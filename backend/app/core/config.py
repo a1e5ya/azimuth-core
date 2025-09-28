@@ -43,7 +43,7 @@ class Settings:
         
         # Ollama Configuration
         self.OLLAMA_API_URL = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
-        self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gpt-oss:20b")
+        self.OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
         self.OLLAMA_TIMEOUT = int(os.getenv("OLLAMA_TIMEOUT", "30"))
         
         # File Upload Configuration

@@ -8,10 +8,10 @@ class OllamaLLM:
     def __init__(self):
         self.base_url = os.getenv("OLLAMA_API_URL", "http://localhost:11434")
         self.model = os.getenv("OLLAMA_MODEL", "llama3.2:3b")
-        self.timeout = 30
+        self.timeout = 60
         
     async def query(self, prompt: str, max_tokens: int = 200) -> Dict[str, Any]:
-        """Query Ollama API with local Llama model"""
+        """Query Ollama API with local llama3.2 model"""
         
         # Check if Ollama is running
         if not await self._check_ollama_status():
@@ -19,6 +19,15 @@ class OllamaLLM:
                 "status": "error",
                 "text": "Ollama service is not running. Please start Ollama first.",
                 "meta": {"fallback": True, "ollama_offline": True}
+            }
+        
+        # Check if model is available
+        model_check = await self._check_model_availability()
+        if not model_check.get("model_available", False):
+            return {
+                "status": "error", 
+                "text": f"Model {self.model} not found. Available models: {model_check.get('available_models', [])}",
+                "meta": {"fallback": True, "model_missing": True}
             }
         
         # Prepare the system message for Azimuth Core
@@ -36,7 +45,8 @@ If a feature isn't implemented yet, guide users to what they can do now."""
             "options": {
                 "temperature": 0.7,
                 "top_p": 0.9,
-                "num_predict": max_tokens
+                "num_predict": 100,
+                "num_ctx": 2048
             },
             "stream": False
         }
@@ -92,7 +102,7 @@ If a feature isn't implemented yet, guide users to what they can do now."""
     async def _check_ollama_status(self) -> bool:
         """Check if Ollama is running and responsive"""
         try:
-            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=5)) as session:
+            async with aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self.timeout)) as session:
                 async with session.get(f"{self.base_url}/api/tags") as response:
                     return response.status == 200
         except:
@@ -134,6 +144,10 @@ If a feature isn't implemented yet, guide users to what they can do now."""
                 "model_available": False,
                 "error": str(e)
             }
+    
+    async def _check_model_availability(self) -> Dict[str, Any]:
+        """Internal method to check if model is available"""
+        return await self.check_model_availability()
     
     async def pull_model(self) -> Dict[str, Any]:
         """Pull/download the configured model"""

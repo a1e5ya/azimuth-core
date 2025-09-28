@@ -6,7 +6,7 @@ import time
 import re
 
 from ..models.database import get_db, User, AuditLog
-from .auth import get_current_user
+from ..auth.local_auth import get_current_user_optional
 from ..services.ollama_client import llm_client  # Updated import
 
 router = APIRouter()
@@ -34,7 +34,6 @@ async def log_chat_interaction(
     """Log chat interaction to audit table"""
     audit = AuditLog(
         user_id=user.id if user else None,
-        firebase_uid=user.firebase_uid if user else None,
         entity="chat",
         action="message",
         details={
@@ -108,14 +107,14 @@ def get_smart_fallback_response(message: str, user: Optional[User]) -> str:
     
     # AI/Language model questions
     if any(phrase in message_lower for phrase in ["language model", "ai", "artificial intelligence", "what are you", "who are you"]):
-        return f"I'm an AI assistant powered by Groq's Llama models, specifically designed for personal finance! I can help with budgeting, savings goals, and financial planning. Right now I'm in Phase 1, so I can chat with you, but I'll be much more powerful once you upload your transaction data, {user_name}!"
+        return f"I'm an AI assistant powered by llama3.2 20B model running locally via Ollama, specifically designed for personal finance! I can help with budgeting, savings goals, and financial planning. Right now I'm in Phase 1, so I can chat with you, but I'll be much more powerful once you upload your transaction data, {user_name}!"
     
     # Greetings
     if any(word in message_lower for word in ["hello", "hi", "hey", "good morning", "good afternoon"]):
         if user:
-            return f"Hello {user_name}! I'm your AI finance assistant powered by Groq. I'm ready to help with budgeting and savings goals. Upload your transaction CSV to unlock my full potential!"
+            return f"Hello {user_name}! I'm your AI finance assistant powered by llama3.2 running locally. I'm ready to help with budgeting and savings goals. Upload your transaction CSV to unlock my full potential!"
         else:
-            return "Hello! I'm your AI finance assistant powered by Groq's fast language models. Sign in to access personalized features, then upload your transaction data to get started with smart financial planning!"
+            return "Hello! I'm your AI finance assistant powered by llama3.2 20B model running locally via Ollama. Sign in to access personalized features, then upload your transaction data to get started with smart financial planning!"
     
     # Data import
     elif any(word in message_lower for word in ["import", "upload", "csv", "transactions", "bank data"]):
@@ -128,9 +127,9 @@ def get_smart_fallback_response(message: str, user: Optional[User]) -> str:
     # Help and capabilities
     elif any(word in message_lower for word in ["help", "what can", "capabilities", "features"]):
         if user:
-            return f"Hi {user_name}! I'm your AI-powered finance assistant running on Groq for super-fast responses. I can help with savings goals, budgeting, and financial planning. Currently in Phase 1 - upload your bank CSV to unlock features like spending analysis and goal tracking!"
+            return f"Hi {user_name}! I'm your AI-powered finance assistant running llama3.2 20B locally for super-fast responses. I can help with savings goals, budgeting, and financial planning. Currently in Phase 1 - upload your bank CSV to unlock features like spending analysis and goal tracking!"
         else:
-            return "I'm an AI finance assistant powered by Groq's lightning-fast language models! Sign in first, then upload transaction data for personalized insights. Try asking: 'Save $3000 by December' or 'Help me budget for groceries'."
+            return "I'm an AI finance assistant powered by llama3.2 20B running locally via Ollama! Sign in first, then upload transaction data for personalized insights. Try asking: 'Save $3000 by December' or 'Help me budget for groceries'."
     
     # Authentication
     elif any(word in message_lower for word in ["auth", "login", "sign in", "account"]):
@@ -149,16 +148,16 @@ def get_smart_fallback_response(message: str, user: Optional[User]) -> str:
     
     # Default response
     else:
-        return f"I understand you said '{message}'. I'm an AI finance assistant powered by Groq's fast language models, ready to help with budgeting, savings goals, and financial planning! Try uploading your transaction data in the Transactions tab to get started, {user_name}."
+        return f"I understand you said '{message}'. I'm an AI finance assistant powered by llama3.2 20B running locally via Ollama, ready to help with budgeting, savings goals, and financial planning! Try uploading your transaction data in the Transactions tab to get started, {user_name}."
 
 @router.post("/command", response_model=ChatResponse)
 async def chat_command(
     request_data: ChatRequest, 
     request: Request,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
-    """Groq-powered chat with intelligent fallbacks"""
+    """llama3.2 powered chat with intelligent fallbacks"""
     
     message = request_data.message
     user_context = "authenticated" if current_user else "anonymous"
@@ -166,11 +165,13 @@ async def chat_command(
     fallback_used = False
     model_info = None
     
-    # Build context for Groq
+    # Build context for llama3.2
     context_parts = [
         "You are having a natural conversation about personal finance.",
-        "The user is using Smart Personal Finance Planner app.",
-        "Be conversational and helpful, like chatting with a friend about money."
+        "The user is using Azimuth Core - a local Personal Finance Planner app.",
+        "Be conversational and helpful, like chatting with a friend about money.",
+        "Focus on privacy, local processing, and financial management.",
+        "Keep responses under 100 words and be encouraging."
     ]
     
     if current_user:
@@ -186,17 +187,17 @@ async def chat_command(
     
     full_prompt = " ".join(context_parts)
     
-    # Try Groq LLM first
-    print(f"🎯 Attempting Groq query for: {message}")
+    # Try llama3.2 via Ollama first
+    print(f"🎯 Attempting llama3.2 query for: {message}")
     try:
         llm_result = await llm_client.query(full_prompt, max_tokens=150)
-        print(f"📊 Groq result: {llm_result['status']}")
+        print(f"📊 llama3.2 result: {llm_result['status']}")
         
         if llm_result["status"] == "success" and llm_result["text"]:
             response = llm_result["text"]
             ai_powered = True
-            model_info = llm_result.get("meta", {}).get("model", "groq")
-            print(f"✅ Using Groq AI response")
+            model_info = llm_result.get("meta", {}).get("model", "llama3.2:3b")
+            print(f"✅ Using llama3.2 AI response")
         else:
             response = get_smart_fallback_response(message, current_user)
             fallback_used = True
@@ -204,7 +205,7 @@ async def chat_command(
             print(f"🔄 Using enhanced fallback: {llm_result.get('text', 'unknown error')}")
             
     except Exception as e:
-        print(f"❌ Groq error: {e}")
+        print(f"❌ llama3.2 error: {e}")
         response = get_smart_fallback_response(message, current_user)
         fallback_used = True
         model_info = "fallback"
@@ -232,7 +233,7 @@ async def chat_command(
 
 @router.get("/history")
 async def get_chat_history(
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db)
 ):
     """Get user's recent chat history (requires auth)"""
@@ -243,5 +244,5 @@ async def get_chat_history(
     return {
         "message": f"Chat history for {current_user.email} - coming in Phase 2!",
         "user_id": str(current_user.id),
-        "ai_model": "groq-llama-models"
+        "ai_model": "llama3.2-20b-local"
     }

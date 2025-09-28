@@ -270,35 +270,7 @@ export default {
       return categories
     })
 
-    // Watchers for filters
-    watch(filters, () => {
-      if (currentTab.value === 'transactions') {
-        loadTransactions()
-      }
-    }, { deep: true })
-
-    // Watch auth store for user changes
-    watch(() => authStore.user, (newUser) => {
-      user.value = newUser
-      console.log('Auth state changed:', newUser ? newUser.email : 'signed out')
-      
-      // Initialize welcome message for authenticated users only
-      if (newUser && chatHistory.value.length === 0) {
-        const userName = newUser.display_name || newUser.email.split('@')[0]
-        
-        addChatMessage({
-          response: `Hello, ${userName}! I'm here to help you with your financial data. You can ask questions about budgeting, upload CSV files, or explore your transaction categories.`
-        })
-        
-        showWelcomeMessage.value = false
-      }
-    }, { immediate: true })
-
-    // Chat functions
-    const toggleHistory = () => {
-      showHistory.value = !showHistory.value
-    }
-
+    // Chat functions - DEFINED FIRST
     const scrollToBottom = async () => {
       await nextTick()
       setTimeout(() => {
@@ -442,6 +414,28 @@ export default {
       } finally {
         loading.value = false
         currentThinking.value = ''
+      }
+    }
+
+    const toggleHistory = () => {
+      showHistory.value = !showHistory.value
+    }
+
+    const openChatPanel = () => {
+      showChat.value = true
+      showHistory.value = true
+    }
+
+    const closeChatPanel = () => {
+      showChat.value = false
+      showHistory.value = false
+    }
+
+    const toggleChatPanel = () => {
+      if (showChat.value) {
+        closeChatPanel()
+      } else {
+        openChatPanel()
       }
     }
 
@@ -592,23 +586,29 @@ export default {
       }
     }
 
-    const openChatPanel = () => {
-      showChat.value = true
-      showHistory.value = true
-    }
-
-    const closeChatPanel = () => {
-      showChat.value = false
-      showHistory.value = false
-    }
-
-    const toggleChatPanel = () => {
-      if (showChat.value) {
-        closeChatPanel()
-      } else {
-        openChatPanel()
+    // Watchers for filters
+    watch(filters, () => {
+      if (currentTab.value === 'transactions') {
+        loadTransactions()
       }
-    }
+    }, { deep: true })
+
+    // Watch auth store for user changes
+    watch(() => authStore.user, (newUser) => {
+      user.value = newUser
+      console.log('Auth state changed:', newUser ? newUser.email : 'signed out')
+      
+      // Initialize welcome message for authenticated users only
+      if (newUser && chatHistory.value.length === 0) {
+        const userName = newUser.display_name || newUser.email.split('@')[0]
+        
+        addChatMessage({
+          response: `Hello, ${userName}! I'm here to help you with your financial data. You can ask questions about budgeting, upload CSV files, or explore your transaction categories.`
+        })
+        
+        showWelcomeMessage.value = false
+      }
+    }, { immediate: true })
 
     // Initialize
     onMounted(() => {

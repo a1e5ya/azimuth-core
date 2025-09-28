@@ -75,14 +75,17 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS middleware with local development support
+# CORS middleware with local development support - CRITICAL FIX
 print(f"🌐 Setting up CORS with {len(settings.ALLOWED_ORIGINS)} origins")
+print(f"   Origins: {settings.ALLOWED_ORIGINS}")
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
+    expose_headers=["*"]
 )
 
 # Include routers with updated structure
@@ -179,7 +182,7 @@ async def root():
         
         "key_features": [
             "🔒 Complete Privacy - All data stays on your device",
-            "🤖 Local AI - Powered by Ollama (no cloud AI services)",
+            "🤖 Local AI - Powered by Ollama with llama3.2 20B (no cloud AI services)",
             "📊 CSV Import - Import transactions from any bank",
             "🏷️ Smart Categorization - AI-powered transaction classification", 
             "📈 Financial Analytics - Spending insights and trends",
