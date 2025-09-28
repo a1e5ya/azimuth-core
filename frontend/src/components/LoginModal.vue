@@ -3,13 +3,6 @@
     <div :class="contentClasses" @click.stop>
       <h2 v-if="!isFullScreen">{{ isLogin ? 'Sign In' : 'Sign Up' }}</h2>
       
-      <!-- Google Sign-In Button -->
-      <button @click="handleGoogleAuth" :class="googleBtnClasses">
-        🔍 Continue with Google
-      </button>
-      
-      <div class="divider">or</div>
-      
       <!-- Email/Password Form -->
       <form @submit.prevent="handleEmailAuth">
         <input
@@ -19,6 +12,15 @@
           required
           :class="inputClasses"
         />
+        
+        <input
+          v-if="!isLogin"
+          v-model="displayName"
+          type="text"
+          placeholder="Display Name (optional)"
+          :class="inputClasses"
+        />
+        
         <input
           v-model="password"
           type="password"
@@ -72,6 +74,7 @@ export default {
     const isLogin = ref(true)
     const email = ref('')
     const password = ref('')
+    const displayName = ref('')
     const error = ref('')
     const loading = ref(false)
     
@@ -91,27 +94,8 @@ export default {
     const resetForm = () => {
       email.value = ''
       password.value = ''
+      displayName.value = ''
       error.value = ''
-      loading.value = false
-    }
-    
-    const handleGoogleAuth = async () => {
-      loading.value = true
-      error.value = ''
-      
-      try {
-        const result = await authStore.loginWithGoogle()
-        if (result.success) {
-          if (!props.isFullScreen) {
-            closeModal()
-          }
-        } else {
-          error.value = result.error
-        }
-      } catch (err) {
-        error.value = err.message
-      }
-      
       loading.value = false
     }
     
@@ -124,7 +108,7 @@ export default {
         if (isLogin.value) {
           result = await authStore.login(email.value, password.value)
         } else {
-          result = await authStore.register(email.value, password.value)
+          result = await authStore.register(email.value, password.value, displayName.value)
         }
         
         if (result.success) {
@@ -150,11 +134,6 @@ export default {
       props.isFullScreen ? 'fullscreen-content' : 'modal-content'
     ])
     
-    const googleBtnClasses = computed(() => [
-      'google-btn',
-      props.isFullScreen ? 'fullscreen-google-btn' : ''
-    ])
-    
     const inputClasses = computed(() => [
       'auth-input',
       props.isFullScreen ? 'fullscreen-input' : ''
@@ -174,15 +153,14 @@ export default {
       isLogin,
       email,
       password,
+      displayName,
       error,
       loading,
       closeModal,
       handleOverlayClick,
-      handleGoogleAuth,
       handleEmailAuth,
       modalClasses,
       contentClasses,
-      googleBtnClasses,
       inputClasses,
       authBtnClasses,
       toggleTextClasses
@@ -227,14 +205,12 @@ export default {
 }
 
 .fullscreen-content {
-
   backdrop-filter: blur(20px);
   border-radius: 30px;
-  padding: 0;
+  padding: var(--gap-large);
   width: 100%;
   max-width: 400px;
   position: relative;
-
 }
 
 /* Common Styles */
@@ -244,58 +220,6 @@ export default {
   margin-bottom: var(--gap-standard);
   color: var(--color-text);
   font-weight: 600;
-}
-
-.fullscreen-content h2 {
-  color: rgb(0, 0, 0);
-  margin-bottom: var(--gap-large);
-}
-
-.google-btn {
-  width: 100%;
-  padding: var(--gap-small) var(--gap-standard);
-  background: var(--color-button);
-  border: 2px solid rgba(0, 0, 0, 0.1);
-  border-radius: var(--radius);
-  font-size: var(--text-medium);
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-bottom: var(--gap-standard);
-  box-shadow: var(--shadow);
-}
-
-.fullscreen-google-btn {
-  background: rgba(255, 255, 255, 0.9);
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  color: #333;
-}
-
-.google-btn:hover,
-.fullscreen-google-btn:hover {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-2px);
-}
-
-.divider {
-  text-align: center;
-  margin: var(--gap-standard) 0;
-  color: var(--color-text-muted);
-  position: relative;
-}
-
-.fullscreen-content .divider {
-  color: rgba(0, 0, 0, 0.8);
-}
-
-
-
-.divider {
-  background: var(--color-background-light);
-  padding: 0 var(--gap-standard);
-}
-
-.fullscreen-content .divider {
-  background: rgba(255, 255, 255, 0.1);
 }
 
 .auth-input {
@@ -326,7 +250,6 @@ export default {
 .auth-btn {
   width: 100%;
   padding: var(--gap-small) var(--gap-standard);
-
   color: #000;
   border: none;
   border-radius: var(--radius);
@@ -336,6 +259,7 @@ export default {
   transition: all 0.3s ease;
   margin-bottom: var(--gap-standard);
   box-shadow: var(--shadow);
+  background: var(--color-button);
 }
 
 .fullscreen-auth-btn {
@@ -361,10 +285,6 @@ export default {
   margin: 0;
 }
 
-.fullscreen-toggle-text {
-
-}
-
 .toggle-btn {
   background: none;
   border: none;
@@ -373,10 +293,6 @@ export default {
   cursor: pointer;
   text-decoration: underline;
   font-size: inherit;
-}
-
-.fullscreen-content .toggle-btn {
-
 }
 
 .error-message {

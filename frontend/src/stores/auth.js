@@ -170,6 +170,93 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
+  // Request password reset
+  const requestPasswordReset = async (email) => {
+    loading.value = true
+    
+    try {
+      console.log('📧 Requesting password reset for:', email)
+      
+      const response = await axios.post(`${API_BASE}/auth/forgot-password`, {
+        email
+      })
+      
+      if (response.data.success) {
+        console.log('✅ Password reset email sent')
+        return { 
+          success: true, 
+          message: 'Password reset email sent successfully'
+        }
+      } else {
+        return { 
+          success: false, 
+          error: response.data.message || 'Failed to send password reset email'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Password reset request failed:', error)
+      
+      let errorMessage = 'Failed to send password reset email'
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.response?.status === 404) {
+        errorMessage = 'Email address not found'
+      } else if (error.response?.status === 429) {
+        errorMessage = 'Too many reset requests. Please wait before trying again.'
+      } else if (error.message.includes('Network Error')) {
+        errorMessage = 'Cannot connect to server. Please check if Azimuth Core is running.'
+      }
+      
+      return { success: false, error: errorMessage }
+    } finally {
+      loading.value = false
+    }
+  }
+  
+  // Reset password with token
+  const resetPassword = async (resetToken, newPassword) => {
+    loading.value = true
+    
+    try {
+      console.log('🔒 Resetting password with token')
+      
+      const response = await axios.post(`${API_BASE}/auth/reset-password`, {
+        token: resetToken,
+        new_password: newPassword
+      })
+      
+      if (response.data.success) {
+        console.log('✅ Password reset successful')
+        return { 
+          success: true, 
+          message: 'Password reset successful'
+        }
+      } else {
+        return { 
+          success: false, 
+          error: response.data.message || 'Password reset failed'
+        }
+      }
+    } catch (error) {
+      console.error('❌ Password reset failed:', error)
+      
+      let errorMessage = 'Password reset failed'
+      if (error.response?.data?.detail) {
+        errorMessage = error.response.data.detail
+      } else if (error.response?.status === 400) {
+        errorMessage = 'Invalid or expired reset token'
+      } else if (error.response?.status === 422) {
+        errorMessage = 'Password does not meet requirements'
+      } else if (error.message.includes('Network Error')) {
+        errorMessage = 'Cannot connect to server. Please check if Azimuth Core is running.'
+      }
+      
+      return { success: false, error: errorMessage }
+    } finally {
+      loading.value = false
+    }
+  }
+  
   // Verify current token
   const verifyToken = async () => {
     if (!token.value) {
@@ -358,6 +445,8 @@ export const useAuthStore = defineStore('auth', () => {
     register,
     login,
     logout,
+    requestPasswordReset,
+    resetPassword,
     verifyToken,
     getCurrentUser,
     changePassword,
