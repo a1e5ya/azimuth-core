@@ -1,4 +1,5 @@
 import os
+import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
@@ -81,8 +82,35 @@ async def authenticate_user(db: AsyncSession, email: str, password: str) -> Opti
         return None
     return user
 
+def validate_password(password: str) -> tuple[bool, str]:
+    """Validate password strength"""
+    if len(password) < 8:
+        return False, "Password must be at least 8 characters long"
+    
+    if not re.search(r"[A-Z]", password):
+        return False, "Password must contain at least one uppercase letter"
+    
+    if not re.search(r"[a-z]", password):
+        return False, "Password must contain at least one lowercase letter"
+    
+    if not re.search(r"\d", password):
+        return False, "Password must contain at least one number"
+    
+    if not re.search(r"[!@#$%^&*(),.?\":{}|<>]", password):
+        return False, "Password must contain at least one special character (!@#$%^&*(),.?\":{}|<>)"
+    
+    return True, "Password is valid"
+
 async def create_user(db: AsyncSession, user_data: UserCreate) -> User:
-    """Create a new user"""
+    """Create a new user with password validation"""
+    # Validate password strength
+    is_valid, error_message = validate_password(user_data.password)
+    if not is_valid:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=error_message
+        )
+    
     # Check if user already exists
     existing_user = await get_user_by_email(db, user_data.email)
     if existing_user:
