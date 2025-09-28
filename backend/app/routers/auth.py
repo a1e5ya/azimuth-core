@@ -1,170 +1,210 @@
 from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
 from pydantic import BaseModel
 from typing import Optional
-import firebase_admin
-from firebase_admin import auth as firebase_auth, credentials
-import json
-import os
 
 from ..models.database import get_db, User, AuditLog
-from ..core.config import settings
+from ..auth.local_auth import (
+    LocalAuthService, get_auth_service, get_current_user, get_current_user_optional,
+    UserCreate, UserLogin, UserResponse, verify_password, get_password_hash
+)
 
 router = APIRouter()
 
-# Initialize Firebase Admin (singleton pattern)
-_firebase_app = None
-
-def get_firebase_app():
-    global _firebase_app
-    if _firebase_app is None:
-        try:
-            # Try to get existing app
-            _firebase_app = firebase_admin.get_app()
-        except ValueError:
-            # App doesn't exist, create it
-            cred_dict = settings.firebase_credentials
-            if not cred_dict:
-                raise ValueError("Firebase credentials not found in environment")
-            
-            cred = credentials.Certificate(cred_dict)
-            _firebase_app = firebase_admin.initialize_app(cred)
-            print("✅ Firebase Admin SDK initialized!")
-    
-    return _firebase_app
-
-# Pydantic models
+# Response Models
 class AuthResponse(BaseModel):
     message: str
-    user_id: Optional[str] = None
-    email: Optional[str] = None
-    phase: str = "1"
+    success: bool
+    user: Optional[UserResponse] = None
+    access_token: Optional[str] = None
+    token_type: Optional[str] = None
 
-class UserResponse(BaseModel):
-    id: str
-    firebase_uid: str
-    email: Optional[str]
-    display_name: Optional[str]
-    created_at: str
+class StatusResponse(BaseModel):
+    authenticated: bool
+    user: Optional[UserResponse] = None
+    message: str
 
-# Simplified dependency to get current user from Firebase token
-async def get_current_user(
-    authorization: Optional[str] = Header(None),
-    db: AsyncSession = Depends(get_db)
-) -> Optional[User]:
-    """Extract user from Firebase JWT token - simplified version"""
-    
-    # Allow anonymous access for now - just log it
-    if not authorization or not authorization.startswith("Bearer "):
-        print("⚠️ No authorization header - allowing anonymous access")
-        return None
-    
-    token = authorization.replace("Bearer ", "")
+@router.post("/register", response_model=AuthResponse)
+async def register_user(
+    user_data: UserCreate,
+    request: Request,
+    auth_service: LocalAuthService = Depends(get_auth_service)
+):
+    """Register a new user with email and password"""
     
     try:
-        print(f"🔑 Verifying Firebase token: {token[:20]}...")
+        result = await auth_service.register(user_data)
         
-        # Get Firebase app
-        app = get_firebase_app()
-        
-        # Verify the token
-        decoded_token = firebase_auth.verify_id_token(token, app=app)
-        firebase_uid = decoded_token['uid']
-        email = decoded_token.get('email')
-        display_name = decoded_token.get('name', '')
-        
-        print(f"✅ Token verified for user: {email} ({firebase_uid[:8]}...)")
-        
-        # Check if user exists in our database
-        result = await db.execute(
-            select(User).where(User.firebase_uid == firebase_uid)
-        )
-        user = result.scalar_one_or_none()
-        
-        # Create user if doesn't exist
-        if not user:
-            print(f"👤 Creating new user: {email}")
-            user = User(
-                firebase_uid=firebase_uid,
-                email=email,
-                display_name=display_name
-            )
-            db.add(user)
-            await db.commit()
-            await db.refresh(user)
-            print(f"✅ User created with ID: {user.id}")
-        else:
-            # Update user info if changed
-            if user.email != email or user.display_name != display_name:
-                print(f"📝 Updating user info for: {email}")
-                user.email = email
-                user.display_name = display_name
-                await db.commit()
-                await db.refresh(user)
-        
-        return user
-        
-    except Exception as e:
-        print(f"❌ Firebase token verification failed: {e}")
-        # Don't raise exception - just return None for anonymous access
-        return None
-
-@router.post("/verify", response_model=AuthResponse)
-async def verify_user(
-    current_user: Optional[User] = Depends(get_current_user)
-):
-    """Verify Firebase token and return user info"""
-    
-    if not current_user:
         return AuthResponse(
-            message="No valid authentication token provided"
+            message="Registration successful",
+            success=True,
+            user=result["user"],
+            access_token=result["access_token"],
+            token_type=result["token_type"]
         )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Registration failed")
+
+@router.post("/login", response_model=AuthResponse)
+async def login_user(
+    user_data: UserLogin,
+    request: Request,
+    auth_service: LocalAuthService = Depends(get_auth_service)
+):
+    """Login user with email and password"""
     
-    return AuthResponse(
-        message=f"✅ Authenticated as {current_user.email}",
-        user_id=str(current_user.id),
-        email=current_user.email
-    )
+    try:
+        result = await auth_service.login(user_data)
+        
+        return AuthResponse(
+            message="Login successful",
+            success=True,
+            user=result["user"],
+            access_token=result["access_token"],
+            token_type=result["token_type"]
+        )
+        
+    except HTTPException as e:
+        raise e
+    except Exception as e:
+        raise HTTPException(status_code=500, detail="Login failed")
 
 @router.get("/me", response_model=UserResponse)
-async def get_me(
+async def get_current_user_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Get current user profile"""
     
-    if not current_user:
-        raise HTTPException(status_code=401, detail="Not authenticated")
-    
     return UserResponse(
-        id=str(current_user.id),
-        firebase_uid=current_user.firebase_uid,
+        id=current_user.id,
         email=current_user.email,
         display_name=current_user.display_name,
         created_at=current_user.created_at.isoformat()
     )
 
-@router.post("/debug")
-async def debug_auth(authorization: Optional[str] = Header(None)):
-    """Debug endpoint to test Firebase token"""
+@router.get("/status", response_model=StatusResponse)
+async def get_auth_status(
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Check authentication status"""
     
-    if not authorization:
-        return {"error": "No Authorization header"}
+    if current_user:
+        return StatusResponse(
+            authenticated=True,
+            user=UserResponse(
+                id=current_user.id,
+                email=current_user.email,
+                display_name=current_user.display_name,
+                created_at=current_user.created_at.isoformat()
+            ),
+            message=f"Authenticated as {current_user.email}"
+        )
+    else:
+        return StatusResponse(
+            authenticated=False,
+            user=None,
+            message="Not authenticated"
+        )
+
+@router.post("/verify", response_model=StatusResponse)
+async def verify_token(
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Verify JWT token validity"""
     
-    if not authorization.startswith("Bearer "):
-        return {"error": "Invalid Authorization format"}
+    if current_user:
+        return StatusResponse(
+            authenticated=True,
+            user=UserResponse(
+                id=current_user.id,
+                email=current_user.email,
+                display_name=current_user.display_name,
+                created_at=current_user.created_at.isoformat()
+            ),
+            message="Token is valid"
+        )
+    else:
+        return StatusResponse(
+            authenticated=False,
+            user=None,
+            message="Invalid or expired token"
+        )
+
+@router.post("/logout")
+async def logout_user(
+    current_user: Optional[User] = Depends(get_current_user_optional),
+    db: AsyncSession = Depends(get_db)
+):
+    """Logout user (client-side token removal)"""
     
-    token = authorization.replace("Bearer ", "")
+    # With JWT, logout is primarily client-side
+    # We can log the logout event for audit purposes
+    if current_user:
+        audit_entry = AuditLog(
+            user_id=current_user.id,
+            entity="auth",
+            action="logout",
+            details={
+                "user_email": current_user.email,
+                "logout_time": "client_initiated"
+            }
+        )
+        db.add(audit_entry)
+        await db.commit()
+        
+        return {"message": "Logout successful", "success": True}
+    else:
+        return {"message": "No active session", "success": True}
+
+@router.post("/change-password")
+async def change_password(
+    current_password: str,
+    new_password: str,
+    current_user: User = Depends(get_current_user),
+    auth_service: LocalAuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
+):
+    """Change user password"""
     
-    try:
-        app = get_firebase_app()
-        decoded_token = firebase_auth.verify_id_token(token, app=app)
-        return {
-            "success": True,
-            "uid": decoded_token['uid'],
-            "email": decoded_token.get('email'),
-            "name": decoded_token.get('name'),
-            "token_preview": token[:20] + "..."
+    # Verify current password
+    if not verify_password(current_password, current_user.password_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Update password
+    current_user.password_hash = get_password_hash(new_password)
+    await db.commit()
+    
+    # Log password change
+    audit_entry = AuditLog(
+        user_id=current_user.id,
+        entity="auth",
+        action="password_change",
+        details={
+            "user_email": current_user.email,
+            "change_time": "successful"
         }
-    except Exception as e:
-        return {"error": str(e), "token_preview": token[:20] + "..."}
+    )
+    db.add(audit_entry)
+    await db.commit()
+    
+    return {"message": "Password changed successfully", "success": True}
+
+@router.get("/debug")
+async def debug_auth(
+    current_user: Optional[User] = Depends(get_current_user_optional)
+):
+    """Debug endpoint for local authentication testing"""
+    
+    return {
+        "auth_type": "local_jwt",
+        "authenticated": current_user is not None,
+        "user_info": {
+            "id": current_user.id if current_user else None,
+            "email": current_user.email if current_user else None,
+            "display_name": current_user.display_name if current_user else None
+        } if current_user else None,
+        "system": "azimuth_core_local"
+    }

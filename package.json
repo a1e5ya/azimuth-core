@@ -1,0 +1,9 @@
+{
+  "name": "azimuth-core",
+  "version": "1.0.0",
+  "scripts": {
+    "install-all": "node -e \"require('child_process').spawn('cmd', ['/c', 'scripts\\\\install.bat'], {stdio: 'inherit'})\"",
+    "start": "node -e \"require('child_process').spawn('cmd', ['/c', 'scripts\\\\start.bat'], {stdio: 'inherit'})\"",
+    "stop": "node -e \"require('child_process').spawn('cmd', ['/c', 'scripts\\\\stop.bat'], {stdio: 'inherit'})\""
+  }
+}

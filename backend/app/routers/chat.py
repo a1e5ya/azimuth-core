@@ -7,7 +7,7 @@ import re
 
 from ..models.database import get_db, User, AuditLog
 from .auth import get_current_user
-from ..services.groq_client import llm_client  # Updated import
+from ..services.ollama_client import llm_client  # Updated import
 
 router = APIRouter()
 
