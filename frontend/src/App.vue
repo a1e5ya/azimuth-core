@@ -78,26 +78,28 @@
         <DashboardTab v-if="currentTab === 'dashboard'" />
 
         <!-- Transactions Tab -->
-        <TransactionsTab 
-          v-else-if="currentTab === 'transactions'"
-          :user="user"
-          :transactionCount="transactionCount"
-          :recentUploads="recentUploads"
-          :transactions="transactions"
-          :loading="loading"
-          :currentPage="currentPage"
-          :pageSize="pageSize"
-          :filters="filters"
-          :allCategories="allCategories"
-          @file-upload="handleFileUpload"
-          @refresh-transactions="refreshTransactions"
-          @change-page="changePage"
-          @categorize-transaction="categorizeTransaction"
-          @edit-transaction="editTransaction"
-          @update-transaction-count="updateTransactionCount"
-          @update-filters="updateFilters"
-          @add-chat-message="addChatMessage"
-        />
+<TransactionsTab 
+  v-else-if="currentTab === 'transactions'"
+  :user="user"
+  :transactionCount="transactionCount"
+  :recentUploads="recentUploads"
+  :transactions="transactions"
+  :loading="loading"
+  :currentPage="currentPage"
+  :pageSize="pageSize"
+  :filters="filters"
+  :allCategories="allCategories"
+  :showFilters="showFilters"
+  @file-upload="handleFileUpload"
+  @refresh-transactions="refreshTransactions"
+  @change-page="changePage"
+  @categorize-transaction="categorizeTransaction"
+  @edit-transaction="editTransaction"
+  @update-transaction-count="updateTransactionCount"
+  @update-filters="updateFilters"
+  @add-chat-message="addChatMessage"
+  @update:showFilters="showFilters = $event"
+/>
 
         <!-- Categories Tab -->
         <CategoriesTab 
@@ -207,6 +209,7 @@ export default {
   setup() {
     // Auth store
     const authStore = useAuthStore()
+    const showFilters = ref(false)
     
     // Core app state
     const currentTab = ref('dashboard')
@@ -313,109 +316,158 @@ export default {
       }
     }
 
-    const sendMessage = async (message = null) => {
-      const messageText = message || chatInput.value.trim()
-      if (!messageText || loading.value) return
+const sendMessage = async (message = null) => {
+  const messageText = message || chatInput.value.trim()
+  if (!messageText || loading.value) return
 
-      const originalInput = chatInput.value
-      loading.value = true
-      chatInput.value = ''
-      currentThinking.value = 'Thinking...'
+  const originalInput = chatInput.value
+  loading.value = true
+  chatInput.value = ''
+  currentThinking.value = 'Thinking...'
+  
+  showWelcomeMessage.value = false
+  showHistory.value = true
+
+  try {
+    const headers = {
+      Authorization: `Bearer ${authStore.token}`
+    }
+
+    console.log('💬 Chat:', messageText.substring(0, 50))
+    const response = await axios.post(`${API_BASE}/chat/command`, {
+      message: messageText
+    }, { headers, timeout: 15000 })
+    
+    console.log('✅ Response:', response.data)
+    const botResponse = response.data.response
+    
+    // Add to history
+    addChatMessage({
+      message: messageText,
+      response: botResponse
+    })
+    
+    // Handle actions with parameters
+    if (response.data.suggested_action) {
+      console.log('⚡ Action:', response.data.suggested_action, response.data.action_params)
       
-      showWelcomeMessage.value = false
-      showHistory.value = true
-
-      try {
-        let headers = {}
-        if (authStore.token) {
-          headers.Authorization = `Bearer ${authStore.token}`
-        }
-
-        console.log('Sending chat message:', messageText.substring(0, 50))
-        const response = await axios.post(`${API_BASE}/chat/command`, {
-          message: messageText
-        }, { headers, timeout: 15000 })
-        
-        console.log('Chat response received:', response.data)
-        const botResponse = response.data.response
-        
-        addChatMessage({
-          message: messageText,
-          response: botResponse
-        })
-        
-        // Handle navigation commands
-        if (messageText.toLowerCase().includes('import') || messageText.toLowerCase().includes('upload')) {
+      switch (response.data.suggested_action) {
+        case 'filter_transactions':
           currentTab.value = 'transactions'
-        } else if (messageText.toLowerCase().includes('categor')) {
-          currentTab.value = 'categories'
-        } else if (messageText.toLowerCase().includes('timeline')) {
-          currentTab.value = 'timeline'
-        } else if (messageText.toLowerCase().includes('settings')) {
-          currentTab.value = 'settings'
-        } else if (messageText.toLowerCase().includes('transactions')) {
-          currentTab.value = 'transactions'
-        }
-        
-      } catch (error) {
-        console.error('Chat request failed:', error)
-        
-        let errorMessage = 'Sorry, I encountered an error. Please try again.'
-        
-        if (error.response?.status === 401) {
-          console.log('Authentication failed - trying token refresh')
-          if (authStore.token) {
-            try {
-              const verifyResult = await authStore.verifyToken()
-              if (verifyResult.success) {
-                console.log('Token refreshed, retrying chat...')
-                
-                const retryResponse = await axios.post(`${API_BASE}/chat/command`, {
-                  message: messageText
-                }, { 
-                  headers: { Authorization: `Bearer ${authStore.token}` }, 
-                  timeout: 15000 
-                })
-                
-                console.log('Chat retry response:', retryResponse.data)
-                const botResponse = retryResponse.data.response
-                
-                addChatMessage({
-                  message: messageText,
-                  response: botResponse
-                })
-                
-                loading.value = false
-                currentThinking.value = ''
-                return
-                
-              } else {
-                errorMessage = 'Authentication failed. Please try signing out and back in.'
-              }
-            } catch (retryError) {
-              console.error('Chat retry failed:', retryError)
-              errorMessage = 'Authentication failed. Please try signing out and back in.'
+          // Apply filters from action_params
+          if (response.data.action_params) {
+            const params = response.data.action_params
+            if (params.main_category) {
+              filters.value.mainCategory = params.main_category
             }
-          } else {
-            errorMessage = 'Please sign in to use the chat feature.'
+            if (params.category_filter) {
+              filters.value.categoryFilter = params.category_filter
+            }
+            if (params.merchant) {
+              filters.value.merchant = params.merchant
+            }
+            if (params.transaction_type) {
+              filters.value.transactionType = params.transaction_type
+            }
+            // Show filters panel
+            showFilters.value = true
           }
-        } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-          errorMessage = 'Unable to connect to the server. Please check if the backend is running.'
-        } else if (error.response?.status >= 500) {
-          errorMessage = 'Server error occurred. Please try again in a moment.'
-        }
-        
-        addChatMessage({
-          message: messageText,
-          response: errorMessage
-        })
-        
-        chatInput.value = originalInput
-      } finally {
-        loading.value = false
-        currentThinking.value = ''
+          break
+          
+        case 'show_transactions_tab':
+          currentTab.value = 'transactions'
+          break
+          
+        case 'show_categories_tab':
+          currentTab.value = 'categories'
+          break
+          
+        case 'show_timeline':
+          currentTab.value = 'timeline'
+          break
+          
+        case 'show_dashboard':
+          currentTab.value = 'dashboard'
+          break
+          
+        case 'show_settings':
+          currentTab.value = 'settings'
+          break
       }
     }
+    
+  } catch (error) {
+    console.error('❌ Chat error:', error)
+    
+    let errorMessage = 'Error. Please try again.'
+    
+    if (error.response?.status === 401) {
+      console.log('🔄 Token refresh...')
+      try {
+        const verifyResult = await authStore.verifyToken()
+        if (verifyResult.success) {
+          // Retry
+          const retryResponse = await axios.post(`${API_BASE}/chat/command`, {
+            message: messageText
+          }, { 
+            headers: { Authorization: `Bearer ${authStore.token}` }, 
+            timeout: 15000 
+          })
+          
+          addChatMessage({
+            message: messageText,
+            response: retryResponse.data.response
+          })
+          
+          // Handle actions on retry
+          if (retryResponse.data.suggested_action) {
+            switch (retryResponse.data.suggested_action) {
+              case 'filter_transactions':
+                currentTab.value = 'transactions'
+                if (retryResponse.data.action_params) {
+                  Object.assign(filters.value, retryResponse.data.action_params)
+                  showFilters.value = true
+                }
+                break
+              case 'show_transactions_tab':
+                currentTab.value = 'transactions'
+                break
+              case 'show_categories_tab':
+                currentTab.value = 'categories'
+                break
+              case 'show_timeline':
+                currentTab.value = 'timeline'
+                break
+            }
+          }
+          
+          loading.value = false
+          currentThinking.value = ''
+          return
+          
+        } else {
+          errorMessage = 'Auth expired. Sign in again.'
+        }
+      } catch (retryError) {
+        errorMessage = 'Auth expired. Sign in again.'
+      }
+    } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+      errorMessage = 'Server offline. Check backend.'
+    } else if (error.response?.status >= 500) {
+      errorMessage = 'Server error. Try again.'
+    }
+    
+    addChatMessage({
+      message: messageText,
+      response: errorMessage
+    })
+    
+    chatInput.value = originalInput
+  } finally {
+    loading.value = false
+    currentThinking.value = ''
+  }
+}
 
     const toggleHistory = () => {
       showHistory.value = !showHistory.value
@@ -643,6 +695,7 @@ export default {
       currentPage,
       pageSize,
       filters,
+      showFilters,
       
       // Category state
       categoriesData,

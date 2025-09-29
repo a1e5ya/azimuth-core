@@ -89,9 +89,13 @@
           <span class="transaction-count">({{ summary?.total_transactions || 0 }} total)</span>
         </div>
         <div class="header-actions">
-          <button class="btn btn-small" @click="showFilters = !showFilters" :class="{ 'btn-active': showFilters }">
-            Filters {{ hasActiveFilters ? '(Active)' : '' }}
-          </button>
+<button 
+  class="btn btn-small" 
+  @click="$emit('update:showFilters', !showFilters)" 
+  :class="{ 'btn-active': showFilters }"
+>
+  Filters {{ hasActiveFilters ? '(Active)' : '' }}
+</button>
           <button class="btn btn-small" @click="refreshTransactions" :disabled="loading">
             Refresh
           </button>
@@ -189,8 +193,7 @@
         
         <div class="filter-actions">
           <button class="btn btn-small" @click="clearFilters">Clear Filters</button>
-          <button class="btn btn-small" @click="showFilters = false">Hide Filters</button>
-        </div>
+<button class="btn btn-small" @click="$emit('update:showFilters', false)">Hide Filters</button>        </div>
       </div>
 
       <!-- Bulk Selection -->
@@ -455,19 +458,24 @@ import { useAuthStore } from '@/stores/auth'
 
 export default {
   name: 'TransactionsTab',
-  props: {
-    user: {
-      type: Object,
-      required: true
-    },
-    allCategories: {
-      type: Array,
-      default: () => []
-    }
+props: {
+  user: {
+    type: Object,
+    required: true
   },
-  emits: [
-    'add-chat-message'
-  ],
+  allCategories: {
+    type: Array,
+    default: () => []
+  },
+  showFilters: {
+    type: Boolean,
+    default: false
+  }
+},
+emits: [
+  'add-chat-message',
+  'update:showFilters'
+],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
@@ -488,7 +496,7 @@ export default {
     const sortOrder = ref('desc')
     
     // Filter state refs - updated for new structure
-    const showFilters = ref(false)
+
     const filters = ref({
       startDate: '',
       endDate: '',
@@ -1068,7 +1076,7 @@ export default {
       sortOrder,
       
       // Filters - updated
-      showFilters,
+
       filters,
       hasActiveFilters,
       uniqueMainCategories,

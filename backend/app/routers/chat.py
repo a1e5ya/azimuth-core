@@ -1,13 +1,14 @@
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func, and_, or_
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, List
+from datetime import datetime, timedelta
 import time
-import re
 
-from ..models.database import get_db, User, AuditLog
-from ..auth.local_auth import get_current_user_optional
-from ..services.ollama_client import llm_client  # Updated import
+from ..models.database import get_db, User, AuditLog, Transaction, Category
+from ..auth.local_auth import get_current_user
+from ..services.ollama_client import llm_client
 
 router = APIRouter()
 
@@ -18,14 +19,376 @@ class ChatResponse(BaseModel):
     response: str
     timestamp: str
     user_context: str
-    phase: str = "1"
     ai_powered: bool = False
     fallback_used: bool = False
     model_info: Optional[str] = None
+    suggested_action: Optional[str] = None
+    action_params: Optional[Dict] = None
+
+async def get_comprehensive_transaction_context(user: User, db: AsyncSession) -> dict:
+    """Get full transaction context for AI - read-only data access"""
+    
+    # Total transaction count
+    result = await db.execute(
+        select(func.count(Transaction.id))
+        .where(Transaction.user_id == user.id)
+    )
+    transaction_count = result.scalar() or 0
+    
+    if transaction_count == 0:
+        return {"has_data": False, "transaction_count": 0}
+    
+    # Recent spending (last 30 days)
+    thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+    
+    result = await db.execute(
+        select(func.sum(Transaction.amount))
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.posted_at >= thirty_days_ago,
+            Transaction.transaction_type == 'expense'
+        )
+    )
+    recent_spending = float(result.scalar() or 0)
+    
+    # Recent income
+    result = await db.execute(
+        select(func.sum(Transaction.amount))
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.posted_at >= thirty_days_ago,
+            Transaction.transaction_type == 'income'
+        )
+    )
+    recent_income = float(result.scalar() or 0)
+    
+    # Uncategorized count
+    result = await db.execute(
+        select(func.count(Transaction.id))
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.category_id.is_(None)
+        )
+    )
+    uncategorized_count = result.scalar() or 0
+    
+    # Category breakdown with amounts
+    result = await db.execute(
+        select(
+            Transaction.main_category,
+            func.count(Transaction.id).label('count'),
+            func.sum(func.abs(Transaction.amount)).label('total')
+        )
+        .where(Transaction.user_id == user.id)
+        .group_by(Transaction.main_category)
+        .order_by(func.sum(func.abs(Transaction.amount)).desc())
+    )
+    
+    categories = {}
+    for row in result:
+        if row.main_category:
+            categories[row.main_category.lower()] = {
+                "name": row.main_category,
+                "count": row.count,
+                "total": float(row.total or 0)
+            }
+    
+    # CSV subcategories breakdown (top spending)
+    result = await db.execute(
+        select(
+            Transaction.csv_category,
+            func.count(Transaction.id).label('count'),
+            func.sum(func.abs(Transaction.amount)).label('total')
+        )
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.csv_category.isnot(None)
+        )
+        .group_by(Transaction.csv_category)
+        .order_by(func.sum(func.abs(Transaction.amount)).desc())
+        .limit(10)
+    )
+    
+    subcategories = {}
+    for row in result:
+        if row.csv_category:
+            subcategories[row.csv_category.lower()] = {
+                "name": row.csv_category,
+                "count": row.count,
+                "total": float(row.total or 0)
+            }
+    
+    # Top merchants
+    result = await db.execute(
+        select(
+            Transaction.merchant,
+            func.count(Transaction.id).label('count'),
+            func.sum(func.abs(Transaction.amount)).label('total')
+        )
+        .where(
+            Transaction.user_id == user.id,
+            Transaction.merchant.isnot(None)
+        )
+        .group_by(Transaction.merchant)
+        .order_by(func.sum(func.abs(Transaction.amount)).desc())
+        .limit(10)
+    )
+    
+    top_merchants = []
+    for row in result:
+        if row.merchant:
+            top_merchants.append({
+                "name": row.merchant,
+                "count": row.count,
+                "total": float(row.total or 0)
+            })
+    
+    # Date range
+    result = await db.execute(
+        select(
+            func.min(Transaction.posted_at),
+            func.max(Transaction.posted_at)
+        )
+        .where(Transaction.user_id == user.id)
+    )
+    min_date, max_date = result.first()
+    
+    return {
+        "has_data": True,
+        "transaction_count": transaction_count,
+        "recent_spending": abs(recent_spending),
+        "recent_income": abs(recent_income),
+        "uncategorized_count": uncategorized_count,
+        "categories": categories,
+        "subcategories": subcategories,
+        "top_merchants": top_merchants,
+        "date_range": {
+            "earliest": min_date.strftime("%Y-%m-%d") if min_date else None,
+            "latest": max_date.strftime("%Y-%m-%d") if max_date else None
+        }
+    }
+
+def detect_intent_and_action(message: str, tx_context: dict) -> tuple[Optional[str], Optional[dict]]:
+    """Detect user intent and return action with parameters"""
+    message_lower = message.lower()
+    
+    # Check if user has data
+    if not tx_context.get("has_data"):
+        if any(word in message_lower for word in ["import", "upload", "csv", "add"]):
+            return "show_transactions_tab", None
+        return None, None
+    
+    # IMPORTANT: Check for "show" or "list" keywords for filtering
+    is_filter_request = any(word in message_lower for word in [
+        "show", "list", "filter", "find", "get", "display", "see"
+    ])
+    
+    if not is_filter_request:
+        # Not a filter request, return None to let AI answer
+        return None, None
+    
+    # Now check what to filter by
+    available_categories = tx_context.get("categories", {})
+    available_subcategories = tx_context.get("subcategories", {})
+    
+    # Check main categories
+    for category_key, category_data in available_categories.items():
+        if category_key in message_lower:
+            return "filter_transactions", {
+                "main_category": category_data["name"]
+            }
+    
+    # Check subcategories
+    for subcat_key, subcat_data in available_subcategories.items():
+        if subcat_key in message_lower:
+            return "filter_transactions", {
+                "category_filter": subcat_data["name"]
+            }
+    
+    # Merchant filtering
+    top_merchants = tx_context.get("top_merchants", [])
+    for merchant in top_merchants:
+        merchant_name = merchant["name"].lower()
+        # Check if merchant name appears in message
+        merchant_words = merchant_name.split()
+        if any(word in message_lower for word in merchant_words if len(word) > 3):
+            return "filter_transactions", {
+                "merchant": merchant["name"]
+            }
+    
+    # Transaction type filtering
+    if any(word in message_lower for word in ["expense", "expenses", "spending"]):
+        return "filter_transactions", {"transaction_type": "expense"}
+    elif any(word in message_lower for word in ["income", "earning", "salary"]):
+        return "filter_transactions", {"transaction_type": "income"}
+    elif any(word in message_lower for word in ["transfer", "transfers"]):
+        return "filter_transactions", {"transaction_type": "transfer"}
+    
+    # If "show" but no match, show transactions tab
+    return "show_transactions_tab", None
+
+def build_context_for_ai(user_name: str, tx_context: dict) -> str:
+    """Build concise context string for AI model"""
+    
+    if not tx_context.get("has_data"):
+        return f"User {user_name} has no transaction data. Guide them to import CSV."
+    
+    context_parts = [
+        f"User: {user_name}",
+        f"{tx_context['transaction_count']} transactions total"
+    ]
+    
+    # Add financial summary
+    if tx_context["recent_spending"] > 0 or tx_context["recent_income"] > 0:
+        context_parts.append(
+            f"Last 30 days: €{tx_context['recent_spending']:.0f} spent, €{tx_context['recent_income']:.0f} income"
+        )
+    
+    # Add category information (top 5)
+    categories = tx_context.get("categories", {})
+    if categories:
+        top_cats = sorted(categories.items(), key=lambda x: x[1]["total"], reverse=True)[:5]
+        cat_summary = ", ".join([f"{cat[1]['name']} €{cat[1]['total']:.0f}" for cat in top_cats])
+        context_parts.append(f"Top categories: {cat_summary}")
+    
+    # Add uncategorized warning
+    if tx_context.get("uncategorized_count", 0) > 0:
+        context_parts.append(f"{tx_context['uncategorized_count']} uncategorized transactions")
+    
+    return ". ".join(context_parts) + "."
+
+def get_smart_fallback_response(message: str, user: User, tx_context: dict) -> str:
+    """Ultra-concise, data-aware fallback responses (max 25 words)"""
+    message_lower = message.lower()
+    user_name = user.display_name or user.email.split('@')[0]
+    
+    if not tx_context.get("has_data"):
+        return f"No data yet. Upload CSV to start."
+    
+    # Category queries
+    categories = tx_context.get("categories", {})
+    subcategories = tx_context.get("subcategories", {})
+    
+    for cat_key, cat_data in categories.items():
+        if cat_key in message_lower:
+            count = cat_data["count"]
+            total = cat_data["total"]
+            return f"Showing {count} {cat_data['name']} transactions (€{total:.0f} total)."
+    
+    for subcat_key, subcat_data in subcategories.items():
+        if subcat_key in message_lower:
+            count = subcat_data["count"]
+            total = subcat_data["total"]
+            return f"Showing {count} {subcat_data['name']} transactions (€{total:.0f})."
+    
+    # Merchant queries
+    for merchant in tx_context.get("top_merchants", []):
+        merchant_name = merchant["name"].lower()
+        merchant_words = merchant_name.split()
+        if any(word in message_lower for word in merchant_words if len(word) > 3):
+            return f"Showing {merchant['count']} {merchant['name']} purchases (€{merchant['total']:.0f})."
+    
+    # Spending summary
+    if any(word in message_lower for word in ["spend", "spent", "spending", "expense"]):
+        spending = tx_context["recent_spending"]
+        return f"€{spending:.0f} spent in last 30 days."
+    
+    # Income summary
+    if any(word in message_lower for word in ["income", "earn", "salary"]):
+        income = tx_context["recent_income"]
+        return f"€{income:.0f} income in last 30 days."
+    
+    # Balance/Net
+    if any(word in message_lower for word in ["balance", "net", "left", "save"]):
+        net = tx_context["recent_income"] - tx_context["recent_spending"]
+        return f"Net last 30 days: €{net:.0f}."
+    
+    # Top spending
+    if any(word in message_lower for word in ["most", "top", "biggest", "where"]):
+        if categories:
+            top_cat = max(categories.values(), key=lambda x: x["total"])
+            return f"Top category: {top_cat['name']} (€{top_cat['total']:.0f})."
+        return f"No category data."
+    
+    # Greetings
+    if any(word in message_lower for word in ["hi", "hello", "hey"]):
+        return f"Hi {user_name}! {tx_context['transaction_count']} transactions ready. What do you need?"
+    
+    # Help
+    if "help" in message_lower:
+        return f"Ask about spending, income, categories, or merchants."
+    
+    # Access question
+    if "access" in message_lower or "see" in message_lower:
+        return f"Yes! I can see all {tx_context['transaction_count']} transactions. Ask me anything."
+    
+    # Default
+    return f"{tx_context['transaction_count']} transactions tracked. Try 'show food' or 'top spending'."
+    """Ultra-concise, data-aware fallback responses (max 25 words)"""
+    message_lower = message.lower()
+    user_name = user.display_name or user.email.split('@')[0]
+    
+    if not tx_context.get("has_data"):
+        return f"Upload your CSV first, {user_name}. Then I can analyze your spending."
+    
+    # Category queries
+    categories = tx_context.get("categories", {})
+    subcategories = tx_context.get("subcategories", {})
+    
+    for cat_key, cat_data in categories.items():
+        if cat_key in message_lower:
+            count = cat_data["count"]
+            total = cat_data["total"]
+            return f"{cat_data['name']}: {count} transactions, €{total:.0f} total. Filter applied."
+    
+    for subcat_key, subcat_data in subcategories.items():
+        if subcat_key in message_lower:
+            count = subcat_data["count"]
+            total = subcat_data["total"]
+            return f"{subcat_data['name']}: {count} transactions, €{total:.0f}. Showing now."
+    
+    # Merchant queries
+    for merchant in tx_context.get("top_merchants", []):
+        merchant_name = merchant["name"].lower()
+        if merchant_name in message_lower:
+            return f"{merchant['name']}: {merchant['count']} purchases, €{merchant['total']:.0f}. Filter applied."
+    
+    # Spending summary
+    if any(word in message_lower for word in ["spend", "spent", "spending", "expense"]):
+        spending = tx_context["recent_spending"]
+        return f"Last 30 days: €{spending:.0f} spent across {len(categories)} categories."
+    
+    # Income summary
+    if any(word in message_lower for word in ["income", "earn", "salary"]):
+        income = tx_context["recent_income"]
+        return f"Last 30 days: €{income:.0f} income received."
+    
+    # Balance/Net
+    if any(word in message_lower for word in ["balance", "net", "left", "save"]):
+        net = tx_context["recent_income"] - tx_context["recent_spending"]
+        return f"Last 30 days net: €{net:.0f}. {'Saving' if net > 0 else 'Overspending'}."
+    
+    # Top spending
+    if any(word in message_lower for word in ["most", "top", "biggest", "where"]):
+        if categories:
+            top_cat = max(categories.values(), key=lambda x: x["total"])
+            return f"Most spending: {top_cat['name']} at €{top_cat['total']:.0f}."
+        return f"No category data yet."
+    
+    # Greetings
+    if any(word in message_lower for word in ["hi", "hello", "hey"]):
+        return f"Hi {user_name}! {tx_context['transaction_count']} transactions tracked. What would you like to know?"
+    
+    # Help
+    if "help" in message_lower:
+        return f"Ask about spending, categories, or merchants. I can filter your {tx_context['transaction_count']} transactions."
+    
+    # Default
+    return f"{tx_context['transaction_count']} transactions ready. Ask about spending, categories, or specific merchants."
 
 async def log_chat_interaction(
     db: AsyncSession,
-    user: Optional[User],
+    user: User,
     message: str,
     response: str,
     ai_powered: bool,
@@ -33,15 +396,14 @@ async def log_chat_interaction(
 ):
     """Log chat interaction to audit table"""
     audit = AuditLog(
-        user_id=user.id if user else None,
+        user_id=user.id,
         entity="chat",
         action="message",
         details={
             "user_message": message,
             "bot_response": response,
             "ai_powered": ai_powered,
-            "authenticated": user is not None,
-            "user_email": user.email if user else None
+            "user_email": user.email
         },
         ip_address=getattr(request.client, 'host', None) if hasattr(request, 'client') else None,
         user_agent=request.headers.get('user-agent', None) if hasattr(request, 'headers') else None
@@ -50,199 +412,163 @@ async def log_chat_interaction(
     db.add(audit)
     await db.commit()
 
-def parse_financial_intent(message: str) -> Optional[dict]:
-    """Parse financial intents with regex fallback"""
-    message_lower = message.lower()
-    
-    # Goal setting patterns
-    goal_patterns = [
-        r"save\s+\$?(\d+[,\d]*)\s+by\s+(\w+)\s+for\s+(.+)",
-        r"save\s+\$?(\d+[,\d]*)\s+for\s+(.+)\s+by\s+(\w+)",
-        r"need\s+\$?(\d+[,\d]*)\s+by\s+(\w+)\s+for\s+(.+)",
-        r"\$?(\d+[,\d]*)\s+by\s+(\w+)\s+for\s+(.+)"
-    ]
-    
-    for pattern in goal_patterns:
-        match = re.search(pattern, message_lower)
-        if match:
-            groups = match.groups()
-            if len(groups) == 3:
-                return {
-                    "type": "savings_goal",
-                    "amount": groups[0],
-                    "deadline": groups[1] if "by" in pattern else groups[2],
-                    "purpose": groups[2] if "by" in pattern else groups[1]
-                }
-    
-    # Budget patterns
-    budget_patterns = [
-        r"budget\s+\$?(\d+[,\d]*)\s+for\s+(.+)",
-        r"spend\s+\$?(\d+[,\d]*)\s+on\s+(.+)",
-        r"limit\s+(.+)\s+to\s+\$?(\d+[,\d]*)"
-    ]
-    
-    for pattern in budget_patterns:
-        match = re.search(pattern, message_lower)
-        if match:
-            return {
-                "type": "budget",
-                "amount": match.group(1) if "limit" not in pattern else match.group(2),
-                "category": match.group(2) if "limit" not in pattern else match.group(1)
-            }
-    
-    return None
-
-def get_smart_fallback_response(message: str, user: Optional[User]) -> str:
-    """Enhanced fallback responses with financial context"""
-    message_lower = message.lower()
-    user_name = user.display_name or user.email.split('@')[0] if user else "there"
-    
-    # Check for financial intents
-    financial_intent = parse_financial_intent(message)
-    if financial_intent:
-        if financial_intent["type"] == "savings_goal":
-            return f"I can see you want to save ${financial_intent['amount']} for {financial_intent['purpose']} by {financial_intent['deadline']}! That's a great goal, {user_name}. Once you upload your transaction data, I'll help you create a realistic savings plan and track your progress."
-        elif financial_intent["type"] == "budget":
-            return f"Setting a ${financial_intent['amount']} budget for {financial_intent['category']} is smart planning! Upload your transaction history and I'll help you see if this budget is realistic based on your spending patterns."
-    
-    # AI/Language model questions
-    if any(phrase in message_lower for phrase in ["language model", "ai", "artificial intelligence", "what are you", "who are you"]):
-        return f"I'm an AI assistant powered by llama3.2 20B model running locally via Ollama, specifically designed for personal finance! I can help with budgeting, savings goals, and financial planning. Right now I'm in Phase 1, so I can chat with you, but I'll be much more powerful once you upload your transaction data, {user_name}!"
-    
-    # Greetings
-    if any(word in message_lower for word in ["hello", "hi", "hey", "good morning", "good afternoon"]):
-        if user:
-            return f"Hello {user_name}! I'm your AI finance assistant powered by llama3.2 running locally. I'm ready to help with budgeting and savings goals. Upload your transaction CSV to unlock my full potential!"
-        else:
-            return "Hello! I'm your AI finance assistant powered by llama3.2 20B model running locally via Ollama. Sign in to access personalized features, then upload your transaction data to get started with smart financial planning!"
-    
-    # Data import
-    elif any(word in message_lower for word in ["import", "upload", "csv", "transactions", "bank data"]):
-        return f"To import your financial data, {user_name}, click 'Upload CSV File' in the Transactions tab. I support most bank CSV formats and will automatically categorize your spending once the feature is ready!"
-    
-    # Financial analysis
-    elif any(word in message_lower for word in ["balance", "money", "spend", "spending", "analyze", "budget"]):
-        return f"I'd love to analyze your finances, {user_name}! First, upload your transaction CSV in the Transactions tab, then I can provide insights on spending patterns, suggest budgets, and help with financial planning."
-    
-    # Help and capabilities
-    elif any(word in message_lower for word in ["help", "what can", "capabilities", "features"]):
-        if user:
-            return f"Hi {user_name}! I'm your AI-powered finance assistant running llama3.2 20B locally for super-fast responses. I can help with savings goals, budgeting, and financial planning. Currently in Phase 1 - upload your bank CSV to unlock features like spending analysis and goal tracking!"
-        else:
-            return "I'm an AI finance assistant powered by llama3.2 20B running locally via Ollama! Sign in first, then upload transaction data for personalized insights. Try asking: 'Save $3000 by December' or 'Help me budget for groceries'."
-    
-    # Authentication
-    elif any(word in message_lower for word in ["auth", "login", "sign in", "account"]):
-        if user:
-            return f"You're successfully signed in as {user.email}! Your authentication is working perfectly. Now upload some transaction data and I can provide personalized financial insights!"
-        else:
-            return "Please sign in using the login button to access personalized financial features and secure data storage!"
-    
-    # Forecasting and predictions
-    elif any(word in message_lower for word in ["forecast", "predict", "future", "will i", "can i afford"]):
-        return f"I'll be able to forecast your spending and predict financial outcomes once you upload transaction data, {user_name}! The forecasting engine uses machine learning to help you plan for the future."
-    
-    # Categories and organization
-    elif any(word in message_lower for word in ["categor", "organize", "sort", "group"]):
-        return f"I can automatically categorize your transactions using ML once you upload your data, {user_name}! The system learns from your spending patterns to organize everything intelligently."
-    
-    # Default response
-    else:
-        return f"I understand you said '{message}'. I'm an AI finance assistant powered by llama3.2 20B running locally via Ollama, ready to help with budgeting, savings goals, and financial planning! Try uploading your transaction data in the Transactions tab to get started, {user_name}."
-
 @router.post("/command", response_model=ChatResponse)
 async def chat_command(
     request_data: ChatRequest, 
     request: Request,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """llama3.2 powered chat with intelligent fallbacks"""
+    """AI-powered chat with full read-only data access"""
     
     message = request_data.message
-    user_context = "authenticated" if current_user else "anonymous"
+    user_name = current_user.display_name or current_user.email.split('@')[0]
+    user_context = f"authenticated_{current_user.email}"
     ai_powered = False
     fallback_used = False
     model_info = None
     
-    # Build context for llama3.2
-    context_parts = [
-        "You are having a natural conversation about personal finance.",
-        "The user is using Azimuth Core - a local Personal Finance Planner app.",
-        "Be conversational and helpful, like chatting with a friend about money.",
-        "Focus on privacy, local processing, and financial management.",
-        "Keep responses under 100 words and be encouraging."
-    ]
+    # Get comprehensive transaction context
+    tx_context = await get_comprehensive_transaction_context(current_user, db)
     
-    if current_user:
-        context_parts.append(f"User {current_user.email} is signed in.")
-    else:
-        context_parts.append("User is anonymous - encourage sign in for personalized features.")
+    # Detect intent and action FIRST
+    suggested_action, action_params = detect_intent_and_action(message, tx_context)
     
-    context_parts.extend([
-        "This is Phase 1: auth works, transaction import coming soon.",
-        "If asked about unimplemented features, guide to current capabilities.",
-        f"User question: {message}"
-    ])
+    # If we detected an action, use direct response (skip AI)
+    if suggested_action and action_params:
+        # Direct data-driven response
+        response = get_smart_fallback_response(message, current_user, tx_context)
+        fallback_used = True
+        model_info = "direct_query"
+        
+        # Create response
+        chat_response = ChatResponse(
+            response=response,
+            timestamp=time.strftime("%H:%M:%S"),
+            user_context=user_context,
+            ai_powered=False,
+            fallback_used=True,
+            model_info=model_info,
+            suggested_action=suggested_action,
+            action_params=action_params
+        )
+        
+        await log_chat_interaction(db, current_user, message, response, False, request)
+        
+        status = "⚡ Direct"
+        print(f"{status}: {message[:40]}... → {response[:60]}...")
+        print(f"   🎯 Action: {suggested_action} {action_params}")
+        
+        return chat_response
     
-    full_prompt = " ".join(context_parts)
+    # Build AI context (only for non-action queries)
+    ai_context = build_context_for_ai(user_name, tx_context)
     
-    # Try llama3.2 via Ollama first
-    print(f"🎯 Attempting llama3.2 query for: {message}")
+    # Build prompt with STRICT instructions
+    full_prompt = f"""You are a helpful finance assistant. MAX 25 WORDS.
+
+{ai_context}
+
+User asks: "{message}"
+
+Rules:
+- Answer in 25 words MAX
+- Be direct, no instructions
+- Use actual data from context
+- Don't tell user to click buttons
+
+Answer:"""
+    
+    # Try Ollama
+    print(f"🎯 Querying Ollama: {message[:50]}")
     try:
-        llm_result = await llm_client.query(full_prompt, max_tokens=150)
-        print(f"📊 llama3.2 result: {llm_result['status']}")
+        llm_result = await llm_client.query(full_prompt, max_tokens=60)
         
         if llm_result["status"] == "success" and llm_result["text"]:
-            response = llm_result["text"]
-            ai_powered = True
-            model_info = llm_result.get("meta", {}).get("model", "llama3.2:3b")
-            print(f"✅ Using llama3.2 AI response")
+            response = llm_result["text"].strip()
+            # Enforce 25 word limit
+            words = response.split()
+            if len(words) > 25:
+                response = " ".join(words[:25]) + "..."
+            
+            # Check if response is still giving instructions
+            bad_phrases = ["go to", "click on", "navigate to", "select the", "use the"]
+            if any(phrase in response.lower() for phrase in bad_phrases):
+                # Override with direct response
+                response = get_smart_fallback_response(message, current_user, tx_context)
+                fallback_used = True
+                model_info = "fallback_override"
+            else:
+                ai_powered = True
+                model_info = llm_result.get("meta", {}).get("model", "llama3.2:3b")
+            
+            print(f"✅ Response generated")
         else:
-            response = get_smart_fallback_response(message, current_user)
+            response = get_smart_fallback_response(message, current_user, tx_context)
             fallback_used = True
             model_info = "fallback"
-            print(f"🔄 Using enhanced fallback: {llm_result.get('text', 'unknown error')}")
+            print(f"🔄 Fallback response")
             
     except Exception as e:
-        print(f"❌ llama3.2 error: {e}")
-        response = get_smart_fallback_response(message, current_user)
+        print(f"❌ Ollama error: {e}")
+        response = get_smart_fallback_response(message, current_user, tx_context)
         fallback_used = True
         model_info = "fallback"
     
-    # Create response object
+    # Create response
     chat_response = ChatResponse(
         response=response,
         timestamp=time.strftime("%H:%M:%S"),
         user_context=user_context,
         ai_powered=ai_powered,
         fallback_used=fallback_used,
-        model_info=model_info
+        model_info=model_info,
+        suggested_action=suggested_action,
+        action_params=action_params
     )
     
-    # Log the interaction
+    # Log interaction
     await log_chat_interaction(db, current_user, message, response, ai_powered, request)
     
-    # Console logging for development
-    status_emoji = "🤖" if ai_powered else "🔄"
-    model_tag = f"[{model_info}]" if model_info else ""
-    print(f"{status_emoji} {model_tag} {user_context}: {message[:50]}...")
-    print(f"   Response: {response[:80]}...")
+    # Console logging
+    status = "🤖 AI" if ai_powered else "🔄 Fallback"
+    print(f"{status} [{model_info}]: {message[:40]}... → {response[:60]}...")
+    if suggested_action:
+        print(f"   ⚡ Action: {suggested_action} {action_params or ''}")
     
     return chat_response
 
 @router.get("/history")
 async def get_chat_history(
-    current_user: User = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get user's recent chat history (requires auth)"""
+    """Get user's recent chat history"""
     
-    if not current_user:
-        return {"error": "Authentication required"}
+    from sqlalchemy import select, desc
+    
+    result = await db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.user_id == current_user.id,
+            AuditLog.entity == "chat",
+            AuditLog.action == "message"
+        )
+        .order_by(desc(AuditLog.created_at))
+        .limit(20)
+    )
+    
+    history = []
+    for log in result.scalars().all():
+        history.append({
+            "message": log.details.get("user_message"),
+            "response": log.details.get("bot_response"),
+            "ai_powered": log.details.get("ai_powered"),
+            "timestamp": log.created_at.isoformat()
+        })
     
     return {
-        "message": f"Chat history for {current_user.email} - coming in Phase 2!",
-        "user_id": str(current_user.id),
-        "ai_model": "llama3.2-20b-local"
+        "history": history,
+        "count": len(history),
+        "user_id": str(current_user.id)
     }
