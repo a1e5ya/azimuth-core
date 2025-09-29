@@ -27,8 +27,9 @@
       <div class="text-medium section-header">User Profile</div>
       <div v-if="user">
         <div class="text-small"><strong>Email:</strong> {{ user.email }}</div>
-        <div class="text-small"><strong>UID:</strong> {{ user.uid.substring(0, 16) }}...</div>
-        <div class="text-small"><strong>Display Name:</strong> {{ user.displayName || 'Not set' }}</div>
+        <div class="text-small"><strong>User ID:</strong> {{ getUserId() }}</div>
+        <div class="text-small"><strong>Display Name:</strong> {{ user.display_name || 'Not set' }}</div>
+        <div class="text-small"><strong>Account Created:</strong> {{ formatDate(user.created_at) }}</div>
         <button class="btn" @click="$emit('logout')">Sign Out</button>
       </div>
       <div v-else>
@@ -64,6 +65,30 @@ export default {
       default: 'Phase 1'
     }
   },
-  emits: ['logout', 'show-tab']
+  emits: ['logout', 'show-tab'],
+  methods: {
+    getUserId() {
+      if (!this.user) return 'N/A'
+      
+      // Handle both Firebase (uid) and local auth (id) formats
+      const id = this.user.id || this.user.uid || ''
+      
+      // Show first 16 characters if it's a long ID
+      return id.length > 16 ? id.substring(0, 16) + '...' : id
+    },
+    formatDate(dateString) {
+      if (!dateString) return 'N/A'
+      
+      try {
+        return new Date(dateString).toLocaleDateString('en-US', {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        })
+      } catch (error) {
+        return dateString
+      }
+    }
+  }
 }
 </script>

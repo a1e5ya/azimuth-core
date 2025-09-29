@@ -294,7 +294,6 @@ async def update_transaction(
     
     audit_entry = AuditLog(
         user_id=current_user.id,
-        firebase_uid=current_user.firebase_uid,
         entity="transaction",
         entity_id=str(transaction.id),
         action="update",
@@ -383,7 +382,6 @@ async def reset_all_transactions(
         # Log the reset action
         audit_entry = AuditLog(
             user_id=current_user.id,
-            firebase_uid=current_user.firebase_uid,
             entity="transaction",
             action="reset_all",
             details={

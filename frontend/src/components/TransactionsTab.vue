@@ -451,6 +451,7 @@
 <script>
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 
 export default {
   name: 'TransactionsTab',
@@ -469,7 +470,7 @@ export default {
   ],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
-
+    const authStore = useAuthStore()
     // File handling refs
     const fileInput = ref(null)
     const isDragging = ref(false)
@@ -631,7 +632,7 @@ export default {
         })
         
         try {
-          const token = await props.user.getIdToken()
+          const token = authStore.token
           
           const formData = new FormData()
           formData.append('file', file)
@@ -689,7 +690,7 @@ export default {
       if (!props.user) return
       
       try {
-        const token = await props.user.getIdToken()
+        const token = authStore.token
         const response = await axios.get(`${API_BASE}/transactions/summary`, {
           headers: { 'Authorization': `Bearer ${token}` }
         })
@@ -717,7 +718,7 @@ export default {
       
       loading.value = true
       try {
-        const token = await props.user.getIdToken()
+        const token = authStore.token
         
         const params = new URLSearchParams({
           page: currentPage.value,
@@ -842,7 +843,7 @@ export default {
       }
       
       try {
-        const token = await props.user.getIdToken()
+        const token = authStore.token
         
         await axios.post(`${API_BASE}/transactions/categorize/${transactionId}`, {
           category_id: categoryId,
@@ -874,7 +875,7 @@ export default {
       if (!bulkCategoryId.value || selectedTransactions.value.length === 0) return
       
       try {
-        const token = await props.user.getIdToken()
+        const token = authStore.token
         
         await axios.post(`${API_BASE}/transactions/bulk-categorize`, {
           transaction_ids: selectedTransactions.value,
@@ -968,7 +969,7 @@ export default {
       resetting.value = true
       
       try {
-        const token = await props.user.getIdToken()
+        const token = authStore.token
         
         await axios.post(`${API_BASE}/transactions/reset`, {
           action: 'reset_all',
