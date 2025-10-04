@@ -183,11 +183,11 @@ export default {
 }
 
 .category-indent {
-  margin-left: 1.5rem;
+  margin-left: 0.5rem;
 }
 
 .category-indent-2 {
-  margin-left: 3rem;
+  margin-left: 1.5rem;
 }
 
 .category-stats {

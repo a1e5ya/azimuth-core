@@ -1,12 +1,5 @@
 <template>
   <div class="subcategory-details">
-    <div class="summary-header">
-      <div class="category-title">
-        <AppIcon :name="summary.category?.icon" size="large" />
-        <h2>{{ summary.category?.name }}</h2>
-      </div>
-    </div>
-
     <div class="summary-cards">
       <div class="card stat-card">
         <div class="stat-label">Total Transactions</div>
@@ -57,10 +50,6 @@
 
     <div class="card">
       <div class="transactions-header">
-        <h3>All Transactions</h3>
-        <button class="btn btn-small" @click="loadTransactions">
-          Refresh
-        </button>
       </div>
 
       <div v-if="loading" class="loading-state">
@@ -116,12 +105,10 @@
 <script>
 import { ref, onMounted, watch } from 'vue'
 import axios from 'axios'
-import AppIcon from './AppIcon.vue'
 import { useAuthStore } from '@/stores/auth'
 
 export default {
   name: 'SubcategoryDetails',
-  components: { AppIcon },
   props: {
     summary: {
       type: Object,
@@ -244,23 +231,6 @@ export default {
   display: flex;
   flex-direction: column;
   gap: var(--gap-standard);
-}
-
-.summary-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.category-title {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-standard);
-}
-
-.category-title h2 {
-  margin: 0;
-  font-size: var(--text-large);
 }
 
 .summary-cards {

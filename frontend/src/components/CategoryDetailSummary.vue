@@ -1,12 +1,5 @@
 <template>
   <div class="category-detail-summary">
-    <div class="summary-header">
-      <div class="category-title">
-        <AppIcon :name="summary.category?.icon" size="large" />
-        <h2>{{ summary.category?.name }}</h2>
-      </div>
-    </div>
-
     <div class="summary-cards">
       <div class="card stat-card">
         <div class="stat-label">Total Transactions</div>
@@ -25,23 +18,22 @@
     </div>
 
     <div v-if="summary.subcategories && summary.subcategories.length > 0" class="card">
-      <h3>Subcategories</h3>
-      <div class="subcategory-list">
-        <div
+      <div class="subcategory-grid">
+        <button
           v-for="subcategory in summary.subcategories"
           :key="subcategory.id"
-          class="subcategory-item"
+          class="subcategory-card"
           @click="$emit('select-subcategory', subcategory)"
         >
-          <div class="subcategory-info">
-            <AppIcon :name="subcategory.icon" size="medium" />
-            <span class="subcategory-name">{{ subcategory.name }}</span>
+          <div class="subcategory-card-icon">
+            <AppIcon :name="subcategory.icon || 'circle'" size="large" />
           </div>
-          <div class="subcategory-amount">
-            {{ formatAmount(subcategory.amount) }}
-            <span class="transaction-count">({{ subcategory.count }})</span>
+          <div class="subcategory-card-content">
+            <div class="subcategory-card-name">{{ subcategory.name }}</div>
+            <div class="subcategory-card-amount">{{ formatAmount(subcategory.amount) }}</div>
+            <div class="subcategory-card-count">{{ subcategory.count }} transactions</div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -168,48 +160,55 @@ export default {
   font-weight: 600;
 }
 
-.subcategory-list {
+.subcategory-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--gap-standard);
+}
+
+.subcategory-card {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-small);
-}
-
-.subcategory-item {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--gap-small);
+  padding: var(--gap-standard);
   background: var(--color-background-light);
+  border: none;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.2s;
+  transition: all 0.2s;
+  text-align: center;
 }
 
-.subcategory-item:hover {
+.subcategory-card:hover {
   background: var(--color-background);
+  transform: translateY(-0.125rem);
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
 }
 
-.subcategory-info {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
+.subcategory-card-icon {
+  margin-bottom: var(--gap-small);
 }
 
-.subcategory-name {
-  font-weight: 500;
+.subcategory-card-content {
+  width: 100%;
 }
 
-.subcategory-amount {
+.subcategory-card-name {
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: var(--text-small);
 }
 
-.transaction-count {
+.subcategory-card-amount {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: var(--text-medium);
+  margin-bottom: 0.25rem;
+}
+
+.subcategory-card-count {
   font-size: var(--text-small);
   color: var(--color-text-muted);
-  font-weight: 400;
 }
 
 .merchant-list {
@@ -235,6 +234,12 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
+}
+
+.transaction-count {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+  font-weight: 400;
 }
 
 .monthly-list {

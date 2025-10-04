@@ -646,7 +646,7 @@ emits: [
           formData.append('file', file)
           formData.append('account_name', 'Default Account')
           formData.append('account_type', 'checking')
-          formData.append('auto_categorize', 'false') // No auto-categorization, just CSV data
+          formData.append('auto_categorize', 'true') 
           
           const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
             headers: {

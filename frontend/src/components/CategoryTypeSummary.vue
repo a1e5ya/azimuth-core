@@ -1,9 +1,5 @@
 <template>
   <div class="type-summary">
-    <div class="summary-header">
-      <h2>{{ typeData.name }} Summary</h2>
-    </div>
-
     <div class="summary-cards">
       <div class="card stat-card">
         <div class="stat-label">Total Transactions</div>
@@ -21,23 +17,23 @@
       </div>
     </div>
 
-    <div class="card">
-      <h3>Top Categories</h3>
-      <div class="category-list">
-        <div
-          v-for="category in summary.categories || []"
+    <div v-if="summary.categories && summary.categories.length > 0" class="card">
+      <div class="category-grid">
+        <button
+          v-for="category in summary.categories"
           :key="category.id"
-          class="category-item"
+          class="category-card"
+          @click="selectCategory(category)"
         >
-          <div class="category-info">
-            <AppIcon :name="category.icon" size="medium" />
-            <span class="category-name">{{ category.name }}</span>
+          <div class="category-card-icon">
+            <AppIcon :name="category.icon || 'circle'" size="large" />
           </div>
-          <div class="category-amount">
-            {{ formatAmount(category.amount) }}
-            <span class="transaction-count">({{ category.count }})</span>
+          <div class="category-card-content">
+            <div class="category-card-name">{{ category.name }}</div>
+            <div class="category-card-amount">{{ formatAmount(category.amount) }}</div>
+            <div class="category-card-count">{{ category.count }} transactions</div>
           </div>
-        </div>
+        </button>
       </div>
     </div>
 
@@ -58,7 +54,9 @@
 </template>
 
 <script>
+import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
+import { useCategoryStore } from '@/stores/categories'
 
 export default {
   name: 'CategoryTypeSummary',
@@ -74,6 +72,8 @@ export default {
     }
   },
   setup() {
+    const categoryStore = useCategoryStore()
+    
     function formatAmount(amount) {
       if (!amount) return '€0.00'
       return new Intl.NumberFormat('en-EU', {
@@ -88,10 +88,21 @@ export default {
       const date = new Date(year, parseInt(month) - 1)
       return date.toLocaleDateString('en-US', { year: 'numeric', month: 'short' })
     }
+    
+    function selectCategory(category) {
+      const fullCategory = categoryStore.categories
+        .flatMap(type => type.children)
+        .find(cat => cat.id === category.id)
+      
+      if (fullCategory) {
+        categoryStore.selectCategory(fullCategory)
+      }
+    }
 
     return {
       formatAmount,
-      formatMonth
+      formatMonth,
+      selectCategory
     }
   }
 }
@@ -138,42 +149,55 @@ export default {
   font-weight: 600;
 }
 
-.category-list {
+.category-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(10rem, 1fr));
+  gap: var(--gap-standard);
+}
+
+.category-card {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-small);
-}
-
-.category-item {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--gap-small);
+  padding: var(--gap-standard);
   background: var(--color-background-light);
+  border: none;
   border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-align: center;
 }
 
-.category-info {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
+.category-card:hover {
+  background: var(--color-background);
+  transform: translateY(-0.125rem);
+  box-shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
 }
 
-.category-name {
-  font-weight: 500;
+.category-card-icon {
+  margin-bottom: var(--gap-small);
 }
 
-.category-amount {
+.category-card-content {
+  width: 100%;
+}
+
+.category-card-name {
   font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+  margin-bottom: 0.25rem;
+  font-size: var(--text-small);
 }
 
-.transaction-count {
+.category-card-amount {
+  font-weight: 700;
+  color: var(--color-text);
+  font-size: var(--text-medium);
+  margin-bottom: 0.25rem;
+}
+
+.category-card-count {
   font-size: var(--text-small);
   color: var(--color-text-muted);
-  font-weight: 400;
 }
 
 .monthly-list {

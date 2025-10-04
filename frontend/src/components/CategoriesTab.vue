@@ -2,12 +2,6 @@
   <div class="tab-content">
     <div class="grid grid-sidebar">
       <div class="container">
-        <div class="category-header">
-          <div class="text-medium section-header">Categories</div>
-          <button class="btn btn-small" @click="refreshCategories" :disabled="loading">
-            Refresh
-          </button>
-        </div>
 
         <div v-if="loading && !categories.length" class="loading-state">
           <div class="loading-spinner">⟳</div>
@@ -32,8 +26,6 @@
 
       <div class="container">
         <div v-if="!selectedLevel" class="empty-selection">
-          <div class="empty-icon">📊</div>
-          <div class="empty-title">Select a Category</div>
           <div class="empty-subtitle">
             Choose a transaction type, category, or subcategory from the tree to view details
           </div>
