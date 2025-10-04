@@ -1,5 +1,5 @@
 """
-Main transactions router with CRUD operations
+Main transactions router with CRUD operations - FIXED
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -43,9 +43,7 @@ async def list_transactions(
     """Get paginated list of transactions with enhanced filters"""
     
     print(f"📋 Transaction list request: page={page}, limit={limit}")
-    print(f"👤 Current user: {current_user.email if current_user else 'None'}")
     
-    # Create filters object
     filters = TransactionFilters(
         page=page,
         limit=limit,
@@ -62,13 +60,11 @@ async def list_transactions(
         sort_order=sort_order
     )
     
-    # Get transactions using queries service
     queries = get_transaction_queries(db, current_user)
     transactions, total_count = await queries.get_transactions_with_filters(filters)
     
     print(f"✅ Found {len(transactions)} transactions (total: {total_count})")
     
-    # Convert to response format
     response_data = []
     for transaction in transactions:
         response_data.append(TransactionResponse(
@@ -84,8 +80,6 @@ async def list_transactions(
             category_icon=transaction.category.icon if transaction.category else None,
             source_category=transaction.source_category,
             import_batch_id=str(transaction.import_batch_id) if transaction.import_batch_id else None,
-            
-            # Enhanced fields
             transaction_type=transaction.transaction_type,
             main_category=transaction.main_category,
             csv_category=transaction.csv_category,
@@ -123,74 +117,69 @@ async def get_transaction_summary(
     
     return TransactionSummary(**summary_data)
 
-@router.get("/review", response_model=ReviewTransactionsResponse)
-async def get_transactions_needing_review(
-    page: int = Query(1, ge=1),
-    limit: int = Query(50, ge=1, le=200),
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get transactions that need manual review"""
-    
-    print(f"🔍 Review transactions request: page={page}, limit={limit}")
-    
-    queries = get_transaction_queries(db, current_user)
-    transactions, total_count = await queries.get_transactions_needing_review(page, limit)
-    
-    # Convert to response format
-    response_data = []
-    for transaction in transactions:
-        response_data.append({
-            "id": str(transaction.id),
-            "posted_at": transaction.posted_at.isoformat(),
-            "amount": str(transaction.amount),
-            "merchant": transaction.merchant,
-            "memo": transaction.memo,
-            "transaction_type": transaction.transaction_type,
-            "csv_category": transaction.csv_category,
-            "csv_subcategory": transaction.csv_subcategory,
-            "main_category": transaction.main_category,
-            "confidence_score": float(transaction.confidence_score) if transaction.confidence_score else None,
-            "suggested_categories": []  # Could be populated by ML later
-        })
-    
-    return ReviewTransactionsResponse(
-        transactions=response_data,
-        total_count=total_count,
-        page=page,
-        limit=limit,
-        has_more=len(response_data) == limit
-    )
-
 @router.post("/categorize/{transaction_id}")
 async def categorize_transaction(
     transaction_id: str,
-    assignment: CategoryAssignment,
-    transaction_service: TransactionService = Depends(get_transaction_service)
+    category_id: str = Query(..., description="Category ID to assign"),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Manually categorize a transaction with enhanced error handling"""
+    """Manually categorize a transaction"""
     
-    print(f"🏷️ Categorize transaction: {transaction_id} -> {assignment.category_id}")
+    print(f"🏷️ Categorize transaction: {transaction_id} -> {category_id}")
     
-    result = await transaction_service.categorize_transaction(
-        transaction_id=transaction_id,
-        category_id=assignment.category_id,
-        confidence=assignment.confidence or 1.0,
-        notes=assignment.notes
+    try:
+        trans_uuid = uuid.UUID(transaction_id)
+        cat_uuid = uuid.UUID(category_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid ID format")
+    
+    # Get transaction
+    trans_query = select(Transaction).where(
+        and_(
+            Transaction.id == trans_uuid,
+            Transaction.user_id == current_user.id
+        )
     )
+    trans_result = await db.execute(trans_query)
+    transaction = trans_result.scalar_one_or_none()
     
-    if not result["success"]:
-        if "not found" in result["message"].lower():
-            raise HTTPException(status_code=404, detail=result["message"])
-        elif "access denied" in result["message"].lower():
-            raise HTTPException(status_code=403, detail=result["message"])
-        else:
-            raise HTTPException(status_code=500, detail=result["message"])
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
     
-    return JSONResponse(
-        content=result,
-        status_code=200
+    # Get category
+    cat_query = select(Category).where(
+        and_(
+            Category.id == cat_uuid,
+            Category.user_id == current_user.id
+        )
     )
+    cat_result = await db.execute(cat_query)
+    category = cat_result.scalar_one_or_none()
+    
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    # Update transaction
+    transaction.category_id = cat_uuid
+    transaction.source_category = "user"
+    transaction.confidence_score = 1.0
+    transaction.review_needed = False
+    transaction.updated_at = datetime.utcnow()
+    
+    await db.commit()
+    
+    print(f"✅ Transaction categorized as: {category.name}")
+    
+    return {
+        "success": True,
+        "message": f"Transaction categorized as {category.name}",
+        "category": {
+            "id": str(category.id),
+            "name": category.name,
+            "icon": category.icon
+        }
+    }
 
 @router.post("/bulk-categorize", response_model=BulkOperationResponse)
 async def bulk_categorize_transactions(
@@ -221,93 +210,6 @@ async def bulk_categorize_transactions(
         updated_count=result["updated_count"]
     )
 
-@router.put("/{transaction_id}")
-async def update_transaction(
-    transaction_id: str,
-    update_data: TransactionUpdate,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update transaction details"""
-    
-    print(f"✏️ Update transaction: {transaction_id}")
-    
-    queries = get_transaction_queries(db, current_user)
-    transaction = await queries.get_transaction_by_id(transaction_id)
-    
-    if not transaction:
-        raise HTTPException(status_code=404, detail="Transaction not found")
-    
-    # Store old values for audit
-    old_values = {
-        "merchant": transaction.merchant,
-        "memo": transaction.memo,
-        "amount": float(transaction.amount),
-        "category_id": str(transaction.category_id) if transaction.category_id else None,
-        "tags": transaction.tags,
-        "notes": transaction.notes
-    }
-    
-    # Apply updates
-    if update_data.merchant is not None:
-        transaction.merchant = update_data.merchant
-    if update_data.memo is not None:
-        transaction.memo = update_data.memo
-    if update_data.amount is not None:
-        transaction.amount = update_data.amount
-    if update_data.category_id is not None:
-        # Verify category exists and belongs to user
-        from sqlalchemy import select
-        from ..models.database import Category
-        import uuid
-        
-        category_query = select(Category).where(
-            and_(
-                Category.id == uuid.UUID(update_data.category_id),
-                Category.user_id == current_user.id
-            )
-        )
-        category_result = await db.execute(category_query)
-        if not category_result.scalar_one_or_none():
-            raise HTTPException(status_code=404, detail="Category not found")
-        transaction.category_id = uuid.UUID(update_data.category_id)
-    if update_data.tags is not None:
-        transaction.tags = update_data.tags
-    if update_data.notes is not None:
-        transaction.notes = update_data.notes
-    
-    transaction.updated_at = datetime.utcnow()
-    await db.commit()
-    
-    # Log the update
-    from ..models.database import AuditLog
-    from datetime import datetime
-    
-    new_values = {
-        "merchant": transaction.merchant,
-        "memo": transaction.memo,
-        "amount": float(transaction.amount),
-        "category_id": str(transaction.category_id) if transaction.category_id else None,
-        "tags": transaction.tags,
-        "notes": transaction.notes
-    }
-    
-    audit_entry = AuditLog(
-        user_id=current_user.id,
-        entity="transaction",
-        entity_id=str(transaction.id),
-        action="update",
-        before_json=old_values,
-        after_json=new_values
-    )
-    db.add(audit_entry)
-    await db.commit()
-    
-    return {
-        "success": True,
-        "message": "Transaction updated successfully"
-    }
-
 @router.delete("/{transaction_id}", response_model=DeleteResponse)
 async def delete_transaction(
     transaction_id: str,
@@ -327,32 +229,6 @@ async def delete_transaction(
     
     return DeleteResponse(**result)
 
-@router.delete("/batch/{batch_id}")
-async def delete_import_batch(
-    batch_id: str,
-    transaction_service: TransactionService = Depends(get_transaction_service)
-):
-    """Delete an import batch and all its transactions"""
-    
-    print(f"🗑️ Delete import batch: {batch_id}")
-    
-    result = await transaction_service.delete_import_batch(batch_id)
-    
-    if not result["success"]:
-        if "not found" in result["message"].lower():
-            raise HTTPException(status_code=404, detail=result["message"])
-        else:
-            raise HTTPException(status_code=500, detail=result["message"])
-    
-    return JSONResponse(
-        content={
-            "success": result["success"],
-            "message": result["message"],
-            "deleted_count": result["deleted_count"]
-        },
-        status_code=200
-    )
-
 @router.post("/reset")
 async def reset_all_transactions(
     current_user: User = Depends(get_current_user),
@@ -364,22 +240,18 @@ async def reset_all_transactions(
         from sqlalchemy import delete
         from ..models.database import Transaction, ImportBatch
         
-        # Count transactions before deletion
         count_query = select(func.count(Transaction.id)).where(Transaction.user_id == current_user.id)
         count_result = await db.execute(count_query)
         transaction_count = count_result.scalar()
         
-        # Delete all transactions for this user
         delete_transactions = delete(Transaction).where(Transaction.user_id == current_user.id)
         await db.execute(delete_transactions)
         
-        # Delete all import batches for this user
         delete_batches = delete(ImportBatch).where(ImportBatch.user_id == current_user.id)
         await db.execute(delete_batches)
         
         await db.commit()
         
-        # Log the reset action
         audit_entry = AuditLog(
             user_id=current_user.id,
             entity="transaction",

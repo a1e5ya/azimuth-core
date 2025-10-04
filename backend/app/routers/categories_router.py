@@ -5,13 +5,15 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
+from datetime import date
 
 from ..models.database import get_db, User
 from ..services.category_service import CategoryService, get_category_service
 from ..services.category_initialization import initialize_user_categories
+from ..services.category_training import get_training_service
+from ..services.llm_categorizer import get_llm_categorizer
 from ..routers.category_queries import CategoryQueries, get_category_queries
 from ..auth.local_auth import get_current_user
-from datetime import date
 
 router = APIRouter()
 
@@ -58,6 +60,16 @@ class CSVMatchResponse(BaseModel):
     category_id: Optional[str]
     confidence: float
     suggestions: List[Dict[str, Any]]
+
+
+class ImprovementRequest(BaseModel):
+    recategorize_uncertain: bool = False
+
+
+class ImprovementResponse(BaseModel):
+    success: bool
+    message: str
+    stats: Dict[str, Any]
 
 
 @router.get("/tree")
@@ -211,6 +223,96 @@ async def match_csv_category(
         category_id=result["category_id"],
         confidence=result["confidence"],
         suggestions=result["suggestions"]
+    )
+
+
+@router.post("/improve", response_model=ImprovementResponse)
+async def improve_categorization(
+    request: ImprovementRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Improve categorization by learning from approved transactions"""
+    
+    print(f"🎯 Starting categorization improvement for user: {current_user.email}")
+    
+    # Get training service and build fresh training data
+    training_service = await get_training_service(db, current_user)
+    training_data = await training_service.build_training_data()
+    
+    print(f"📚 Learned from {training_data['total_approved']} approved transactions")
+    print(f"   - Merchant patterns: {len(training_data['merchant_mappings'])}")
+    print(f"   - CSV patterns: {len(training_data['csv_mappings'])}")
+    print(f"   - Keyword patterns: {len(training_data['keyword_mappings'])}")
+    
+    stats = {
+        'training_data': {
+            'total_approved': training_data['total_approved'],
+            'merchant_patterns': len(training_data['merchant_mappings']),
+            'csv_patterns': len(training_data['csv_mappings']),
+            'keyword_patterns': len(training_data['keyword_mappings'])
+        },
+        'recategorized': 0,
+        'improved': 0
+    }
+    
+    # Optional: Recategorize uncertain transactions
+    if request.recategorize_uncertain:
+        from sqlalchemy import select, and_
+        from ..models.database import Transaction
+        
+        print("🔄 Recategorizing uncertain transactions...")
+        
+        # Get transactions needing review or with low confidence
+        uncertain_query = select(Transaction).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.review_needed == True
+            )
+        ).limit(100)  # Process in batches
+        
+        result = await db.execute(uncertain_query)
+        uncertain_transactions = result.scalars().all()
+        
+        print(f"📋 Found {len(uncertain_transactions)} uncertain transactions")
+        
+        llm_categorizer = await get_llm_categorizer(db, current_user)
+        
+        improved_count = 0
+        for transaction in uncertain_transactions:
+            # Try categorizing again with new training data
+            result = await llm_categorizer.categorize_transaction(
+                merchant=transaction.merchant or '',
+                memo=transaction.memo or '',
+                amount=float(transaction.amount),
+                csv_main=transaction.main_category or '',
+                csv_category=transaction.csv_category or '',
+                csv_subcategory=transaction.csv_subcategory
+            )
+            
+            # Update if we got better confidence or new category
+            if result['category_id']:
+                old_confidence = float(transaction.confidence_score or 0)
+                new_confidence = result['confidence']
+                
+                if new_confidence > old_confidence or not transaction.category_id:
+                    transaction.category_id = result['category_id']
+                    transaction.confidence_score = new_confidence
+                    transaction.source_category = result['method']
+                    transaction.review_needed = new_confidence < 0.75
+                    improved_count += 1
+        
+        await db.commit()
+        
+        stats['recategorized'] = len(uncertain_transactions)
+        stats['improved'] = improved_count
+        
+        print(f"✅ Improved {improved_count}/{len(uncertain_transactions)} transactions")
+    
+    return ImprovementResponse(
+        success=True,
+        message=f"Learned from {training_data['total_approved']} approved transactions. {stats['improved']} transactions improved.",
+        stats=stats
     )
 
 

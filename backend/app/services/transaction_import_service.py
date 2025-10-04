@@ -1,6 +1,5 @@
 """
-Transaction import service - COMPLETE FIX for SQLite UUID issue
-Replace backend/app/services/transaction_import_service.py with this
+Transaction import service - DEBUG CATEGORY MATCHING
 """
 from fastapi import Depends
 from ..models.database import get_db
@@ -15,8 +14,7 @@ from ..models.database import (
     Transaction, Account, Category, ImportBatch, User, AuditLog, CategoryMapping
 )
 from ..services.csv_processor import process_csv_upload
-from ..services.category_mappings import CategoryMapper, PatternType
-from ..services.category_service import CategoryService
+from ..services.category_training import CategoryTrainingService
 from ..auth.local_auth import get_current_user
 
 class TransactionImportService:
@@ -25,7 +23,6 @@ class TransactionImportService:
     def __init__(self, db: AsyncSession, user: User):
         self.db = db
         self.user = user
-        self.category_mapper = CategoryMapper()
     
     async def import_from_csv(
         self,
@@ -35,7 +32,7 @@ class TransactionImportService:
         account_type: str = "checking",
         auto_categorize: bool = True
     ) -> Dict[str, Any]:
-        """Import transactions from CSV"""
+        """Import transactions - LEARN from CSV categories first"""
         
         print(f"📤 Starting import: {filename} ({len(file_content)} bytes)")
         
@@ -66,43 +63,58 @@ class TransactionImportService:
             )
             print(f"✅ Processed {len(transactions_data)} transactions")
 
-            category_service = CategoryService(self.db, self.user)
+            # Get user's categories
+            user_categories = await self._get_user_categories()
+            print(f"📋 Available user categories: {len(user_categories)}")
+            for cat in user_categories[:10]:
+                parent_name = ""
+                if cat.parent_id:
+                    parent = next((c for c in user_categories if c.id == cat.parent_id), None)
+                    if parent:
+                        parent_name = f" (parent: {parent.name})"
+                print(f"   - {cat.name}{parent_name} [type: {cat.category_type}]")
+            
+            # Debug first few transactions
+            print(f"🔍 Sample CSV categories from first 5 transactions:")
+            for i, trans in enumerate(transactions_data[:5]):
+                print(f"   {i+1}. Main: '{trans.get('main_category')}' | Cat: '{trans.get('csv_category')}' | Sub: '{trans.get('csv_subcategory')}'")
             
             categorization_stats = {
-                'exact_matches': 0,
-                'similar_matches': 0,
-                'uncategorized': 0,
-                'review_needed': 0
+                'csv_exact': 0,
+                'none': 0
             }
 
-            inserted_count = 0
-            for trans_data in transactions_data:
+            print(f"🎯 Mapping to user categories...")
+            
+            for idx, trans_data in enumerate(transactions_data):
+                if idx % 1000 == 0 and idx > 0:
+                    print(f"   Progress: {idx}/{len(transactions_data)}")
+                
                 category_id = None
                 confidence_score = None
-                review_needed = False
+                source_category = "imported"
                 
-                if auto_categorize and trans_data.get('main_category'):
-                    match_result = await category_service.match_csv_category(
-                        csv_main=trans_data.get('main_category', ''),
-                        csv_category=trans_data.get('csv_category', ''),
-                        csv_subcategory=trans_data.get('csv_subcategory')
+                if auto_categorize:
+                    csv_main = trans_data.get('main_category', '')
+                    csv_cat = trans_data.get('csv_category', '')
+                    csv_subcat = trans_data.get('csv_subcategory', '')
+                    
+                    category = await self._find_category_for_csv(
+                        csv_main, csv_cat, csv_subcat, user_categories
                     )
                     
-                    if match_result['match_type'] == 'exact':
-                        category_id = match_result['category_id']
-                        confidence_score = match_result['confidence']
-                        categorization_stats['exact_matches'] += 1
-                    elif match_result['match_type'] == 'similar':
-                        category_id = match_result['category_id']
-                        confidence_score = match_result['confidence']
-                        review_needed = True
-                        categorization_stats['similar_matches'] += 1
+                    if category:
+                        category_id = category.id
+                        confidence_score = 0.95
+                        source_category = 'csv_mapped'
+                        categorization_stats['csv_exact'] += 1
+                        
+                        if idx < 5:
+                            print(f"   ✅ Matched: '{csv_cat}' / '{csv_subcat}' → {category.name}")
                     else:
-                        review_needed = True
-                        categorization_stats['uncategorized'] += 1
-                    
-                    if review_needed:
-                        categorization_stats['review_needed'] += 1
+                        categorization_stats['none'] += 1
+                        if idx < 5:
+                            print(f"   ❌ No match: '{csv_cat}' / '{csv_subcat}'")
                 
                 transaction = Transaction(
                     id=str(uuid.uuid4()),
@@ -116,7 +128,7 @@ class TransactionImportService:
                     category_id=category_id,
                     import_batch_id=str(import_batch.id),
                     hash_dedupe=trans_data['hash_dedupe'],
-                    source_category="csv_matched" if category_id else "imported",
+                    source_category=source_category,
                     transaction_type=trans_data.get('transaction_type'),
                     main_category=trans_data.get('main_category'),
                     csv_category=trans_data.get('csv_category'),
@@ -132,13 +144,13 @@ class TransactionImportService:
                     weekday=trans_data.get('weekday'),
                     transfer_pair_id=trans_data.get('transfer_pair_id'),
                     confidence_score=confidence_score,
-                    review_needed=review_needed
+                    review_needed=not category_id
                 )
                 
                 self.db.add(transaction)
-                inserted_count += 1
-
+            
             await self.db.commit()
+            inserted_count = len(transactions_data)
             
             import_batch.rows_total = len(transactions_data)
             import_batch.rows_imported = inserted_count
@@ -153,8 +165,11 @@ class TransactionImportService:
             
             await self.db.commit()
             
-            print(f"✅ Import complete: {inserted_count} transactions")
-            print(f"📊 Categorization: {categorization_stats}")
+            total_categorized = categorization_stats['csv_exact']
+            
+            elapsed = (datetime.utcnow() - import_batch.created_at).total_seconds()
+            print(f"✅ Import complete: {inserted_count} transactions in {elapsed:.1f}s")
+            print(f"📊 Categorization: {total_categorized}/{inserted_count} mapped ({total_categorized/inserted_count*100:.1f}%)")
             
             audit_entry = AuditLog(
                 user_id=str(self.user.id),
@@ -178,9 +193,11 @@ class TransactionImportService:
                     **summary,
                     "rows_inserted": inserted_count,
                     "batch_id": str(import_batch.id),
-                    "categorization": categorization_stats
+                    "categorization": categorization_stats,
+                    "auto_categorized": total_categorized,
+                    "categorization_rate": (total_categorized / inserted_count * 100) if inserted_count > 0 else 0
                 },
-                "message": f"Successfully imported {inserted_count} transactions"
+                "message": f"Imported {inserted_count} transactions. {total_categorized} matched ({total_categorized/inserted_count*100:.1f}%)."
             }
             
         except Exception as e:
@@ -203,6 +220,59 @@ class TransactionImportService:
                 "summary": {"error": str(e)},
                 "message": f"Import failed: {str(e)}"
             }
+    
+    async def _get_user_categories(self) -> List:
+        """Get all active user categories"""
+        query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.active == True
+            )
+        )
+        result = await self.db.execute(query)
+        return result.scalars().all()
+    
+    async def _find_category_for_csv(
+        self,
+        csv_main: str,
+        csv_cat: str,
+        csv_subcat: str,
+        user_categories: List
+    ) -> Optional[Category]:
+        """Find matching user category - EXACT and FUZZY matching"""
+        
+        # Normalize inputs
+        csv_main = (csv_main or '').lower().strip()
+        csv_cat = (csv_cat or '').lower().strip()
+        csv_subcat = (csv_subcat or '').lower().strip()
+        
+        # Try exact subcategory match
+        if csv_subcat:
+            for cat in user_categories:
+                if cat.name.lower().strip() == csv_subcat:
+                    return cat
+        
+        # Try exact category match
+        if csv_cat:
+            for cat in user_categories:
+                if cat.name.lower().strip() == csv_cat:
+                    return cat
+        
+        # Try fuzzy subcategory match
+        if csv_subcat:
+            for cat in user_categories:
+                cat_name = cat.name.lower().strip()
+                if csv_subcat in cat_name or cat_name in csv_subcat:
+                    return cat
+        
+        # Try fuzzy category match
+        if csv_cat:
+            for cat in user_categories:
+                cat_name = cat.name.lower().strip()
+                if csv_cat in cat_name or cat_name in csv_cat:
+                    return cat
+        
+        return None
     
     async def _get_or_create_account(
         self, 
@@ -233,47 +303,6 @@ class TransactionImportService:
             print(f"✅ Created account: {account.name}")
         
         return account
-    
-    async def _load_categorization_data(self):
-        """Load user categories and mappings"""
-        
-        categories_result = await self.db.execute(
-            select(Category).where(
-                and_(Category.user_id == str(self.user.id), Category.active == True)
-            )
-        )
-        user_categories = {cat.name.lower(): cat for cat in categories_result.scalars().all()}
-        
-        mappings_result = await self.db.execute(
-            select(CategoryMapping).where(
-                and_(CategoryMapping.user_id == str(self.user.id), CategoryMapping.active == True)
-            ).order_by(CategoryMapping.priority.desc())
-        )
-        mappings = mappings_result.scalars().all()
-        
-        from ..services.category_mappings import CategoryMapping as CMMapping, PatternType
-        
-        cm_mappings = []
-        for mapping in mappings:
-            try:
-                cm_mappings.append(CMMapping(
-                    id=str(mapping.id),
-                    user_id=str(mapping.user_id),
-                    pattern_type=PatternType(mapping.pattern_type),
-                    pattern_value=mapping.pattern_value,
-                    category_id=str(mapping.category_id),
-                    priority=mapping.priority,
-                    confidence=float(mapping.confidence),
-                    active=mapping.active,
-                    description=f"{mapping.pattern_type}: {mapping.pattern_value}"
-                ))
-            except ValueError:
-                continue
-        
-        self.category_mapper.load_mappings(cm_mappings)
-        self.user_categories = user_categories
-        
-        print(f"🏷️ Loaded {len(user_categories)} categories and {len(cm_mappings)} mappings")
     
     async def create_default_category_mappings(self):
         """Create default category mappings"""
