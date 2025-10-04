@@ -8,6 +8,7 @@ from ..auth.local_auth import (
     LocalAuthService, get_auth_service, get_current_user, get_current_user_optional,
     UserCreate, UserLogin, UserResponse, verify_password, get_password_hash
 )
+from ..services.category_initialization import initialize_user_categories
 
 router = APIRouter()
 
@@ -28,12 +29,15 @@ class StatusResponse(BaseModel):
 async def register_user(
     user_data: UserCreate,
     request: Request,
-    auth_service: LocalAuthService = Depends(get_auth_service)
+    auth_service: LocalAuthService = Depends(get_auth_service),
+    db: AsyncSession = Depends(get_db)
 ):
     """Register a new user with email and password"""
     
     try:
         result = await auth_service.register(user_data)
+        
+        await initialize_user_categories(result["user"].id, db)
         
         return AuthResponse(
             message="Registration successful",
@@ -140,8 +144,6 @@ async def logout_user(
 ):
     """Logout user (client-side token removal)"""
     
-    # With JWT, logout is primarily client-side
-    # We can log the logout event for audit purposes
     if current_user:
         audit_entry = AuditLog(
             user_id=current_user.id,
@@ -169,15 +171,12 @@ async def change_password(
 ):
     """Change user password"""
     
-    # Verify current password
     if not verify_password(current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    # Update password
     current_user.password_hash = get_password_hash(new_password)
     await db.commit()
     
-    # Log password change
     audit_entry = AuditLog(
         user_id=current_user.id,
         entity="auth",

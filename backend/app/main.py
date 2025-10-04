@@ -18,7 +18,7 @@ print("🔧 Azimuth Core CORS Configuration:")
 print(f"   ALLOWED_ORIGINS: {settings.ALLOWED_ORIGINS}")
 
 # Import other modules after settings
-from app.routers import auth, chat
+from app.routers import auth, chat, categories_router
 from app.routers import transactions_router, transaction_import_router, transaction_analytics_router
 from app.models.database import init_database
 
@@ -91,6 +91,7 @@ app.add_middleware(
 # Include routers with updated structure
 app.include_router(auth.router, prefix="/auth", tags=["authentication"])
 app.include_router(chat.router, prefix="/chat", tags=["ai-chat"])
+app.include_router(categories_router.router, prefix="/categories", tags=["categories"])
 
 # Transaction routers - separated by functionality
 app.include_router(transactions_router.router, prefix="/transactions", tags=["transactions"])

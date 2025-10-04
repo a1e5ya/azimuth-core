@@ -16,6 +16,7 @@ from ..models.database import (
 )
 from ..services.csv_processor import process_csv_upload
 from ..services.category_mappings import CategoryMapper, PatternType
+from ..services.category_service import CategoryService
 from ..auth.local_auth import get_current_user
 
 class TransactionImportService:
@@ -39,12 +40,10 @@ class TransactionImportService:
         print(f"📤 Starting import: {filename} ({len(file_content)} bytes)")
         
         try:
-            # Generate file hash
             file_hash = hashlib.md5(file_content).hexdigest()
             
-            # Create import batch
             import_batch = ImportBatch(
-                user_id=str(self.user.id),  # SQLite: Convert UUID to string
+                user_id=str(self.user.id),
                 filename=filename,
                 file_size=len(file_content),
                 file_hash=file_hash,
@@ -56,10 +55,8 @@ class TransactionImportService:
             await self.db.refresh(import_batch)
             print(f"✅ Created batch: {import_batch.id}")
 
-            # Get or create account
             account = await self._get_or_create_account(account_name, account_type)
 
-            # Process CSV
             print("🔄 Processing CSV...")
             transactions_data, summary = process_csv_upload(
                 file_content, 
@@ -69,21 +66,57 @@ class TransactionImportService:
             )
             print(f"✅ Processed {len(transactions_data)} transactions")
 
-            # Insert transactions - FIXED: All IDs as strings for SQLite
+            category_service = CategoryService(self.db, self.user)
+            
+            categorization_stats = {
+                'exact_matches': 0,
+                'similar_matches': 0,
+                'uncategorized': 0,
+                'review_needed': 0
+            }
+
             inserted_count = 0
             for trans_data in transactions_data:
+                category_id = None
+                confidence_score = None
+                review_needed = False
+                
+                if auto_categorize and trans_data.get('main_category'):
+                    match_result = await category_service.match_csv_category(
+                        csv_main=trans_data.get('main_category', ''),
+                        csv_category=trans_data.get('csv_category', ''),
+                        csv_subcategory=trans_data.get('csv_subcategory')
+                    )
+                    
+                    if match_result['match_type'] == 'exact':
+                        category_id = match_result['category_id']
+                        confidence_score = match_result['confidence']
+                        categorization_stats['exact_matches'] += 1
+                    elif match_result['match_type'] == 'similar':
+                        category_id = match_result['category_id']
+                        confidence_score = match_result['confidence']
+                        review_needed = True
+                        categorization_stats['similar_matches'] += 1
+                    else:
+                        review_needed = True
+                        categorization_stats['uncategorized'] += 1
+                    
+                    if review_needed:
+                        categorization_stats['review_needed'] += 1
+                
                 transaction = Transaction(
-                    id=str(uuid.uuid4()),  # String for SQLite
-                    user_id=str(self.user.id),  # String for SQLite
-                    account_id=trans_data.get('account_id'),  # Already string from CSV processor
+                    id=str(uuid.uuid4()),
+                    user_id=str(self.user.id),
+                    account_id=trans_data.get('account_id'),
                     posted_at=trans_data['posted_at'],
                     amount=trans_data['amount'],
                     currency=trans_data.get('currency', 'EUR'),
                     merchant=trans_data.get('merchant'),
                     memo=trans_data.get('memo'),
-                    import_batch_id=str(import_batch.id),  # String for SQLite
+                    category_id=category_id,
+                    import_batch_id=str(import_batch.id),
                     hash_dedupe=trans_data['hash_dedupe'],
-                    source_category="imported",
+                    source_category="csv_matched" if category_id else "imported",
                     transaction_type=trans_data.get('transaction_type'),
                     main_category=trans_data.get('main_category'),
                     csv_category=trans_data.get('csv_category'),
@@ -97,7 +130,9 @@ class TransactionImportService:
                     month=trans_data.get('month'),
                     year_month=trans_data.get('year_month'),
                     weekday=trans_data.get('weekday'),
-                    transfer_pair_id=trans_data.get('transfer_pair_id')
+                    transfer_pair_id=trans_data.get('transfer_pair_id'),
+                    confidence_score=confidence_score,
+                    review_needed=review_needed
                 )
                 
                 self.db.add(transaction)
@@ -105,7 +140,6 @@ class TransactionImportService:
 
             await self.db.commit()
             
-            # Update batch status
             import_batch.rows_total = len(transactions_data)
             import_batch.rows_imported = inserted_count
             import_batch.rows_duplicated = 0
@@ -114,22 +148,23 @@ class TransactionImportService:
             import_batch.completed_at = datetime.utcnow()
             import_batch.summary_data = {
                 **summary,
-                "auto_categorized_count": 0
+                "categorization": categorization_stats
             }
             
             await self.db.commit()
             
             print(f"✅ Import complete: {inserted_count} transactions")
+            print(f"📊 Categorization: {categorization_stats}")
             
-            # Log import
             audit_entry = AuditLog(
-                user_id=str(self.user.id),  # String for SQLite
+                user_id=str(self.user.id),
                 entity="transaction",
                 action="bulk_import",
                 details={
                     "filename": filename,
                     "batch_id": str(import_batch.id),
                     "rows_imported": inserted_count,
+                    "categorization": categorization_stats,
                     "summary": summary
                 }
             )
@@ -142,7 +177,8 @@ class TransactionImportService:
                 "summary": {
                     **summary,
                     "rows_inserted": inserted_count,
-                    "batch_id": str(import_batch.id)
+                    "batch_id": str(import_batch.id),
+                    "categorization": categorization_stats
                 },
                 "message": f"Successfully imported {inserted_count} transactions"
             }
@@ -152,7 +188,6 @@ class TransactionImportService:
             import traceback
             traceback.print_exc()
             
-            # Update batch on error
             if 'import_batch' in locals():
                 try:
                     import_batch.status = "failed"
@@ -179,7 +214,6 @@ class TransactionImportService:
         if not account_name:
             return None
         
-        # Find existing account
         result = await self.db.execute(
             select(Account).where(
                 and_(Account.user_id == str(self.user.id), Account.name == account_name)
@@ -188,9 +222,8 @@ class TransactionImportService:
         account = result.scalar_one_or_none()
         
         if not account:
-            # Create new account
             account = Account(
-                user_id=str(self.user.id),  # String for SQLite
+                user_id=str(self.user.id),
                 name=account_name,
                 account_type=account_type
             )
@@ -275,7 +308,7 @@ class TransactionImportService:
                         user_id=str(self.user.id),
                         pattern_type=pattern_type,
                         pattern_value=pattern_value.lower(),
-                        category_id=category_id,  # Already a string
+                        category_id=category_id,
                         priority=priority,
                         confidence=0.9,
                         active=True
