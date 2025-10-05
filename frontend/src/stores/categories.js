@@ -68,6 +68,7 @@ export const useCategoryStore = defineStore('categories', () => {
     selectedCategory.value = null
     selectedSubcategory.value = null
     
+    console.log('Selected: type', type.name)
     await loadSummary(type.code, 'type')
   }
   
@@ -76,12 +77,13 @@ export const useCategoryStore = defineStore('categories', () => {
     selectedSubcategory.value = null
     
     const parentType = categories.value.find(t => 
-      t.children.some(c => c.id === category.id)
+      t.children && t.children.some(c => c.id === category.id)
     )
     if (parentType) {
       selectedType.value = parentType
     }
     
+    console.log('Selected: category', category.name)
     await loadSummary(category.id, 'category')
   }
   
@@ -89,15 +91,18 @@ export const useCategoryStore = defineStore('categories', () => {
     selectedSubcategory.value = subcategory
     
     for (const type of categories.value) {
-      for (const cat of type.children) {
-        if (cat.children && cat.children.some(s => s.id === subcategory.id)) {
-          selectedType.value = type
-          selectedCategory.value = cat
-          break
+      if (type.children) {
+        for (const cat of type.children) {
+          if (cat.children && cat.children.some(s => s.id === subcategory.id)) {
+            selectedType.value = type
+            selectedCategory.value = cat
+            break
+          }
         }
       }
     }
     
+    console.log('Selected: subcategory', subcategory.name)
     await loadSummary(subcategory.id, 'subcategory')
   }
   

@@ -1,8 +1,8 @@
 """
-Category analytics queries - FIXED
+Category analytics queries - FIXED UUID string conversion
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_, desc, extract, or_
+from sqlalchemy import select, func, and_, desc
 from typing import Dict, Any, Optional, List
 from datetime import date
 import uuid
@@ -27,7 +27,6 @@ class CategoryQueries:
     ) -> Dict[str, Any]:
         """Get summary for transaction type"""
         
-        # Get all categories for this type
         cat_query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
@@ -37,14 +36,13 @@ class CategoryQueries:
         )
         cat_result = await self.db.execute(cat_query)
         type_categories = cat_result.scalars().all()
-        category_ids = [c.id for c in type_categories]
+        category_ids = [str(c.id) for c in type_categories]
         
         if not category_ids:
             return {
                 'type': category_type,
                 'stats': {'total_count': 0, 'total_amount': 0, 'avg_amount': 0},
-                'categories': [],
-                'monthly': []
+                'categories': []
             }
         
         trans_conditions = [Transaction.user_id == self.user.id]
@@ -54,7 +52,6 @@ class CategoryQueries:
             trans_conditions.append(Transaction.posted_at <= end_date)
         trans_conditions.append(Transaction.category_id.in_(category_ids))
         
-        # Overall stats
         stats_query = select(
             func.count(Transaction.id).label('total_count'),
             func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount'),
@@ -64,14 +61,12 @@ class CategoryQueries:
         stats_result = await self.db.execute(stats_query)
         stats = stats_result.first()
         
-        # Category breakdown - only parent categories (not subcategories)
-        parent_cats = [c for c in type_categories if c.parent_id is not None and self._is_parent_category(c, type_categories)]
+        parent_cats = [c for c in type_categories if c.parent_id is not None and self._is_main_category(c, type_categories)]
         
         category_breakdown = []
-        for cat in parent_cats[:15]:
-            # Get this category and its children
-            child_ids = [c.id for c in type_categories if c.parent_id == cat.id]
-            all_cat_ids = [cat.id] + child_ids
+        for cat in parent_cats:
+            child_ids = [str(c.id) for c in type_categories if c.parent_id == cat.id]
+            all_cat_ids = [str(cat.id)] + child_ids
             
             cat_query = select(
                 func.count(Transaction.id).label('count'),
@@ -97,18 +92,6 @@ class CategoryQueries:
         
         category_breakdown.sort(key=lambda x: x['amount'], reverse=True)
         
-        # Monthly breakdown - ALL months, not just recent
-        monthly_query = select(
-            func.strftime('%Y-%m', Transaction.posted_at).label('month'),
-            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
-        ).where(and_(*trans_conditions)).group_by('month').order_by('month')
-        
-        monthly_result = await self.db.execute(monthly_query)
-        monthly_breakdown = [
-            {'month': row.month, 'amount': float(row.amount)}
-            for row in monthly_result
-        ]
-        
         return {
             'type': category_type,
             'stats': {
@@ -116,24 +99,19 @@ class CategoryQueries:
                 'total_amount': float(stats.total_amount),
                 'avg_amount': float(stats.avg_amount)
             },
-            'categories': category_breakdown,
-            'monthly': monthly_breakdown
+            'categories': category_breakdown
         }
     
-    def _is_parent_category(self, cat: Category, all_cats: List[Category]) -> bool:
-        """Check if category is a parent (has children or is level 2)"""
-        # Level 1 = no parent (type level)
-        # Level 2 = has parent but parent has no parent (main categories)
-        # Level 3 = has parent whose parent exists (subcategories)
-        
+    def _is_main_category(self, cat: Category, all_cats: List[Category]) -> bool:
+        """Check if category is a main category (level 2 in hierarchy)"""
         if not cat.parent_id:
-            return False  # Type level
+            return False
         
         parent = next((c for c in all_cats if c.id == cat.parent_id), None)
         if parent and not parent.parent_id:
-            return True  # This is a main category
+            return True
         
-        return False  # This is a subcategory
+        return False
     
     async def get_category_summary(
         self,
@@ -160,7 +138,6 @@ class CategoryQueries:
         if not category:
             return {}
         
-        # Get child categories
         children_query = select(Category).where(
             and_(
                 Category.parent_id == cat_uuid,
@@ -170,8 +147,8 @@ class CategoryQueries:
         )
         children_result = await self.db.execute(children_query)
         children = children_result.scalars().all()
-        child_ids = [c.id for c in children]
-        all_category_ids = [cat_uuid] + child_ids
+        child_ids = [str(c.id) for c in children]
+        all_category_ids = [str(cat_uuid)] + child_ids
         
         conditions = [
             Transaction.user_id == self.user.id,
@@ -182,7 +159,6 @@ class CategoryQueries:
         if end_date:
             conditions.append(Transaction.posted_at <= end_date)
         
-        # Overall stats
         stats_query = select(
             func.count(Transaction.id).label('total_count'),
             func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount'),
@@ -192,7 +168,6 @@ class CategoryQueries:
         stats_result = await self.db.execute(stats_query)
         stats = stats_result.first()
         
-        # Subcategories breakdown
         subcategories = []
         for child in children:
             sub_query = select(
@@ -201,7 +176,7 @@ class CategoryQueries:
             ).where(
                 and_(
                     Transaction.user_id == self.user.id,
-                    Transaction.category_id == child.id
+                    Transaction.category_id == str(child.id)
                 )
             )
             
@@ -219,7 +194,6 @@ class CategoryQueries:
         
         subcategories.sort(key=lambda x: x['amount'], reverse=True)
         
-        # Top merchants
         merchants_query = select(
             Transaction.merchant,
             func.count(Transaction.id).label('count'),
@@ -238,18 +212,6 @@ class CategoryQueries:
             for row in merchants_result
         ]
         
-        # Monthly breakdown
-        monthly_query = select(
-            func.strftime('%Y-%m', Transaction.posted_at).label('month'),
-            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
-        ).where(and_(*conditions)).group_by('month').order_by('month')
-        
-        monthly_result = await self.db.execute(monthly_query)
-        monthly_breakdown = [
-            {'month': row.month, 'amount': float(row.amount)}
-            for row in monthly_result
-        ]
-        
         return {
             'category': {
                 'id': str(category.id),
@@ -263,8 +225,7 @@ class CategoryQueries:
                 'avg_amount': float(stats.avg_amount)
             },
             'subcategories': subcategories,
-            'top_merchants': top_merchants,
-            'monthly': monthly_breakdown
+            'top_merchants': top_merchants
         }
     
     async def get_subcategory_transactions(
@@ -283,7 +244,7 @@ class CategoryQueries:
             return {'transactions': [], 'total': 0}
         
         conditions = [
-            Transaction.category_id == subcat_uuid,
+            Transaction.category_id == str(subcat_uuid),
             Transaction.user_id == self.user.id
         ]
         

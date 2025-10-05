@@ -87,67 +87,74 @@ class TransactionImportService:
             print(f"🎯 Mapping to user categories...")
             
             for idx, trans_data in enumerate(transactions_data):
-                if idx % 1000 == 0 and idx > 0:
-                    print(f"   Progress: {idx}/{len(transactions_data)}")
-                
-                category_id = None
-                confidence_score = None
-                source_category = "imported"
-                
-                if auto_categorize:
-                    csv_main = trans_data.get('main_category', '')
-                    csv_cat = trans_data.get('csv_category', '')
-                    csv_subcat = trans_data.get('csv_subcategory', '')
-                    
-                    category = await self._find_category_for_csv(
-                        csv_main, csv_cat, csv_subcat, user_categories
-                    )
-                    
-                    if category:
-                        category_id = category.id
-                        confidence_score = 0.95
-                        source_category = 'csv_mapped'
-                        categorization_stats['csv_exact'] += 1
-                        
-                        if idx < 5:
-                            print(f"   ✅ Matched: '{csv_cat}' / '{csv_subcat}' → {category.name}")
-                    else:
-                        categorization_stats['none'] += 1
-                        if idx < 5:
-                            print(f"   ❌ No match: '{csv_cat}' / '{csv_subcat}'")
-                
-                transaction = Transaction(
-                    id=str(uuid.uuid4()),
-                    user_id=str(self.user.id),
-                    account_id=trans_data.get('account_id'),
-                    posted_at=trans_data['posted_at'],
-                    amount=trans_data['amount'],
-                    currency=trans_data.get('currency', 'EUR'),
-                    merchant=trans_data.get('merchant'),
-                    memo=trans_data.get('memo'),
-                    category_id=category_id,
-                    import_batch_id=str(import_batch.id),
-                    hash_dedupe=trans_data['hash_dedupe'],
-                    source_category=source_category,
-                    transaction_type=trans_data.get('transaction_type'),
-                    main_category=trans_data.get('main_category'),
-                    csv_category=trans_data.get('csv_category'),
-                    csv_subcategory=trans_data.get('csv_subcategory'),
-                    csv_account=trans_data.get('csv_account'),
-                    owner=trans_data.get('owner'),
-                    csv_account_type=trans_data.get('csv_account_type'),
-                    is_expense=trans_data.get('is_expense', False),
-                    is_income=trans_data.get('is_income', False),
-                    year=trans_data.get('year'),
-                    month=trans_data.get('month'),
-                    year_month=trans_data.get('year_month'),
-                    weekday=trans_data.get('weekday'),
-                    transfer_pair_id=trans_data.get('transfer_pair_id'),
-                    confidence_score=confidence_score,
-                    review_needed=not category_id
-                )
-                
-                self.db.add(transaction)
+                            if idx % 1000 == 0 and idx > 0:
+                                print(f"   Progress: {idx}/{len(transactions_data)}")
+                            
+                            category_id = None
+                            confidence_score = None
+                            source_category = "imported"
+                            
+                            if auto_categorize:
+                                csv_main = trans_data.get('main_category', '')
+                                csv_cat = trans_data.get('csv_category', '')
+                                csv_subcat = trans_data.get('csv_subcategory', '')
+                                
+                                category = await self._find_category_for_csv(
+                                    csv_main, csv_cat, csv_subcat, user_categories
+                                )
+                                
+                                if category:
+                                    category_id = category.id
+                                    confidence_score = 0.95
+                                    source_category = 'csv_mapped'
+                                    categorization_stats['csv_exact'] += 1
+                                    
+                                    # DEBUG: Print first 5 successful matches
+                                    if idx < 5:
+                                        print(f"   ✅ Matched: '{csv_cat}' / '{csv_subcat}' → {category.name} (ID: {category.id})")
+                                else:
+                                    categorization_stats['none'] += 1
+                                    if idx < 5:
+                                        print(f"   ❌ No match: '{csv_cat}' / '{csv_subcat}'")
+                            
+                            # CRITICAL DEBUG: Check what we're about to save
+                            if idx < 3:
+                                print(f"\n   🔍 Transaction {idx} before save:")
+                                print(f"      category_id type: {type(category_id)}, value: {category_id}")
+                                print(f"      Will save as: {str(category_id) if category_id else None}")
+                            
+                            transaction = Transaction(
+                                id=str(uuid.uuid4()),
+                                user_id=str(self.user.id),
+                                account_id=trans_data.get('account_id'),
+                                posted_at=trans_data['posted_at'],
+                                amount=trans_data['amount'],
+                                currency=trans_data.get('currency', 'EUR'),
+                                merchant=trans_data.get('merchant'),
+                                memo=trans_data.get('memo'),
+                                category_id=str(category_id) if category_id else None,  # Make sure it's a string
+                                import_batch_id=str(import_batch.id),
+                                hash_dedupe=trans_data['hash_dedupe'],
+                                source_category=source_category,
+                                transaction_type=trans_data.get('transaction_type'),
+                                main_category=trans_data.get('main_category'),
+                                csv_category=trans_data.get('csv_category'),
+                                csv_subcategory=trans_data.get('csv_subcategory'),
+                                csv_account=trans_data.get('csv_account'),
+                                owner=trans_data.get('owner'),
+                                csv_account_type=trans_data.get('csv_account_type'),
+                                is_expense=trans_data.get('is_expense', False),
+                                is_income=trans_data.get('is_income', False),
+                                year=trans_data.get('year'),
+                                month=trans_data.get('month'),
+                                year_month=trans_data.get('year_month'),
+                                weekday=trans_data.get('weekday'),
+                                transfer_pair_id=trans_data.get('transfer_pair_id'),
+                                confidence_score=confidence_score,
+                                review_needed=not category_id
+                            )
+                            
+                            self.db.add(transaction)
             
             await self.db.commit()
             inserted_count = len(transactions_data)

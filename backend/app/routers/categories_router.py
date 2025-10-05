@@ -372,3 +372,54 @@ async def get_subcategory_transactions(
     )
     
     return result
+
+@router.get("/debug/transactions")
+async def debug_transactions(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Debug: Check transaction categorization status"""
+    from sqlalchemy import select, func
+    from ..models.database import Transaction
+    
+    # Total transactions
+    total_query = select(func.count(Transaction.id)).where(
+        Transaction.user_id == current_user.id
+    )
+    total_result = await db.execute(total_query)
+    total = total_result.scalar()
+    
+    # Categorized transactions
+    categorized_query = select(func.count(Transaction.id)).where(
+        and_(
+            Transaction.user_id == current_user.id,
+            Transaction.category_id.isnot(None)
+        )
+    )
+    categorized_result = await db.execute(categorized_query)
+    categorized = categorized_result.scalar()
+    
+    # Sample transactions
+    sample_query = select(Transaction).where(
+        Transaction.user_id == current_user.id
+    ).limit(10)
+    sample_result = await db.execute(sample_query)
+    samples = sample_result.scalars().all()
+    
+    return {
+        "total_transactions": total,
+        "categorized_transactions": categorized,
+        "uncategorized_transactions": total - categorized,
+        "sample_transactions": [
+            {
+                "id": str(t.id),
+                "merchant": t.merchant,
+                "amount": str(t.amount),
+                "csv_category": t.csv_category,
+                "csv_subcategory": t.csv_subcategory,
+                "category_id": str(t.category_id) if t.category_id else None,
+                "source_category": t.source_category
+            }
+            for t in samples
+        ]
+    }
