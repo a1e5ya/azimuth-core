@@ -1,26 +1,32 @@
 <template>
   <div class="tab-content">
     <div class="container">
-      <div class="categories-header">
-        <h2>Categories Management</h2>
-        <div class="header-actions">
-          <button class="btn btn-small" @click="showAddModal = true">Add Category</button>
-          <button class="btn btn-small btn-link" @click="refreshCategories">Refresh</button>
-        </div>
-      </div>
-
       <!-- Type Tabs -->
       <div class="type-tabs">
-        <button
-          v-for="type in categories"
-          :key="type.id"
-          class="type-tab"
-          :class="{ active: selectedTypeId === type.id }"
-          @click="selectedTypeId = type.id"
-        >
-          <AppIcon :name="type.icon" size="medium" />
-          {{ type.name }}
-        </button>
+        <div class="tabs-left">
+          <button
+            v-for="type in categories"
+            :key="type.id"
+            class="type-tab"
+            :class="{ active: selectedTypeId === type.id }"
+            @click="selectedTypeId = type.id"
+          >
+            <AppIcon :name="type.icon" size="medium" />
+            {{ type.name }}
+          </button>
+        </div>
+        
+        <div class="tabs-right">
+          <ActionsMenu
+            class="always-visible"
+            :show-add="true"
+            :show-edit="false"
+            :show-delete="false"
+            :show-check="false"
+            menu-title="Category Actions"
+            @add="addNewCategory"
+          />
+        </div>
       </div>
 
       <!-- Loading State -->
@@ -29,71 +35,72 @@
         <div>Loading categories...</div>
       </div>
 
-      <!-- Categories Grid -->
-      <div v-else-if="currentType" class="categories-grid">
+      <!-- Categories Compact Grid -->
+      <div v-else-if="currentType" class="categories-compact-grid">
         <div
           v-for="mainCat in currentType.children"
           :key="mainCat.id"
-          class="main-category-section"
+          class="category-container"
         >
-          <!-- Main Category Header -->
-          <div class="main-category-header">
-            <div class="category-title">
-              <AppIcon :name="mainCat.icon" size="large" />
-              <h3>{{ mainCat.name }}</h3>
+          <!-- Main Category Header - Compact -->
+          <div class="category-header-compact">
+            <div class="category-title-compact">
+              <AppIcon :name="mainCat.icon" size="medium" />
+              <h4>{{ mainCat.name }}</h4>
             </div>
-            <div class="category-actions">
-              <button class="btn btn-small btn-link" @click="editCategory(mainCat)">Edit</button>
-              <button class="btn btn-small btn-link" @click="addSubcategory(mainCat)">Add Sub</button>
-              <button class="btn btn-small btn-link" @click="deleteCategory(mainCat)">Delete</button>
-            </div>
+            <ActionsMenu
+              :show-add="true"
+              :show-edit="true"
+              :show-delete="true"
+              @edit="editCategory(mainCat)"
+              @add="addSubcategory(mainCat)"
+              @delete="deleteCategory(mainCat)"
+            />
           </div>
 
-          <!-- Subcategories -->
-          <div v-if="mainCat.children && mainCat.children.length > 0" class="subcategories-grid">
+          <!-- Subcategories Compact -->
+          <div v-if="mainCat.children && mainCat.children.length > 0" class="subcats-compact">
             <div
               v-for="subcat in mainCat.children"
               :key="subcat.id"
-              class="subcategory-card"
+              class="subcat-compact"
             >
-              <div class="subcat-header">
-                <AppIcon :name="subcat.icon" size="medium" />
-                <span class="subcat-name">{{ subcat.name }}</span>
-              </div>
-              
-              <div class="subcat-keywords">
-                <label>Keywords:</label>
-                <input
-                  type="text"
-                  class="keyword-input"
-                  placeholder="coffee, starbucks..."
-                  :value="getKeywords(subcat.id)"
-                  @change="updateKeywords(subcat.id, $event.target.value)"
-                >
-              </div>
-
-              <div class="subcat-merchants">
-                <label>Merchants:</label>
-                <div class="merchant-list">
-                  <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="merchant-tag">
-                    {{ merchant }}
-                  </span>
-                  <span v-if="!getMerchants(subcat.id).length" class="text-muted">
-                    None yet
-                  </span>
+              <div class="subcat-top">
+                <div class="subcat-name-icon">
+                  <AppIcon :name="subcat.icon" size="small" />
+                  <span>{{ subcat.name }}</span>
                 </div>
+                <ActionsMenu
+                  :show-add="false"
+                  :show-edit="true"
+                  :show-delete="true"
+                  @edit="editCategory(subcat)"
+                  @delete="deleteCategory(subcat)"
+                />
               </div>
 
-              <div class="subcat-actions">
-                <button class="btn btn-small btn-link" @click="editCategory(subcat)">Edit</button>
-                <button class="btn btn-small btn-link" @click="deleteCategory(subcat)">Delete</button>
+              <input
+                type="text"
+                class="keyword-input-compact"
+                placeholder="keywords..."
+                :value="getKeywords(subcat.id)"
+                @change="updateKeywords(subcat.id, $event.target.value)"
+              >
+
+              <div class="merchant-tags-compact">
+                <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag-micro">
+                  {{ merchant }}
+                </span>
+                <span v-if="!getMerchants(subcat.id).length" class="text-micro-muted">
+                  No merchants
+                </span>
               </div>
             </div>
           </div>
 
-          <div v-else class="no-subcategories">
+          <div v-else class="no-subcats-compact">
             <button class="btn btn-small" @click="addSubcategory(mainCat)">
-              Add First Subcategory
+              Add Subcategory
             </button>
           </div>
         </div>
@@ -106,14 +113,17 @@
 import { ref, computed, onMounted } from 'vue'
 import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
+import ActionsMenu from './ActionsMenu.vue'
 
 export default {
   name: 'CategoriesTab',
-  components: { AppIcon },
+  components: { 
+    AppIcon,
+    ActionsMenu
+  },
   setup() {
     const categoryStore = useCategoryStore()
     const selectedTypeId = ref(null)
-    const showAddModal = ref(false)
 
     const categories = computed(() => categoryStore.categories)
     const loading = computed(() => categoryStore.loading)
@@ -142,6 +152,10 @@ export default {
       console.log('Add subcategory to:', parent.name)
     }
 
+    function addNewCategory() {
+      console.log('Add new main category')
+    }
+
     function getKeywords(categoryId) {
       return ''
     }
@@ -163,11 +177,11 @@ export default {
       loading,
       selectedTypeId,
       currentType,
-      showAddModal,
       refreshCategories,
       editCategory,
       deleteCategory,
       addSubcategory,
+      addNewCategory,
       getKeywords,
       updateKeywords,
       getMerchants
@@ -177,34 +191,32 @@ export default {
 </script>
 
 <style scoped>
-.categories-header {
+/* Type Tabs */
+.type-tabs {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--gap-large);
-}
-
-.categories-header h2 {
-  margin: 0;
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--gap-small);
-}
-
-.type-tabs {
-  display: flex;
-  gap: var(--gap-small);
-  margin-bottom: var(--gap-large);
+  gap: var(--gap-standard);
+  margin-bottom: var(--gap-standard);
   border-bottom: 2px solid var(--color-background-dark);
+}
+
+.tabs-left {
+  display: flex;
+  gap: var(--gap-small);
+}
+
+.tabs-right {
+  display: flex;
+  align-items: center;
+  margin-bottom: -2px;
 }
 
 .type-tab {
   display: flex;
   align-items: center;
   gap: var(--gap-small);
-  padding: var(--gap-small) var(--gap-standard);
+  padding: 0.5rem var(--gap-standard);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -226,6 +238,7 @@ export default {
   font-weight: 600;
 }
 
+/* Loading */
 .loading-state {
   text-align: center;
   padding: var(--gap-large);
@@ -242,131 +255,126 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-.categories-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-large);
-}
-
-.main-category-section {
-  background: var(--color-background-light);
-  padding: var(--gap-standard);
-  border-radius: var(--radius);
-}
-
-.main-category-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--gap-standard);
-  padding-bottom: var(--gap-small);
-  border-bottom: 1px solid var(--color-background-dark);
-}
-
-.category-title {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
-}
-
-.category-title h3 {
-  margin: 0;
-  font-size: var(--text-medium);
-}
-
-.category-actions {
-  display: flex;
-  gap: var(--gap-small);
-}
-
-.subcategories-grid {
+/* Compact Grid Layout */
+.categories-compact-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
   gap: var(--gap-standard);
+  align-items: start;
 }
 
-.subcategory-card {
-  background: var(--color-background);
-  padding: var(--gap-standard);
+.category-container {
+  background: var(--color-background-light);
+  padding: 0.75rem;
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
-  gap: var(--gap-small);
+  gap: 0.5rem;
 }
 
-.subcat-header {
+/* Category Header - Compact */
+.category-header-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: 0.5rem;
+  border-bottom: 1px solid var(--color-background-dark);
+}
+
+.category-title-compact {
   display: flex;
   align-items: center;
-  gap: var(--gap-small);
-  margin-bottom: var(--gap-small);
+  gap: 0.375rem;
 }
 
-.subcat-name {
-  font-weight: 600;
+.category-title-compact h4 {
+  margin: 0;
   font-size: var(--text-small);
+  font-weight: 600;
 }
 
-.subcat-keywords,
-.subcat-merchants {
+/* Subcategories Compact */
+.subcats-compact {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.5rem;
 }
 
-.subcat-keywords label,
-.subcat-merchants label {
+.subcat-compact {
+  background: var(--color-background);
+  padding: 0.5rem;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 0.375rem;
+}
+
+.subcat-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.subcat-name-icon {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
   font-size: var(--text-small);
-  color: var(--color-text-muted);
   font-weight: 500;
 }
 
-.keyword-input {
+/* Compact Input */
+.keyword-input-compact {
   width: 100%;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem 0.375rem;
   border: 1px solid var(--color-background-dark);
-  border-radius: var(--radius);
-  font-size: var(--text-small);
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
   font-family: inherit;
 }
 
-.keyword-input:focus {
+.keyword-input-compact:focus {
   outline: none;
   border-color: var(--color-text-light);
 }
 
-.merchant-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
-  min-height: 1.5rem;
-}
-
-.merchant-tag {
-  background: var(--color-background-light);
-  padding: 0.125rem 0.375rem;
-  border-radius: var(--radius);
-  font-size: var(--text-small);
-  color: var(--color-text);
-}
-
-.text-muted {
+.keyword-input-compact::placeholder {
   color: var(--color-text-muted);
-  font-size: var(--text-small);
   font-style: italic;
 }
 
-.subcat-actions {
+/* Merchant Tags */
+.merchant-tags-compact {
   display: flex;
-  gap: var(--gap-small);
-  justify-content: flex-end;
-  margin-top: var(--gap-small);
-  padding-top: var(--gap-small);
-  border-top: 1px solid var(--color-background-light);
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  min-height: 1.25rem;
 }
 
-.no-subcategories {
-  text-align: center;
-  padding: var(--gap-standard);
+.tag-micro {
+  background: var(--color-background-light);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.6875rem;
+  color: var(--color-text);
+}
+
+.text-micro-muted {
   color: var(--color-text-muted);
+  font-size: 0.6875rem;
+  font-style: italic;
+}
+
+/* No Subcategories */
+.no-subcats-compact {
+  text-align: center;
+  padding: 0.5rem;
+}
+
+/* Responsive */
+@media (max-width: 48rem) {
+  .categories-compact-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
