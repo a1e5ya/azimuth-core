@@ -303,7 +303,6 @@ export default {
     // Constants
     const zoomLevels = [
       { value: 'month', label: 'Month', days: 30 },
-      { value: 'quarter', label: 'Quarter', days: 90 },
       { value: 'year', label: 'Year', days: 365 }
     ]
     
@@ -605,10 +604,7 @@ export default {
         
         if (zoom === 'month') {
           key = new Date(date.getFullYear(), date.getMonth(), 1)
-        } else if (zoom === 'quarter') {
-          const quarter = Math.floor(date.getMonth() / 3)
-          key = new Date(date.getFullYear(), quarter * 3, 1)
-        } else {
+        }  else {
           key = new Date(date.getFullYear(), 0, 1)
         }
         
