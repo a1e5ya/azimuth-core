@@ -39,20 +39,20 @@
       </div>
 
       <div class="container stat-card">
+        <div class="stat-label">{{ viewMode === 'monthly' ? 'This Month' : 'This Year' }} Transfers</div>
+        <div class="stat-value neutral">{{ formatCurrency(kpis.currentPeriodTransfers) }}</div>
+        <div class="stat-detail">
+          {{ kpis.transferTransactionCount }} transfers
+        </div>
+      </div>
+
+      <div class="container stat-card">
         <div class="stat-label">Net Savings</div>
         <div class="stat-value" :class="kpis.netSavings >= 0 ? 'positive' : 'negative'">
           {{ formatCurrency(kpis.netSavings) }}
         </div>
         <div class="stat-detail">
           {{ kpis.savingsRate }}% savings rate
-        </div>
-      </div>
-
-      <div class="container stat-card">
-        <div class="stat-label">Total Transactions</div>
-        <div class="stat-value">{{ kpis.totalTransactions }}</div>
-        <div class="stat-detail">
-          {{ kpis.currentPeriodTransactions }} {{ viewMode === 'monthly' ? 'this month' : 'this year' }}
         </div>
       </div>
     </div>
@@ -113,7 +113,7 @@
             <div class="transaction-date">{{ formatDate(tx.posted_at) }}</div>
             <div class="transaction-details">
               <div class="transaction-merchant">{{ tx.merchant || 'Unknown' }}</div>
-              <div class="transaction-category">{{ tx.main_category || 'Uncategorized' }}</div>
+              <div class="transaction-category">{{ tx.csv_category || tx.main_category || 'Uncategorized' }}</div>
             </div>
             <div class="transaction-amount" :class="getAmountClass(tx)">
               {{ formatCurrency(tx.amount) }}
@@ -174,6 +174,7 @@ export default {
     const transactions = ref([])
     const chartData = ref([])
     const viewMode = ref('monthly')
+    const summary = ref(null)
     
     const kpis = computed(() => {
       if (transactions.value.length === 0) {
@@ -181,11 +182,13 @@ export default {
           currentPeriodSpending: 0,
           lastPeriodSpending: 0,
           currentPeriodIncome: 0,
+          currentPeriodTransfers: 0,
           netSavings: 0,
           savingsRate: 0,
           totalTransactions: 0,
           currentPeriodTransactions: 0,
-          incomeTransactionCount: 0
+          incomeTransactionCount: 0,
+          transferTransactionCount: 0
         }
       }
       
@@ -208,27 +211,36 @@ export default {
       let currentPeriodSpending = 0
       let lastPeriodSpending = 0
       let currentPeriodIncome = 0
+      let currentPeriodTransfers = 0
       let currentPeriodTransactions = 0
       let incomeTransactionCount = 0
+      let transferTransactionCount = 0
       
       transactions.value.forEach(tx => {
         const txDate = new Date(tx.posted_at)
         const txMonth = txDate.getMonth()
         const txYear = txDate.getFullYear()
         const amount = Math.abs(parseFloat(tx.amount))
+        const txType = (tx.transaction_type || '').toLowerCase()
+        const mainCategory = (tx.main_category || '').toLowerCase()
         
         if (txMonth === currentMonth && txYear === currentYear) {
           currentPeriodTransactions++
-          if (tx.transaction_type === 'expense') {
+          
+          // Check if it's a transfer by type or main_category
+          if (txType === 'transfer' || txType === 'transfers' || mainCategory === 'transfers') {
+            currentPeriodTransfers += amount
+            transferTransactionCount++
+          } else if (txType === 'expense') {
             currentPeriodSpending += amount
-          } else if (tx.transaction_type === 'income') {
+          } else if (txType === 'income') {
             currentPeriodIncome += amount
             incomeTransactionCount++
           }
         }
         
         if (txMonth === lastMonth && txYear === lastMonthYear) {
-          if (tx.transaction_type === 'expense') {
+          if (txType === 'expense') {
             lastPeriodSpending += amount
           }
         }
@@ -243,11 +255,13 @@ export default {
         currentPeriodSpending,
         lastPeriodSpending,
         currentPeriodIncome,
+        currentPeriodTransfers,
         netSavings,
         savingsRate,
         totalTransactions: transactions.value.length,
         currentPeriodTransactions,
-        incomeTransactionCount
+        incomeTransactionCount,
+        transferTransactionCount
       }
     }
     
@@ -258,26 +272,35 @@ export default {
       let currentPeriodSpending = 0
       let lastPeriodSpending = 0
       let currentPeriodIncome = 0
+      let currentPeriodTransfers = 0
       let currentPeriodTransactions = 0
       let incomeTransactionCount = 0
+      let transferTransactionCount = 0
       
       transactions.value.forEach(tx => {
         const txDate = new Date(tx.posted_at)
         const txYear = txDate.getFullYear()
         const amount = Math.abs(parseFloat(tx.amount))
+        const txType = (tx.transaction_type || '').toLowerCase()
+        const mainCategory = (tx.main_category || '').toLowerCase()
         
         if (txYear === currentYear) {
           currentPeriodTransactions++
-          if (tx.transaction_type === 'expense') {
+          
+          // Check if it's a transfer by type or main_category
+          if (txType === 'transfer' || txType === 'transfers' || mainCategory === 'transfers') {
+            currentPeriodTransfers += amount
+            transferTransactionCount++
+          } else if (txType === 'expense') {
             currentPeriodSpending += amount
-          } else if (tx.transaction_type === 'income') {
+          } else if (txType === 'income') {
             currentPeriodIncome += amount
             incomeTransactionCount++
           }
         }
         
         if (txYear === lastYear) {
-          if (tx.transaction_type === 'expense') {
+          if (txType === 'expense') {
             lastPeriodSpending += amount
           }
         }
@@ -292,11 +315,13 @@ export default {
         currentPeriodSpending,
         lastPeriodSpending,
         currentPeriodIncome,
+        currentPeriodTransfers,
         netSavings,
         savingsRate,
         totalTransactions: transactions.value.length,
         currentPeriodTransactions,
-        incomeTransactionCount
+        incomeTransactionCount,
+        transferTransactionCount
       }
     }
     
@@ -345,7 +370,7 @@ export default {
         
         if (!isCurrentPeriod) return
         
-        const category = tx.main_category || 'Uncategorized'
+        const category = tx.csv_category || tx.main_category || 'Uncategorized'
         const amount = Math.abs(parseFloat(tx.amount))
         
         categoryTotals[category] = (categoryTotals[category] || 0) + amount
@@ -560,24 +585,73 @@ export default {
       loading.value = true
       
       try {
-        const response = await fetch(`${API_BASE}/transactions/list?page=1&limit=10000`, {
+        // Fetch transactions in batches to avoid limit issues
+        let allTransactions = []
+        let page = 1
+        const batchSize = 1000
+        let hasMore = true
+        
+        while (hasMore && page <= 10) {
+          const response = await fetch(`${API_BASE}/transactions/list?page=${page}&limit=${batchSize}`, {
+            headers: {
+              'Authorization': `Bearer ${authStore.token}`
+            }
+          })
+          
+          if (!response.ok) {
+            throw new Error('Failed to load transactions')
+          }
+          
+          const data = await response.json()
+          
+          if (data.length === 0) {
+            hasMore = false
+            break
+          }
+          
+          allTransactions = allTransactions.concat(data)
+          
+          if (data.length < batchSize) {
+            hasMore = false
+          }
+          
+          page++
+        }
+        
+        transactions.value = allTransactions
+        processChartData()
+        
+        console.log('Dashboard loaded:', allTransactions.length, 'transactions')
+        
+      } catch (error) {
+        console.error('Failed to load transactions:', error)
+        if (error.response?.status === 401) {
+          await authStore.verifyToken()
+        }
+      } finally {
+        loading.value = false
+      }
+    }
+    
+    async function loadSummary() {
+      if (!authStore.token) return
+      
+      try {
+        const response = await fetch(`${API_BASE}/transactions/summary`, {
           headers: {
             'Authorization': `Bearer ${authStore.token}`
           }
         })
         
-        if (!response.ok) throw new Error('Failed to load transactions')
+        if (!response.ok) throw new Error('Failed to load summary')
         
         const data = await response.json()
-        transactions.value = data
-        processChartData()
+        summary.value = data
         
-        console.log('Dashboard loaded:', data.length, 'transactions')
+        console.log('Summary loaded:', data)
         
       } catch (error) {
-        console.error('Failed to load transactions:', error)
-      } finally {
-        loading.value = false
+        console.error('Failed to load summary:', error)
       }
     }
     
@@ -637,12 +711,20 @@ export default {
     
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
+        loadSummary()
         loadTransactions()
+      }
+    })
+    
+    watch(() => viewMode.value, () => {
+      if (transactions.value.length > 0) {
+        processChartData()
       }
     })
     
     onMounted(() => {
       if (authStore.user) {
+        loadSummary()
         loadTransactions()
       }
     })
@@ -692,6 +774,10 @@ export default {
 
 .stat-value.negative {
   color: #ef4444;
+}
+
+.stat-value.neutral {
+  color: #3b82f6;
 }
 
 .stat-detail {
