@@ -16,9 +16,9 @@
           >
             <div class="drop-zone-content">
               <div class="upload-text">
-          <div class="import-header">
-            <h3>Import Transactions</h3>
-          </div>
+                <div class="import-header">
+                  <h3>Import Transactions</h3>
+                </div>
               </div>
             </div>
             <input 
@@ -35,24 +35,24 @@
 
       <!-- Transaction Count Card -->
       <div class="container stat-card">
-          <div class="stat-label">Total Transactions</div>
-          <div class="stat-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</div>
-          <div class="stat-detail">
-            <span v-if="summary?.categorized_count">
-              {{ summary.categorized_count }} categorized
-            </span>
-          </div>
+        <div class="stat-label">Total Transactions</div>
+        <div class="stat-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</div>
+        <div class="stat-detail">
+          <span v-if="summary?.categorized_count">
+            {{ summary.categorized_count }} categorized
+          </span>
+        </div>
       </div>
 
       <!-- Reset Card -->
       <div class="container stat-card">
-          <div class="stat-detail">
-            <button class="btn btn-danger" @click="showResetModal = true" v-if="summary && summary.total_transactions > 0">
-              Reset All Data
-            </button>
-            <span v-else class="text-muted">No data to reset</span>
-          </div>
+        <div class="stat-detail">
+          <button class="btn btn-danger" @click="showResetModal = true" v-if="summary && summary.total_transactions > 0">
+            Reset All Data
+          </button>
+          <span v-else class="text-muted">No data to reset</span>
         </div>
+      </div>
     </div>
 
     <!-- Upload Progress -->
@@ -88,112 +88,144 @@
           <h3>Transaction History</h3>
           <span class="transaction-count">({{ summary?.total_transactions || 0 }} total)</span>
         </div>
+              <!-- Pagination -->
+
+        
+        <div class="pagination-controls">
+          <select v-model.number="pageSize" @change="changePageSize" class="page-size-select">
+            <option :value="25">25 per page</option>
+            <option :value="50">50 per page</option>
+            <option :value="100">100 per page</option>
+            <option :value="200">200 per page</option>
+          </select>
+          
+          <button 
+            class="btn btn-small" 
+            @click="changePage(currentPage - 1)"
+            :disabled="currentPage <= 1"
+          >
+            Previous
+          </button>
+          
+          <span class="page-indicator">Page {{ currentPage }}</span>
+          
+          <button 
+            class="btn btn-small" 
+            @click="changePage(currentPage + 1)"
+            :disabled="transactions.length < pageSize"
+          >
+            Next
+          </button>
+        </div>
         <div class="header-actions">
-<button 
-  class="btn btn-small" 
-  @click="$emit('update:showFilters', !showFilters)" 
-  :class="{ 'btn-active': showFilters }"
->
-  Filters {{ hasActiveFilters ? '(Active)' : '' }}
-</button>
+          <button 
+            class="btn btn-small" 
+            @click="$emit('update:showFilters', !showFilters)" 
+            :class="{ 'btn-active': showFilters }"
+          >
+            Filters {{ hasActiveFilters ? '(Active)' : '' }}
+          </button>
           <button class="btn btn-small" @click="refreshTransactions" :disabled="loading">
             Refresh
           </button>
         </div>
       </div>
       
-      <!-- Expandable Filters - Reorganized -->
-      <div class="filters-panel" v-if="showFilters">
+      <!-- Compact Filters Panel -->
+      <div class="filters-panel-compact" v-if="showFilters">
+        <!-- First Row: Date Range & Amounts -->
         <div class="filters-row">
-          <!-- Date Range Filters -->
-          <div class="filter-group">
+          <div class="filter-group-compact">
             <label>From Date</label>
             <input 
               type="date" 
               v-model="filters.startDate"
-              class="filter-input"
+              class="filter-input-compact"
             >
           </div>
           
-          <div class="filter-group">
+          <div class="filter-group-compact">
             <label>To Date</label>
             <input 
               type="date" 
               v-model="filters.endDate"
-              class="filter-input"
+              class="filter-input-compact"
             >
           </div>
           
-          <!-- Amount Range Filters -->
-          <div class="filter-group">
-            <label>Min Amount (€)</label>
+          <div class="filter-group-compact">
+            <label>Min Amount</label>
             <input 
               type="number" 
               v-model.number="filters.minAmount"
-              class="filter-input"
+              class="filter-input-compact"
               placeholder="0.00"
               step="0.01"
             >
           </div>
           
-          <div class="filter-group">
-            <label>Max Amount (€)</label>
+          <div class="filter-group-compact">
+            <label>Max Amount</label>
             <input 
               type="number" 
               v-model.number="filters.maxAmount"
-              class="filter-input"
+              class="filter-input-compact"
               placeholder="1000.00"
               step="0.01"
             >
           </div>
         </div>
         
-        <div class="filters-row">
-          <!-- Search and Category Filters -->
-          <div class="filter-group filter-search">
-            <label>Search</label>
-            <input 
-              type="text" 
-              v-model="filters.merchant"
-              class="filter-input"
-              placeholder="Search merchant, message..."
-            >
-          </div>
-          
-          <div class="filter-group">
-            <label>Category</label>
-            <select v-model="filters.mainCategory" class="filter-input">
-              <option value="">All Categories</option>
-              <option v-for="category in uniqueMainCategories" :key="category" :value="category">
-                {{ category }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="filter-group">
-            <label>Subcategory</label>
-            <select v-model="filters.categoryFilter" class="filter-input">
-              <option value="">All Subcategories</option>
-              <option v-for="category in uniqueCategories" :key="category" :value="category">
-                {{ category }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="filter-group">
-            <label>Transaction Type</label>
-            <select v-model="filters.transactionType" class="filter-input">
+        <!-- Second Row: Type & Categories -->
+        <div class="filters-row filters-row-3col">
+          <div class="filter-group-compact">
+            <label>Type</label>
+            <select v-model="filters.typeFilter" class="filter-input-compact">
               <option value="">All Types</option>
-              <option value="income">Income</option>
-              <option value="expense">Expense</option>
-              <option value="transfer">Transfer</option>
+              <option v-for="type in availableTypes" :key="type.id" :value="type.id">
+                {{ type.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="filter-group-compact">
+            <label>Category</label>
+            <select v-model="filters.categoryFilter" class="filter-input-compact" :disabled="!filters.typeFilter">
+              <option value="">All Categories</option>
+              <option v-for="category in availableCategories" :key="category.id" :value="category.id">
+                {{ category.name }}
+              </option>
+            </select>
+          </div>
+          
+          <div class="filter-group-compact">
+            <label>Subcategory</label>
+            <select v-model="filters.subcategoryFilter" class="filter-input-compact" :disabled="!filters.categoryFilter">
+              <option value="">All Subcategories</option>
+              <option v-for="subcategory in availableSubcategories" :key="subcategory.id" :value="subcategory.id">
+                {{ subcategory.name }}
+              </option>
             </select>
           </div>
         </div>
         
-        <div class="filter-actions">
-          <button class="btn btn-small" @click="clearFilters">Clear Filters</button>
-<button class="btn btn-small" @click="$emit('update:showFilters', false)">Hide Filters</button>        </div>
+        <!-- Third Row: Search & Actions -->
+        <div class="filters-row filters-row-actions">
+          <div class="filter-group-compact filter-search-compact">
+            <label>Search</label>
+            <input 
+              type="text" 
+              v-model="filters.merchant"
+              class="filter-input-compact"
+              placeholder="Search merchant, message..."
+            >
+          </div>
+          
+          <div class="filter-actions-compact">
+            <button class="btn btn-small" @click="clearFilters">Clear</button>
+            <button class="btn btn-small" @click="$emit('update:showFilters', false)">Hide</button>
+          </div>
+        </div>
       </div>
 
       <!-- Bulk Selection -->
@@ -266,9 +298,10 @@
                   {{ sortOrder === 'desc' ? '↓' : '↑' }}
                 </span>
               </th>
+              <th class="col-type">Type</th>
               <th class="col-category">Category</th>
-              <th class="col-category">Account</th>
-              <th class="col-actions">Actions</th>
+              <th class="col-subcategory">Subcategory</th>
+              <th class="col-actions"></th>
             </tr>
           </thead>
           <tbody>
@@ -296,121 +329,162 @@
               
               <td class="col-amount" :class="getAmountClass(transaction)">
                 <div class="amount-primary">{{ formatAmount(transaction.amount) }}</div>
-                <div class="amount-secondary" v-if="transaction.transfer_pair_id">
-                  Transfer ID: {{ transaction.transfer_pair_id }}
-                </div>
               </td>
               
               <td class="col-merchant">
                 <div class="merchant-primary">{{ transaction.merchant || 'Unknown Merchant' }}</div>
                 <div class="merchant-secondary" v-if="transaction.memo">
-                  {{ truncateText(transaction.memo, 80) }}
+                  {{ truncateText(transaction.memo, 50) }}
                 </div>
               </td>
               
-              <td class="col-category">
-                <div class="category-assigned" v-if="transaction.main_category">
-                  <div class="category-name">{{ transaction.main_category }}</div>
-                  <div class="category-name" v-if="transaction.csv_category">{{ transaction.csv_category }}</div>
+              <td class="col-type">
+                <div class="category-text" v-if="getCategoryType(transaction)">
+                  {{ getCategoryType(transaction) }}
                 </div>
                 <div v-else class="text-muted">-</div>
-                <div v-if="transaction.editing_category" class="category-selector-edit">
-                  <select 
-                    @change="categorizeTransaction(transaction.id, $event.target.value)"
-                    class="category-select"
-                    :disabled="categorizingTransactions.includes(transaction.id)"
-                    :value="transaction.category_id || ''"
-                  >
-                    <option value="">Select category...</option>
-                    <optgroup 
-                      v-for="group in groupedCategories" 
-                      :key="group.name" 
-                      :label="group.name"
-                    >
-                      <option 
-                        v-for="category in group.categories" 
-                        :key="category.id" 
-                        :value="category.id"
-                      >
-                        {{ category.name }}
-                      </option>
-                    </optgroup>
-                  </select>
-                  <button 
-                    class="btn btn-small btn-link cancel-edit-btn" 
-                    @click="cancelEditingCategory(transaction.id)"
-                    title="Cancel"
-                  >
-                    Cancel
-                  </button>
-                </div>
               </td>
               
-
-              
               <td class="col-category">
-                <div class="category-assigned" v-if="transaction.owner || transaction.csv_account">
-                  <div class="category-name" v-if="transaction.owner">{{ transaction.owner }}</div>
-                  <div class="merchant-secondary" v-if="transaction.csv_account">{{ transaction.csv_account }}</div>
+                <div class="category-text" v-if="getCategoryName(transaction)">
+                  {{ getCategoryName(transaction) }}
+                </div>
+                <div v-else class="text-muted">-</div>
+              </td>
+              
+              <td class="col-subcategory">
+                <div class="category-text" v-if="getSubcategoryName(transaction)">
+                  {{ getSubcategoryName(transaction) }}
                 </div>
                 <div v-else class="text-muted">-</div>
               </td>
               
               <td class="col-actions">
-                <div class="action-buttons">
-                  <!-- Show edit button for category assignment -->
-                  <button 
-                    v-if="!transaction.editing_category"
-                    class="btn btn-small btn-link" 
-                    @click="startEditingCategory(transaction.id)"
-                    title="Assign category"
-                  >
-                    Edit
-                  </button>
-                  
-                  <!-- Show "Auto-categorizing..." for transactions being processed -->
-                  <span v-if="categorizingTransactions.includes(transaction.id)" class="text-muted">
-                    Processing...
-                  </span>
-                </div>
+                <ActionsMenu
+                  :show-edit="true"
+                  :show-add="false"
+                  :show-check="false"
+                  :show-delete="true"
+                  @edit="editTransaction(transaction)"
+                  @delete="deleteTransaction(transaction)"
+                />
               </td>
             </tr>
           </tbody>
         </table>
       </div>
       
-      <!-- Pagination -->
-      <div class="pagination-section" v-if="transactions.length > 0">
-        <div class="pagination-info">
-          Showing {{ ((currentPage - 1) * pageSize) + 1 }} to 
-          {{ Math.min(currentPage * pageSize, summary?.total_transactions || 0) }} 
-          of {{ summary?.total_transactions || 0 }} transactions
+
+    </div>
+
+    <!-- Edit Transaction Modal -->
+    <div v-if="editingTransaction" class="modal-overlay" @click="closeEditModal">
+      <div class="modal-content transaction-edit-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Transaction</h3>
+          <button class="close-btn" @click="closeEditModal">×</button>
         </div>
         
-        <div class="pagination-controls">
-          <select v-model.number="pageSize" @change="changePageSize" class="page-size-select">
-            <option :value="25">25 per page</option>
-            <option :value="50">50 per page</option>
-            <option :value="100">100 per page</option>
-            <option :value="200">200 per page</option>
-          </select>
-          
+        <div class="modal-body">
+          <div class="edit-form">
+            <div class="form-group">
+              <label>Merchant</label>
+              <input 
+                type="text" 
+                v-model="editForm.merchant"
+                class="form-input"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label>Amount</label>
+              <input 
+                type="number" 
+                v-model.number="editForm.amount"
+                class="form-input"
+                step="0.01"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label>Memo</label>
+              <textarea 
+                v-model="editForm.memo"
+                class="form-input"
+                rows="3"
+              ></textarea>
+            </div>
+            
+            <div class="form-group">
+              <label>Category</label>
+              <select v-model="editForm.category_id" class="form-input">
+                <option value="">Select category...</option>
+                <optgroup 
+                  v-for="group in groupedCategories" 
+                  :key="group.name" 
+                  :label="group.name"
+                >
+                  <option 
+                    v-for="category in group.categories" 
+                    :key="category.id" 
+                    :value="category.id"
+                  >
+                    {{ category.name }}
+                  </option>
+                </optgroup>
+              </select>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-actions">
           <button 
-            class="btn btn-small" 
-            @click="changePage(currentPage - 1)"
-            :disabled="currentPage <= 1"
+            class="btn" 
+            @click="saveTransactionEdit"
+            :disabled="saving"
           >
-            Previous
+            {{ saving ? 'Saving...' : 'Save Changes' }}
           </button>
-          
-          <span class="page-indicator">Page {{ currentPage }}</span>
-          
+          <button class="btn btn-link" @click="closeEditModal" :disabled="saving">
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div v-if="deletingTransaction" class="modal-overlay" @click="closeDeleteModal">
+      <div class="modal-content delete-modal" @click.stop>
+        <div class="modal-header">
+          <h3>Delete Transaction</h3>
+          <button class="close-btn" @click="closeDeleteModal">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="delete-warning">
+            <div class="warning-icon">⚠️</div>
+            <div class="warning-text">
+              <p><strong>Are you sure you want to delete this transaction?</strong></p>
+              <p class="transaction-details">
+                <strong>{{ deletingTransaction.merchant || 'Unknown Merchant' }}</strong><br>
+                {{ formatAmount(deletingTransaction.amount) }}<br>
+                {{ formatDate(deletingTransaction.posted_at) }}
+              </p>
+              <p>This action cannot be undone.</p>
+            </div>
+          </div>
+        </div>
+        
+        <div class="modal-actions">
           <button 
-            class="btn btn-small" 
-            @click="changePage(currentPage + 1)"
-            :disabled="transactions.length < pageSize"
+            class="btn btn-danger" 
+            @click="confirmDelete"
+            :disabled="deleting"
           >
-            Next
+            {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
+          </button>
+          <button class="btn btn-link" @click="closeDeleteModal" :disabled="deleting">
+            Cancel
           </button>
         </div>
       </div>
@@ -455,87 +529,106 @@
 import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { useCategoryStore } from '@/stores/categories'
+import ActionsMenu from './ActionsMenu.vue'
 
 export default {
   name: 'TransactionsTab',
-props: {
-  user: {
-    type: Object,
-    required: true
+  components: {
+    ActionsMenu
   },
-  allCategories: {
-    type: Array,
-    default: () => []
+  props: {
+    user: {
+      type: Object,
+      required: true
+    },
+    allCategories: {
+      type: Array,
+      default: () => []
+    },
+    showFilters: {
+      type: Boolean,
+      default: false
+    }
   },
-  showFilters: {
-    type: Boolean,
-    default: false
-  }
-},
-emits: [
-  'add-chat-message',
-  'update:showFilters'
-],
+  emits: [
+    'add-chat-message',
+    'update:showFilters'
+  ],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
-    // File handling refs
+    const categoryStore = useCategoryStore()
+    
     const fileInput = ref(null)
     const isDragging = ref(false)
     const localUploads = ref([])
     
-    // Data state refs
     const loading = ref(false)
     const summary = ref(null)
     const transactions = ref([])
     
-    // Pagination and sorting refs
     const currentPage = ref(1)
     const pageSize = ref(50)
     const sortBy = ref('posted_at')
     const sortOrder = ref('desc')
     
-    // Filter state refs - updated for new structure
-
     const filters = ref({
       startDate: '',
       endDate: '',
       minAmount: null,
       maxAmount: null,
       merchant: '',
-      mainCategory: '',
+      typeFilter: '',
       categoryFilter: '',
-      transactionType: ''
+      subcategoryFilter: ''
     })
     
-    // Selection and bulk action refs
+    const csvMainCategories = ref([])
+    const csvCategories = ref([])
+    const csvSubcategories = ref([])
+    
     const selectedTransactions = ref([])
     const bulkCategoryId = ref('')
     const categorizingTransactions = ref([])
     
-    // Modal state refs
     const showResetModal = ref(false)
     const resetting = ref(false)
-
-    // Computed properties for filters
-    const uniqueMainCategories = computed(() => {
-      const categories = new Set()
-      transactions.value.forEach(t => {
-        if (t.main_category) {
-          categories.add(t.main_category)
-        }
-      })
-      return Array.from(categories).sort()
+    const editingTransaction = ref(null)
+    const deletingTransaction = ref(null)
+    const saving = ref(false)
+    const deleting = ref(false)
+    
+    const editForm = ref({
+      merchant: '',
+      amount: 0,
+      memo: '',
+      category_id: ''
     })
 
-    const uniqueCategories = computed(() => {
-      const categories = new Set()
-      transactions.value.forEach(t => {
-        if (t.csv_category) {
-          categories.add(t.csv_category)
-        }
-      })
-      return Array.from(categories).sort()
+    const categoryTree = computed(() => categoryStore.categories || [])
+    
+    const availableTypes = computed(() => {
+      return csvMainCategories.value.map(name => ({ id: name, name }))
+    })
+
+    const availableCategories = computed(() => {
+      if (!filters.value.typeFilter) return []
+      
+      return csvCategories.value
+        .filter(cat => cat.main === filters.value.typeFilter)
+        .map(cat => ({ id: cat.name, name: cat.name }))
+    })
+
+    const availableSubcategories = computed(() => {
+      if (!filters.value.categoryFilter) return []
+      
+      return csvSubcategories.value
+        .filter(sub => 
+          sub.main === filters.value.typeFilter && 
+          sub.category === filters.value.categoryFilter
+        )
+        .map(sub => ({ id: sub.name, name: sub.name }))
     })
 
     const hasActiveFilters = computed(() => {
@@ -545,7 +638,20 @@ emits: [
     const groupedCategories = computed(() => {
       const groups = {}
       
-      for (const category of props.allCategories) {
+      const flattenCategories = (categories, parentName = '') => {
+        const result = []
+        for (const cat of categories) {
+          result.push({ ...cat, parent_name: parentName })
+          if (cat.children) {
+            result.push(...flattenCategories(cat.children, cat.name))
+          }
+        }
+        return result
+      }
+      
+      const flatCategories = flattenCategories(categoryTree.value)
+      
+      for (const category of flatCategories) {
         const groupName = category.parent_name || category.category_type || 'Other'
         
         if (!groups[groupName]) {
@@ -566,17 +672,28 @@ emits: [
              transactions.value.every(t => selectedTransactions.value.includes(t.id))
     })
 
-    // Watchers
     watch(filters, () => {
       currentPage.value = 1
       loadTransactions()
     }, { deep: true })
     
+    watch(() => filters.value.typeFilter, (newVal, oldVal) => {
+      if (newVal !== oldVal) {
+        filters.value.categoryFilter = ''
+        filters.value.subcategoryFilter = ''
+      }
+    })
+    
+    watch(() => filters.value.categoryFilter, (newVal, oldVal) => {
+      if (newVal !== oldVal) {
+        filters.value.subcategoryFilter = ''
+      }
+    })
+    
     watch(() => [currentPage.value, pageSize.value, sortBy.value, sortOrder.value], () => {
       loadTransactions()
     })
 
-    // File handling methods
     const triggerFileUpload = () => {
       fileInput.value?.click()
     }
@@ -646,7 +763,7 @@ emits: [
           formData.append('file', file)
           formData.append('account_name', 'Default Account')
           formData.append('account_type', 'checking')
-          formData.append('auto_categorize', 'true') 
+          formData.append('auto_categorize', 'true')
           
           const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
             headers: {
@@ -669,6 +786,7 @@ emits: [
             response: `Successfully imported ${file.name} with ${upload.rows} transactions!${duplicatesMsg} All CSV category data has been preserved.`
           })
           
+          await loadFilterOptions()
           await loadSummary()
           await loadTransactions()
           
@@ -693,7 +811,82 @@ emits: [
       }
     }
 
-    // Data loading methods
+    const loadFilterOptions = async () => {
+      if (!props.user) return
+      
+      try {
+        const token = authStore.token
+        
+        const mainCats = new Set()
+        const cats = new Map()
+        const subCats = new Map()
+        
+        let page = 1
+        let hasMore = true
+        const pageSize = 1000
+        
+        while (hasMore && page <= 10) {
+          const response = await axios.get(`${API_BASE}/transactions/list`, {
+            params: {
+              page: page,
+              limit: pageSize
+            },
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          
+          const pageTransactions = response.data
+          
+          if (pageTransactions.length === 0) {
+            hasMore = false
+            break
+          }
+          
+          pageTransactions.forEach(t => {
+            if (t.main_category) {
+              mainCats.add(t.main_category)
+              
+              if (t.csv_category) {
+                const key = `${t.main_category}|${t.csv_category}`
+                cats.set(key, {
+                  main: t.main_category,
+                  name: t.csv_category
+                })
+                
+                if (t.csv_subcategory) {
+                  const subKey = `${t.main_category}|${t.csv_category}|${t.csv_subcategory}`
+                  subCats.set(subKey, {
+                    main: t.main_category,
+                    category: t.csv_category,
+                    name: t.csv_subcategory
+                  })
+                }
+              }
+            }
+          })
+          
+          if (pageTransactions.length < pageSize) {
+            hasMore = false
+          }
+          
+          page++
+        }
+        
+        csvMainCategories.value = Array.from(mainCats).sort()
+        csvCategories.value = Array.from(cats.values())
+        csvSubcategories.value = Array.from(subCats.values())
+        
+        console.log('Loaded filter options:', {
+          types: csvMainCategories.value.length,
+          categories: csvCategories.value.length,
+          subcategories: csvSubcategories.value.length,
+          pagesLoaded: page - 1
+        })
+        
+      } catch (error) {
+        console.error('Failed to load filter options:', error)
+      }
+    }
+
     const loadSummary = async () => {
       if (!props.user) return
       
@@ -707,17 +900,6 @@ emits: [
         console.log('Loaded transaction summary:', response.data)
       } catch (error) {
         console.error('Failed to load summary:', error)
-        if (error.response?.status === 401) {
-          try {
-            const newToken = await props.user.getIdToken(true)
-            const retryResponse = await axios.get(`${API_BASE}/transactions/summary`, {
-              headers: { 'Authorization': `Bearer ${newToken}` }
-            })
-            summary.value = retryResponse.data
-          } catch (retryError) {
-            console.error('Summary retry failed:', retryError)
-          }
-        }
       }
     }
 
@@ -728,92 +910,93 @@ emits: [
       try {
         const token = authStore.token
         
-        const params = new URLSearchParams({
-          page: currentPage.value,
-          limit: pageSize.value,
-          sort_by: sortBy.value,
-          sort_order: sortOrder.value,
-          ...(filters.value.startDate && { start_date: filters.value.startDate }),
-          ...(filters.value.endDate && { end_date: filters.value.endDate }),
-          ...(filters.value.merchant && { merchant: filters.value.merchant }),
-          ...(filters.value.minAmount && { min_amount: filters.value.minAmount }),
-          ...(filters.value.maxAmount && { max_amount: filters.value.maxAmount }),
-          ...(filters.value.transactionType && { transaction_type: filters.value.transactionType })
-          // Note: mainCategory and categoryFilter would need backend support for CSV field filtering
-        })
+        const hasCSVFilter = filters.value.typeFilter || filters.value.categoryFilter || filters.value.subcategoryFilter
         
-        const response = await axios.get(`${API_BASE}/transactions/list?${params}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        let transactionData = response.data.map(transaction => ({
-          ...transaction,
-          editing_category: false
-        }))
-
-        // Client-side filtering for CSV categories since backend might not support them yet
-        if (filters.value.mainCategory) {
-          transactionData = transactionData.filter(t => 
-            t.main_category && t.main_category.toLowerCase().includes(filters.value.mainCategory.toLowerCase())
-          )
+        if (hasCSVFilter) {
+          // Load all transactions in batches when CSV filter is active
+          let allTransactions = []
+          let page = 1
+          const batchSize = 1000
+          
+          while (page <= 10) {
+            const params = {
+              page: page,
+              limit: batchSize,
+              sort_by: sortBy.value,
+              sort_order: sortOrder.value
+            }
+            
+            if (filters.value.startDate) params.start_date = filters.value.startDate
+            if (filters.value.endDate) params.end_date = filters.value.endDate
+            if (filters.value.merchant) params.merchant = filters.value.merchant
+            if (filters.value.minAmount) params.min_amount = filters.value.minAmount
+            if (filters.value.maxAmount) params.max_amount = filters.value.maxAmount
+            
+            const response = await axios.get(`${API_BASE}/transactions/list`, {
+              params,
+              headers: { 'Authorization': `Bearer ${token}` }
+            })
+            
+            const batch = response.data
+            
+            if (batch.length === 0) break
+            
+            allTransactions = allTransactions.concat(batch)
+            
+            if (batch.length < batchSize) break
+            
+            page++
+          }
+          
+          // Filter by CSV categories
+          let filtered = allTransactions.filter(t => {
+            if (filters.value.typeFilter && t.main_category !== filters.value.typeFilter) {
+              return false
+            }
+            
+            if (filters.value.categoryFilter && t.csv_category !== filters.value.categoryFilter) {
+              return false
+            }
+            
+            if (filters.value.subcategoryFilter && t.csv_subcategory !== filters.value.subcategoryFilter) {
+              return false
+            }
+            
+            return true
+          })
+          
+          // Apply pagination to filtered results
+          const start = (currentPage.value - 1) * pageSize.value
+          const end = start + pageSize.value
+          transactions.value = filtered.slice(start, end)
+          
+          console.log('Loaded transactions (filtered):', transactions.value.length, 'of', filtered.length)
+        } else {
+          // Normal backend pagination when no CSV filter
+          const params = {
+            page: currentPage.value,
+            limit: pageSize.value,
+            sort_by: sortBy.value,
+            sort_order: sortOrder.value
+          }
+          
+          if (filters.value.startDate) params.start_date = filters.value.startDate
+          if (filters.value.endDate) params.end_date = filters.value.endDate
+          if (filters.value.merchant) params.merchant = filters.value.merchant
+          if (filters.value.minAmount) params.min_amount = filters.value.minAmount
+          if (filters.value.maxAmount) params.max_amount = filters.value.maxAmount
+          
+          const response = await axios.get(`${API_BASE}/transactions/list`, {
+            params,
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          
+          transactions.value = response.data
+          
+          console.log('Loaded transactions:', transactions.value.length)
         }
-
-        if (filters.value.categoryFilter) {
-          transactionData = transactionData.filter(t => 
-            t.csv_category && t.csv_category.toLowerCase().includes(filters.value.categoryFilter.toLowerCase())
-          )
-        }
-        
-        transactions.value = transactionData
-        
-        console.log('Loaded transactions:', transactions.value.length)
       } catch (error) {
         console.error('Failed to load transactions:', error)
-        if (error.response?.status === 401) {
-          try {
-            const newToken = await props.user.getIdToken(true)
-            const params = new URLSearchParams({
-              page: currentPage.value,
-              limit: pageSize.value,
-              sort_by: sortBy.value,
-              sort_order: sortOrder.value,
-              ...(filters.value.startDate && { start_date: filters.value.startDate }),
-              ...(filters.value.endDate && { end_date: filters.value.endDate }),
-              ...(filters.value.merchant && { merchant: filters.value.merchant }),
-              ...(filters.value.minAmount && { min_amount: filters.value.minAmount }),
-              ...(filters.value.maxAmount && { max_amount: filters.value.maxAmount }),
-              ...(filters.value.transactionType && { transaction_type: filters.value.transactionType })
-            })
-            
-            const retryResponse = await axios.get(`${API_BASE}/transactions/list?${params}`, {
-              headers: { 'Authorization': `Bearer ${newToken}` }
-            })
-            
-            let retryData = retryResponse.data.map(transaction => ({
-              ...transaction,
-              editing_category: false
-            }))
-
-            // Apply client-side CSV filtering on retry as well
-            if (filters.value.mainCategory) {
-              retryData = retryData.filter(t => 
-                t.main_category && t.main_category.toLowerCase().includes(filters.value.mainCategory.toLowerCase())
-              )
-            }
-
-            if (filters.value.categoryFilter) {
-              retryData = retryData.filter(t => 
-                t.csv_category && t.csv_category.toLowerCase().includes(filters.value.categoryFilter.toLowerCase())
-              )
-            }
-            
-            transactions.value = retryData
-            
-            console.log('Transaction retry successful:', retryData.length)
-          } catch (retryError) {
-            console.error('Transaction retry failed:', retryError)
-          }
-        }
       } finally {
         loading.value = false
       }
@@ -824,58 +1007,100 @@ emits: [
       await loadTransactions()
     }
 
-    // Transaction management methods - simplified for CSV-first approach
-    const startEditingCategory = (transactionId) => {
-      const transaction = transactions.value.find(t => t.id === transactionId)
-      if (transaction) {
-        transaction.editing_category = true
+    const editTransaction = (transaction) => {
+      editingTransaction.value = transaction
+      editForm.value = {
+        merchant: transaction.merchant || '',
+        amount: parseFloat(transaction.amount),
+        memo: transaction.memo || '',
+        category_id: transaction.category_id || ''
       }
     }
 
-    const cancelEditingCategory = (transactionId) => {
-      const transaction = transactions.value.find(t => t.id === transactionId)
-      if (transaction) {
-        transaction.editing_category = false
+    const closeEditModal = () => {
+      editingTransaction.value = null
+      editForm.value = {
+        merchant: '',
+        amount: 0,
+        memo: '',
+        category_id: ''
       }
     }
 
-    const categorizeTransaction = async (transactionId, categoryId) => {
-      if (!categoryId || categorizingTransactions.value.includes(transactionId)) return
+    const saveTransactionEdit = async () => {
+      if (!editingTransaction.value || saving.value) return
       
-      categorizingTransactions.value.push(transactionId)
-      
-      // Stop editing mode
-      const transaction = transactions.value.find(t => t.id === transactionId)
-      if (transaction) {
-        transaction.editing_category = false
-      }
+      saving.value = true
       
       try {
         const token = authStore.token
         
-        await axios.post(`${API_BASE}/transactions/categorize/${transactionId}`, {
-          category_id: categoryId,
-          confidence: 1.0
-        }, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
+        await axios.put(
+          `${API_BASE}/transactions/${editingTransaction.value.id}`,
+          editForm.value,
+          {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        )
         
-        const category = props.allCategories.find(c => c.id === categoryId)
         emit('add-chat-message', {
-          message: 'Manual category override',
-          response: `Transaction manually categorized as ${category?.name || 'selected category'}! This overrides the CSV category.`
+          message: 'Transaction updated',
+          response: 'Transaction has been successfully updated!'
         })
         
         await loadTransactions()
         await loadSummary()
+        closeEditModal()
         
       } catch (error) {
-        console.error('Failed to categorize transaction:', error)
+        console.error('Failed to update transaction:', error)
         emit('add-chat-message', {
-          response: 'Failed to apply manual category. Please try again.'
+          response: 'Failed to update transaction. Please try again.'
         })
       } finally {
-        categorizingTransactions.value = categorizingTransactions.value.filter(id => id !== transactionId)
+        saving.value = false
+      }
+    }
+
+    const deleteTransaction = (transaction) => {
+      deletingTransaction.value = transaction
+    }
+
+    const closeDeleteModal = () => {
+      deletingTransaction.value = null
+    }
+
+    const confirmDelete = async () => {
+      if (!deletingTransaction.value || deleting.value) return
+      
+      deleting.value = true
+      
+      try {
+        const token = authStore.token
+        
+        await axios.delete(
+          `${API_BASE}/transactions/${deletingTransaction.value.id}`,
+          {
+            headers: { 'Authorization': `Bearer ${token}` }
+          }
+        )
+        
+        emit('add-chat-message', {
+          message: 'Transaction deleted',
+          response: 'Transaction has been permanently deleted.'
+        })
+        
+        await loadTransactions()
+        await loadSummary()
+        closeDeleteModal()
+        
+      } catch (error) {
+        console.error('Failed to delete transaction:', error)
+        emit('add-chat-message', {
+          response: 'Failed to delete transaction. Please try again.'
+        })
+      } finally {
+        deleting.value = false
       }
     }
 
@@ -895,8 +1120,8 @@ emits: [
         
         const category = props.allCategories.find(c => c.id === bulkCategoryId.value)
         emit('add-chat-message', {
-          message: `Bulk manual categorization: ${selectedTransactions.value.length} transactions`,
-          response: `Successfully applied manual category ${category?.name || 'selected category'} to ${selectedTransactions.value.length} transactions! This overrides CSV categories.`
+          message: `Bulk categorization: ${selectedTransactions.value.length} transactions`,
+          response: `Successfully applied category ${category?.name || 'selected category'} to ${selectedTransactions.value.length} transactions!`
         })
         
         selectedTransactions.value = []
@@ -912,7 +1137,6 @@ emits: [
       }
     }
 
-    // Filter methods - updated for new filter structure
     const clearFilters = () => {
       filters.value = {
         startDate: '',
@@ -920,9 +1144,9 @@ emits: [
         minAmount: null,
         maxAmount: null,
         merchant: '',
-        mainCategory: '',
+        typeFilter: '',
         categoryFilter: '',
-        transactionType: ''
+        subcategoryFilter: ''
       }
     }
 
@@ -935,7 +1159,6 @@ emits: [
       }
     }
 
-    // Selection methods
     const toggleTransactionSelection = (transactionId) => {
       const index = selectedTransactions.value.indexOf(transactionId)
       if (index > -1) {
@@ -958,7 +1181,6 @@ emits: [
       bulkCategoryId.value = ''
     }
 
-    // Pagination methods
     const changePage = (newPage) => {
       if (newPage >= 1) {
         currentPage.value = newPage
@@ -970,7 +1192,6 @@ emits: [
       loadTransactions()
     }
 
-    // Reset functionality
     const confirmReset = async () => {
       if (resetting.value) return
       
@@ -986,7 +1207,6 @@ emits: [
           headers: { 'Authorization': `Bearer ${token}` }
         })
         
-        // Clear local state on success
         transactions.value = []
         summary.value = null
         selectedTransactions.value = []
@@ -994,7 +1214,7 @@ emits: [
         
         emit('add-chat-message', {
           message: 'Reset all transaction data',
-          response: 'All transaction data has been successfully reset. You can now import fresh CSV files.'
+          response: 'All transaction data has been successfully reset.'
         })
         
         showResetModal.value = false
@@ -1002,17 +1222,73 @@ emits: [
       } catch (error) {
         console.error('Reset failed:', error)
         
-        const errorMessage = 'Reset feature is not yet implemented on the server. Please contact support or manually delete data through database.'
-        
         emit('add-chat-message', {
-          response: errorMessage
+          response: 'Reset feature is not yet implemented on the server.'
         })
       } finally {
         resetting.value = false
       }
     }
 
-    // Utility methods
+    const findCategoryById = (categoryId) => {
+      const searchInTree = (categories) => {
+        for (const cat of categories) {
+          if (cat.id === categoryId) return cat
+          if (cat.children) {
+            const found = searchInTree(cat.children)
+            if (found) return found
+          }
+        }
+        return null
+      }
+      
+      return searchInTree(categoryTree.value)
+    }
+
+    const getCategoryHierarchy = (category) => {
+      const hierarchy = {
+        type: null,
+        category: null,
+        subcategory: null
+      }
+      
+      if (!category) return hierarchy
+      
+      let current = category
+      
+      if (current.parent_id) {
+        const parent = findCategoryById(current.parent_id)
+        
+        if (parent && parent.parent_id) {
+          hierarchy.subcategory = current
+          hierarchy.category = parent
+          hierarchy.type = findCategoryById(parent.parent_id)
+        } else if (parent) {
+          hierarchy.category = current
+          hierarchy.type = parent
+        }
+      } else {
+        hierarchy.type = current
+      }
+      
+      return hierarchy
+    }
+
+    const getCategoryType = (transaction) => {
+      if (!transaction.main_category) return null
+      return transaction.main_category
+    }
+
+    const getCategoryName = (transaction) => {
+      if (!transaction.csv_category) return null
+      return transaction.csv_category
+    }
+
+    const getSubcategoryName = (transaction) => {
+      if (!transaction.csv_subcategory) return null
+      return transaction.csv_subcategory
+    }
+
     const formatDate = (dateString) => {
       return new Date(dateString).toLocaleDateString('en-EU', {
         day: '2-digit',
@@ -1027,11 +1303,6 @@ emits: [
         style: 'currency',
         currency: 'EUR'
       }).format(Math.abs(num))
-    }
-
-    const formatTransactionType = (type) => {
-      if (!type) return 'Unknown'
-      return type.charAt(0).toUpperCase() + type.slice(1)
     }
 
     const getAmountClass = (transaction) => {
@@ -1049,91 +1320,283 @@ emits: [
       return text.substring(0, maxLength) + '...'
     }
 
-    // Initialize data on component mount
     onMounted(async () => {
       if (props.user) {
+        await categoryStore.loadCategories()
+        await loadFilterOptions()
         await loadSummary()
         await loadTransactions()
       }
     })
 
-    // Return all reactive references and methods for template use
     return {
-      // File handling
       fileInput,
       isDragging,
       localUploads,
-      
-      // Data state
       loading,
       summary,
       transactions,
-      
-      // Pagination and sorting
       currentPage,
       pageSize,
       sortBy,
       sortOrder,
-      
-      // Filters - updated
-
       filters,
       hasActiveFilters,
-      uniqueMainCategories,
-      uniqueCategories,
-      
-      // Selection and bulk actions
+      availableTypes,
+      availableCategories,
+      availableSubcategories,
       selectedTransactions,
       bulkCategoryId,
       categorizingTransactions,
       allVisibleTransactionsSelected,
-      
-      // Modals
       showResetModal,
       resetting,
-      
-      // Computed
+      editingTransaction,
+      deletingTransaction,
+      saving,
+      deleting,
+      editForm,
       groupedCategories,
-      
-      // File handling methods
       triggerFileUpload,
       handleFileSelect,
       handleFileDrop,
-      
-      // Data loading methods
+      loadFilterOptions,
       loadSummary,
       loadTransactions,
       refreshTransactions,
-      
-      // Transaction methods
-      startEditingCategory,
-      cancelEditingCategory,
-      categorizeTransaction,
+      editTransaction,
+      closeEditModal,
+      saveTransactionEdit,
+      deleteTransaction,
+      closeDeleteModal,
+      confirmDelete,
       bulkCategorize,
-      
-      // Filter and UI methods
       clearFilters,
       toggleSort,
-      
-      // Selection methods
       toggleTransactionSelection,
       toggleAllTransactions,
       clearSelection,
-      
-      // Pagination methods
       changePage,
       changePageSize,
-      
-      // Reset methods
       confirmReset,
-      
-      // Utility methods
+      findCategoryById,
+      getCategoryHierarchy,
+      getCategoryType,
+      getCategoryName,
+      getSubcategoryName,
       formatDate,
       formatAmount,
-      formatTransactionType,
       getAmountClass,
       truncateText
     }
   }
 }
 </script>
+
+<style scoped>
+/* Compact Filters Panel */
+.filters-panel-compact {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-standard);
+  margin-bottom: var(--gap-standard);
+  animation: slideDown 0.3s ease;
+}
+
+.filters-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--gap-small);
+  margin-bottom: var(--gap-small);
+}
+
+.filters-row:last-child {
+  margin-bottom: 0;
+}
+
+.filters-row-3col {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.filters-row-actions {
+  grid-template-columns: 2fr 1fr;
+}
+
+.filter-group-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.filter-group-compact label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--color-text-light);
+}
+
+.filter-input-compact {
+  padding: 0.375rem 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: var(--color-button);
+  font-size: var(--text-small);
+  transition: border-color 0.2s ease;
+}
+
+.filter-input-compact:focus {
+  outline: none;
+  border-color: var(--color-button-active);
+}
+
+.filter-search-compact {
+  flex: 1;
+}
+
+.filter-actions-compact {
+  display: flex;
+  gap: var(--gap-small);
+  align-items: flex-end;
+}
+
+/* Table improvements */
+.col-type {
+  width: 6rem;
+}
+
+.col-category {
+  width: 10rem;
+}
+
+.col-subcategory {
+  width: 10rem;
+}
+
+.col-actions {
+  width: 3rem;
+  text-align: center;
+}
+
+.category-text {
+  font-size: var(--text-small);
+  color: var(--color-text);
+}
+
+.type-badge {
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  font-size: var(--text-small);
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+/* Edit and Delete Modals */
+.transaction-edit-modal {
+  max-width: 35rem;
+}
+
+.delete-modal {
+  max-width: 30rem;
+}
+
+.edit-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.form-group label {
+  font-weight: 600;
+  color: var(--color-text-light);
+  font-size: var(--text-small);
+}
+
+.form-input {
+  padding: 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: var(--color-button);
+  font-size: var(--text-medium);
+  font-family: inherit;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--color-button-active);
+}
+
+textarea.form-input {
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.delete-warning {
+  display: flex;
+  gap: var(--gap-standard);
+  padding: var(--gap-standard);
+  background: rgba(239, 68, 68, 0.05);
+  border-radius: var(--radius);
+}
+
+.warning-icon {
+  font-size: 2rem;
+  flex-shrink: 0;
+}
+
+.warning-text p {
+  margin-bottom: var(--gap-small);
+}
+
+.transaction-details {
+  padding: var(--gap-small);
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  margin: var(--gap-small) 0;
+}
+
+/* Responsive */
+@media (max-width: 64rem) {
+  .filters-row {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .filters-row-3col {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  
+  .filters-row-actions {
+    grid-template-columns: 1fr;
+  }
+  
+  .filter-actions-compact {
+    justify-content: stretch;
+  }
+  
+  .filter-actions-compact button {
+    flex: 1;
+  }
+}
+
+@media (max-width: 48rem) {
+  .filters-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .transactions-table {
+    font-size: 0.75rem;
+  }
+  
+  .col-type,
+  .col-category,
+  .col-subcategory {
+    display: none;
+  }
+}
+</style>
