@@ -3,7 +3,6 @@
     <!-- Header Controls -->
     <div class="timeline-header">
       <div class="timeline-title">
-        <h2>Financial Timeline</h2>
         <span class="timeline-subtitle">
           {{ formatDateRange(dateRange.start, dateRange.end) }}
         </span>
@@ -29,7 +28,6 @@
       </div>
       
       <div v-else-if="!hasData" class="empty-state">
-        <div class="empty-icon">📊</div>
         <p class="empty-title">No transaction data available</p>
         <p class="empty-subtitle">Import transactions to see your financial timeline</p>
       </div>
@@ -274,42 +272,126 @@ export default {
         .slice(0, 12)
     })
     
+    const categoryColors = {
+      // Food & Dining
+      'Groceries': '#10b981',
+      'Restaurants': '#ef4444',
+      'Cafes & Coffee': '#f59e0b',
+      'Sweets': '#ec4899',
+      
+      // Shopping
+      'Clothing & Shoes': '#8b5cf6',
+      'Electronics': '#3b82f6',
+      'Household': '#06b6d4',
+      'Accessories': '#d946ef',
+      'Subscriptions': '#f97316',
+      'Guilty Pleasure': '#db2777',
+      
+      // Housing & Utilities
+      'Monthly Rent': '#0891b2',
+      'Internet & Phone': '#6366f1',
+      'Energy & Water': '#14b8a6',
+      
+      // Transport
+      'Fuel': '#f59e0b',
+      'Public Transport': '#84cc16',
+      'Vehicle Registration & Tax': '#eab308',
+      'Maintenance & Repairs': '#f97316',
+      'Parking Fees': '#facc15',
+      
+      // Health
+      'Pharmacy': '#22c55e',
+      'Medical Services': '#10b981',
+      'Dental Care': '#059669',
+      'Gym & Fitness': '#84cc16',
+      
+      // Leisure & Culture
+      'Music': '#a855f7',
+      'Social Activities': '#ec4899',
+      'Education': '#3b82f6',
+      'Books & Media': '#6366f1',
+      'Hobbies & Crafts': '#8b5cf6',
+      
+      // Family
+      'Sports Activities': '#0ea5e9',
+      "Child's Activities": '#06b6d4',
+      'Toys & Games': '#14b8a6',
+      
+      // Insurance
+      'Health Insurance': '#f43f5e',
+      'Home Insurance': '#e11d48',
+      'Vehicle Insurance': '#be123c',
+      
+      // Financial
+      'Bureaucracy': '#64748b',
+      'Investment Accounts': '#475569',
+      'Withdrawal': '#334155',
+      'Payment Provider': '#1e293b',
+      'Bank Services': '#0f172a',
+      
+      // Transfers
+      'Between Own Accounts': '#06b6d4',
+      'Family Support': '#14b8a6',
+      'Reserve Transfer': '#0891b2',
+      'Savings Transfer': '#0e7490',
+      'House Savings': '#155e75',
+      
+      // Default
+      'Uncategorized': '#94a3b8'
+    }
+    
     const chartSeries = computed(() => {
       if (!timelineData.value.length) return []
       
       const series = []
       
-      // Income series
+      // Group expenses by category
+      const expensesByCategory = {}
+      transactions.value
+        .filter(t => t.transaction_type === 'expense')
+        .forEach(t => {
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          if (!expensesByCategory[category]) {
+            expensesByCategory[category] = new Map()
+          }
+          
+          const date = new Date(t.posted_at)
+          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          const amount = Math.abs(parseFloat(t.amount))
+          
+          expensesByCategory[category].set(key, (expensesByCategory[category].get(key) || 0) + amount)
+        })
+      
+      // Create expense series (positive values above zero line)
+      Object.entries(expensesByCategory)
+        .sort((a, b) => {
+          const sumA = Array.from(a[1].values()).reduce((s, v) => s + v, 0)
+          const sumB = Array.from(b[1].values()).reduce((s, v) => s + v, 0)
+          return sumB - sumA
+        })
+        .slice(0, 15) // Top 15 categories
+        .forEach(([category, dateMap]) => {
+          series.push({
+            name: category,
+            type: 'line',
+            data: timelineData.value.map(d => ({
+              x: d.date,
+              y: dateMap.get(d.date) || 0
+            }))
+          })
+        })
+      
+      // Income series (negative values below zero line)
       series.push({
         name: 'Income',
-        type: 'area',
+        type: 'line',
         data: timelineData.value.map(d => ({
           x: d.date,
-          y: d.income
+          y: -d.income // Negative to show below zero
         }))
       })
       
-      // Expenses series
-      series.push({
-        name: 'Expenses',
-        type: 'area',
-        data: timelineData.value.map(d => ({
-          x: d.date,
-          y: d.expenses
-        }))
-      })
-      
-      // Transfers series
-      series.push({
-        name: 'Transfers',
-        type: 'area',
-        data: timelineData.value.map(d => ({
-          x: d.date,
-          y: d.transfers
-        }))
-      })
-      
-      // Running balance line
+      // Running balance line (thicker, more prominent)
       let runningBalance = 0
       const balanceData = timelineData.value.map(d => {
         runningBalance += (d.income - d.expenses)
@@ -328,79 +410,144 @@ export default {
       return series
     })
     
-    const chartOptions = computed(() => ({
-      chart: {
-        id: 'timeline-main',
-        type: 'area',
-        height: 500,
-        stacked: false,
-        toolbar: {
-          show: true,
-          tools: {
-            download: true,
-            selection: true,
-            zoom: true,
-            zoomin: true,
-            zoomout: true,
-            pan: true,
-            reset: true
+    const chartOptions = computed(() => {
+      const colors = []
+      
+      // Generate colors for expense categories
+      chartSeries.value.forEach((serie, index) => {
+        if (serie.name === 'Income') {
+          colors.push('#22c55e')
+        } else if (serie.name === 'Balance') {
+          colors.push('#8b5cf6')
+        } else {
+          colors.push(categoryColors[serie.name] || `hsl(${index * 25}, 70%, 60%)`)
+        }
+      })
+      
+      return {
+        chart: {
+          id: 'timeline-main',
+          type: 'line',
+          height: 500,
+          stacked: false,
+          toolbar: {
+            show: true,
+            tools: {
+              download: true,
+              selection: true,
+              zoom: true,
+              zoomin: true,
+              zoomout: true,
+              pan: true,
+              reset: true
+            }
+          },
+          zoom: {
+            enabled: true,
+            type: 'x',
+            autoScaleYaxis: true
+          },
+          animations: {
+            enabled: true,
+            easing: 'easeinout',
+            speed: 800
           }
         },
-        zoom: {
-          enabled: true,
-          type: 'x',
-          autoScaleYaxis: true
+        dataLabels: {
+          enabled: false
         },
-        animations: {
-          enabled: true,
-          easing: 'easeinout',
-          speed: 800
-        }
-      },
-      dataLabels: {
-        enabled: false
-      },
-      stroke: {
-        curve: 'smooth',
-        width: [0, 0, 0, 3]
-      },
-      fill: {
-        type: 'gradient',
-        gradient: {
-          opacityFrom: 0.6,
-          opacityTo: 0.1
-        }
-      },
-      legend: {
-        position: 'top',
-        horizontalAlign: 'left'
-      },
-      xaxis: {
-        type: 'datetime',
-        labels: {
-          datetimeUTC: false
-        }
-      },
-      yaxis: {
-        title: {
-          text: 'Amount (€)'
+        stroke: {
+          curve: 'smooth',
+          width: chartSeries.value.map((serie, index) => {
+            if (serie.name === 'Balance') return 3
+            if (serie.name === 'Income') return 2
+            return 1.5
+          })
         },
-        labels: {
-          formatter: (val) => '€' + Math.round(val).toLocaleString()
-        }
-      },
-      tooltip: {
-        shared: true,
-        intersect: false,
-        x: {
-          format: 'dd MMM yyyy'
+        fill: {
+          type: 'solid',
+          opacity: chartSeries.value.map((serie) => {
+            if (serie.name === 'Balance') return 1
+            if (serie.name === 'Income') return 0.8
+            return 0.6
+          })
         },
-        y: {
-          formatter: (val) => '€' + val.toFixed(2)
+        legend: {
+          position: 'top',
+          horizontalAlign: 'left',
+          floating: false,
+          offsetY: 0,
+          markers: {
+            width: 12,
+            height: 12,
+            radius: 2
+          }
+        },
+        grid: {
+          borderColor: '#e5e7eb',
+          strokeDashArray: 4,
+          xaxis: {
+            lines: {
+              show: true
+            }
+          },
+          yaxis: {
+            lines: {
+              show: true
+            }
+          }
+        },
+        xaxis: {
+          type: 'datetime',
+          labels: {
+            datetimeUTC: false,
+            style: {
+              colors: '#6b7280'
+            }
+          }
+        },
+        yaxis: {
+          title: {
+            text: 'Amount (€)',
+            style: {
+              color: '#6b7280'
+            }
+          },
+          labels: {
+            formatter: (val) => '€' + Math.round(val).toLocaleString(),
+            style: {
+              colors: '#6b7280'
+            }
+          }
+        },
+        tooltip: {
+          shared: true,
+          intersect: false,
+          x: {
+            format: 'dd MMM yyyy'
+          },
+          y: {
+            formatter: (val) => '€' + Math.abs(val).toFixed(2)
+          }
+        },
+        colors: colors,
+        annotations: {
+          yaxis: [{
+            y: 0,
+            borderColor: '#374151',
+            borderWidth: 2,
+            opacity: 0.8,
+            label: {
+              text: 'Zero Line',
+              style: {
+                color: '#fff',
+                background: '#374151'
+              }
+            }
+          }]
         }
-      },
-      colors: ['#22c55e', '#ef4444', '#3b82f6', '#8b5cf6']
-    }))
+      }
+    })
     
     // Methods
     function groupTransactionsByDay(txs) {
