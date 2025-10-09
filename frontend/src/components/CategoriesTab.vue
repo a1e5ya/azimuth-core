@@ -1,6 +1,9 @@
 <template>
   <div class="tab-content">
-    <div class="container">
+    <div 
+      class="container"
+      :style="{ backgroundColor: hexToRgba(currentType?.color, 0.07) }"
+    >
       <!-- Type Tabs -->
       <div class="type-tabs">
         <div class="tabs-left">
@@ -9,6 +12,7 @@
             :key="type.id"
             class="type-tab"
             :class="{ active: selectedTypeId === type.id }"
+            :style="{ '--tab-hover-color': type.color }"
             @click="selectedTypeId = type.id"
           >
             <AppIcon :name="type.icon" size="medium" />
@@ -36,16 +40,25 @@
       </div>
 
       <!-- Categories Compact Grid -->
-      <div v-else-if="currentType" class="categories-compact-grid">
+      <div 
+        v-else-if="currentType" 
+        class="categories-compact-grid"
+      >
         <div
           v-for="mainCat in currentType.children"
           :key="mainCat.id"
           class="category-container"
+          :style="{ backgroundColor: hexToRgba(mainCat.color, 0.1) }"
         >
           <!-- Main Category Header - Compact -->
           <div class="category-header-compact">
             <div class="category-title-compact">
-              <AppIcon :name="mainCat.icon" size="medium" />
+              <AppIcon 
+                :name="mainCat.icon" 
+                size="medium"
+                class="category-icon"
+                :style="{ '--icon-hover-color': mainCat.color }"
+              />
               <h4>{{ mainCat.name }}</h4>
             </div>
             <ActionsMenu
@@ -64,10 +77,16 @@
               v-for="subcat in mainCat.children"
               :key="subcat.id"
               class="subcat-compact"
+              :style="{ backgroundColor: hexToRgba(subcat.color, 0.1) }"
             >
               <div class="subcat-top">
                 <div class="subcat-name-icon">
-                  <AppIcon :name="subcat.icon" size="small" />
+                  <AppIcon 
+                    :name="subcat.icon" 
+                    size="small"
+                    class="subcat-icon"
+                    :style="{ '--icon-hover-color': subcat.color }"
+                  />
                   <span>{{ subcat.name }}</span>
                 </div>
                 <ActionsMenu
@@ -133,6 +152,14 @@ export default {
       return categories.value.find(t => t.id === selectedTypeId.value)
     })
 
+    function hexToRgba(hex, alpha) {
+      if (!hex) return 'transparent'
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`
+    }
+
     async function refreshCategories() {
       await categoryStore.loadCategories()
       if (categories.value && categories.value.length > 0 && !selectedTypeId.value) {
@@ -177,6 +204,7 @@ export default {
       loading,
       selectedTypeId,
       currentType,
+      hexToRgba,
       refreshCategories,
       editCategory,
       deleteCategory,
@@ -229,7 +257,11 @@ export default {
 
 .type-tab:hover {
   color: var(--color-text);
-  background: var(--color-background-light);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.type-tab:hover :deep(.icon-wrapper) {
+  color: var(--tab-hover-color);
 }
 
 .type-tab.active {
@@ -264,7 +296,6 @@ export default {
 }
 
 .category-container {
-  background: var(--color-background-light);
   padding: 0.75rem;
   border-radius: var(--radius);
   display: flex;
@@ -293,6 +324,11 @@ export default {
   font-weight: 600;
 }
 
+.category-title-compact .category-icon:hover :deep(.icon-wrapper) {
+  color: var(--icon-hover-color);
+  transition: color 0.2s;
+}
+
 /* Subcategories Compact */
 .subcats-compact {
   display: flex;
@@ -301,7 +337,6 @@ export default {
 }
 
 .subcat-compact {
-  background: var(--color-background);
   padding: 0.5rem;
   border-radius: var(--radius);
   display: flex;
@@ -321,6 +356,11 @@ export default {
   gap: 0.375rem;
   font-size: var(--text-small);
   font-weight: 500;
+}
+
+.subcat-name-icon .subcat-icon:hover :deep(.icon-wrapper) {
+  color: var(--icon-hover-color);
+  transition: color 0.2s;
 }
 
 /* Compact Input */

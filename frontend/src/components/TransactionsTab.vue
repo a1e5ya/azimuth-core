@@ -62,8 +62,8 @@
         <div class="upload-items">
           <div v-for="upload in localUploads" :key="upload.id" class="upload-item" :class="upload.status">
             <div class="upload-status-icon">
-              <span v-if="upload.status === 'success'">✅</span>
-              <span v-else-if="upload.status === 'error'">❌</span>
+              <span v-if="upload.status === 'success'"></span>
+              <span v-else-if="upload.status === 'error'"></span>
               <span v-else class="loading-spinner">⟳</span>
             </div>
             <div class="upload-details">
