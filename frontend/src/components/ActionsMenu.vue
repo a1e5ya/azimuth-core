@@ -176,7 +176,8 @@ export default {
 
 /* Show on parent hover */
 .category-header-compact:hover .btn-menu-dots,
-.subcat-top:hover .btn-menu-dots {
+.subcat-top:hover .btn-menu-dots,
+.transaction-row:hover .btn-menu-dots {
   opacity: 0.6;
 }
 

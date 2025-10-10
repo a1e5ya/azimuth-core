@@ -1,132 +1,101 @@
 <template>
   <div class="tab-content">
-    <!-- Top Cards Section -->
-    <div class="grid grid-3">
-      <!-- Import Card -->
-      <div class="container">
-        <div class="import-section">
-          <div 
-            class="drop-zone" 
-            @click="triggerFileUpload"
-            @drop.prevent="handleFileDrop"
-            @dragover.prevent
-            @dragenter.prevent="isDragging = true"
-            @dragleave.prevent="isDragging = false"
-            :class="{ 'drag-active': isDragging }"
-          >
-            <div class="drop-zone-content">
-              <div class="upload-text">
-                <div class="import-header">
-                  <h3>Import Transactions</h3>
-                </div>
-              </div>
-            </div>
-            <input 
-              ref="fileInput" 
-              type="file" 
-              accept=".csv,.xlsx" 
-              multiple 
-              @change="handleFileSelect" 
-              style="display: none;"
-            >
-          </div>
-        </div>
-      </div>
 
-      <!-- Transaction Count Card -->
-      <div class="container stat-card">
-        <div class="stat-label">Total Transactions</div>
-        <div class="stat-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</div>
-        <div class="stat-detail">
-          <span v-if="summary?.categorized_count">
-            {{ summary.categorized_count }} categorized
-          </span>
-        </div>
-      </div>
 
-      <!-- Reset Card -->
-      <div class="container stat-card">
-        <div class="stat-detail">
-          <button class="btn btn-danger" @click="showResetModal = true" v-if="summary && summary.total_transactions > 0">
-            Reset All Data
-          </button>
-          <span v-else class="text-muted">No data to reset</span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Upload Progress -->
-    <div class="container" v-if="localUploads.length > 0">
-      <div class="upload-progress">
-        <h4>Upload Progress</h4>
-        <div class="upload-items">
-          <div v-for="upload in localUploads" :key="upload.id" class="upload-item" :class="upload.status">
-            <div class="upload-status-icon">
-              <span v-if="upload.status === 'success'"></span>
-              <span v-else-if="upload.status === 'error'"></span>
-              <span v-else class="loading-spinner">⟳</span>
-            </div>
-            <div class="upload-details">
-              <div class="upload-filename">{{ upload.filename }}</div>
-              <div class="upload-info">
-                <span class="upload-time">{{ upload.timestamp }}</span>
-                <span v-if="upload.status === 'processing'" class="upload-status"> • Processing...</span>
-                <span v-else-if="upload.status === 'success'" class="upload-status"> • {{ upload.rows }} rows imported</span>
-                <span v-else-if="upload.status === 'error'" class="upload-status"> • Upload failed</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Transactions Table with Filters -->
+    <!-- Transactions Header with Stats and Pagination -->
     <div class="container">
-      <!-- Table Header with Controls -->
       <div class="transactions-header">
-        <div class="header-info">
-          <h3>Transaction History</h3>
-          <span class="transaction-count">({{ summary?.total_transactions || 0 }} total)</span>
-        </div>
-              <!-- Pagination -->
 
+        <!-- Left: Stats -->
+        <div class="header-stats">
+          <div class="stat-item">
+            <span class="stat-label">Total:</span>
+            <span class="stat-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-label">Categorized:</span>
+            <span class="stat-value">{{ summary?.categorized_count?.toLocaleString() || 0 }}</span>
+          </div>
+          
+          <!-- Upload Progress Inline -->
+          <div v-if="localUploads.length > 0" class="upload-inline">
+            <div v-for="upload in localUploads.slice(0, 1)" :key="upload.id" class="upload-mini">
+              <span v-if="upload.status === 'success'">✓</span>
+              <span v-else-if="upload.status === 'error'">✗</span>
+              <span v-else class="loading-spinner-mini">⟳</span>
+              <span class="upload-mini-text">{{ upload.filename }}</span>
+              <span v-if="upload.status === 'success'" class="upload-mini-count">
+                {{ upload.rows }} rows
+              </span>
+            </div>
+          </div>
+        </div>
+
+                    <!-- Action Buttons - Compact Top Left -->
+    <div class="action-buttons-compact">
+      <button 
+        class="btn btn-icon" 
+        @click="triggerFileUpload"
+        title="Import Transactions"
+      >
+        <AppIcon name="file-add" size="medium" />
+      </button>
+      
+      <button 
+        class="btn btn-icon" 
+        @click="$emit('update:showFilters', !showFilters)"
+        :class="{ 'btn-active': showFilters }"
+        title="Filter Transactions"
+      >
+        <AppIcon name="filter" size="medium" />
+      </button>
+      
+      <button 
+        class="btn btn-icon" 
+        @click="refreshTransactions" 
+        :disabled="loading"
+        title="Refresh"
+      >
+        <AppIcon name="refresh" size="medium" />
+      </button>
+      
+      <input 
+        ref="fileInput" 
+        type="file" 
+        accept=".csv,.xlsx" 
+        multiple 
+        @change="handleFileSelect" 
+        style="display: none;"
+      >
+    </div>
         
+        <!-- Right: Pagination -->
         <div class="pagination-controls">
           <select v-model.number="pageSize" @change="changePageSize" class="page-size-select">
-            <option :value="25">25 per page</option>
-            <option :value="50">50 per page</option>
-            <option :value="100">100 per page</option>
-            <option :value="200">200 per page</option>
+            <option :value="25">25</option>
+            <option :value="50">50</option>
+            <option :value="100">100</option>
+            <option :value="200">200</option>
           </select>
           
           <button 
-            class="btn btn-small" 
+            class="btn btn-icon" 
             @click="changePage(currentPage - 1)"
             :disabled="currentPage <= 1"
+            title="Previous Page"
           >
-            Previous
+            <AppIcon name="angle-double-left" size="medium" />
           </button>
           
-          <span class="page-indicator">Page {{ currentPage }}</span>
+          <span class="page-indicator">{{ currentPage }}</span>
           
           <button 
-            class="btn btn-small" 
+            class="btn btn-icon" 
             @click="changePage(currentPage + 1)"
             :disabled="transactions.length < pageSize"
+            title="Next Page"
           >
-            Next
-          </button>
-        </div>
-        <div class="header-actions">
-          <button 
-            class="btn btn-small" 
-            @click="$emit('update:showFilters', !showFilters)" 
-            :class="{ 'btn-active': showFilters }"
-          >
-            Filters {{ hasActiveFilters ? '(Active)' : '' }}
-          </button>
-          <button class="btn btn-small" @click="refreshTransactions" :disabled="loading">
-            Refresh
+            <AppIcon name="angle-double-right" size="medium" />
           </button>
         </div>
       </div>
@@ -310,9 +279,9 @@
               :key="transaction.id"
               class="transaction-row"
               :class="{ 
-                'selected': selectedTransactions.includes(transaction.id),
-                'auto-categorizing': categorizingTransactions.includes(transaction.id)
+                'selected': selectedTransactions.includes(transaction.id)
               }"
+              :style="getTransactionRowStyle(transaction)"
             >
               <td class="col-select">
                 <input 
@@ -373,8 +342,6 @@
           </tbody>
         </table>
       </div>
-      
-
     </div>
 
     <!-- Edit Transaction Modal -->
@@ -489,39 +456,6 @@
         </div>
       </div>
     </div>
-
-    <!-- Reset Confirmation Modal -->
-    <div v-if="showResetModal" class="modal-overlay" @click="showResetModal = false">
-      <div class="modal-content reset-modal" @click.stop>
-        <div class="modal-header">
-          <h3>Reset All Transaction Data</h3>
-        </div>
-        
-        <div class="modal-body">
-          <div class="reset-warning">
-            <div class="warning-icon">⚠️</div>
-            <div class="warning-text">
-              <p><strong>This action cannot be undone!</strong></p>
-              <p>This will permanently delete all {{ summary?.total_transactions || 0 }} transactions.</p>
-              <p>Are you sure you want to continue?</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-danger" 
-            @click="confirmReset"
-            :disabled="resetting"
-          >
-            {{ resetting ? 'Resetting...' : 'Yes, Reset All Data' }}
-          </button>
-          <button class="btn btn-link" @click="showResetModal = false" :disabled="resetting">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
@@ -531,11 +465,13 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/categories'
 import ActionsMenu from './ActionsMenu.vue'
+import AppIcon from './AppIcon.vue'
 
 export default {
   name: 'TransactionsTab',
   components: {
-    ActionsMenu
+    ActionsMenu,
+    AppIcon
   },
   props: {
     user: {
@@ -590,10 +526,7 @@ export default {
     
     const selectedTransactions = ref([])
     const bulkCategoryId = ref('')
-    const categorizingTransactions = ref([])
     
-    const showResetModal = ref(false)
-    const resetting = ref(false)
     const editingTransaction = ref(null)
     const deletingTransaction = ref(null)
     const saving = ref(false)
@@ -694,6 +627,29 @@ export default {
       loadTransactions()
     })
 
+    const hexToRgba = (hex, alpha) => {
+      if (!hex) return 'transparent'
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`
+    }
+
+    const getTransactionRowStyle = (transaction) => {
+      if (!transaction.category_id) {
+        return {}
+      }
+      
+      const category = findCategoryById(transaction.category_id)
+      if (!category || !category.color) {
+        return {}
+      }
+      
+      return {
+        backgroundColor: hexToRgba(category.color, 0.1)
+      }
+    }
+
     const triggerFileUpload = () => {
       fileInput.value?.click()
     }
@@ -702,12 +658,6 @@ export default {
       const files = event.target.files
       processFiles(files)
       event.target.value = ''
-    }
-
-    const handleFileDrop = (event) => {
-      isDragging.value = false
-      const files = event.dataTransfer.files
-      processFiles(files)
     }
 
     const processFiles = async (files) => {
@@ -753,7 +703,7 @@ export default {
         
         emit('add-chat-message', {
           message: `Uploading: ${file.name}`,
-          response: `Processing ${file.name}... CSV categories will be imported and displayed directly.`
+          response: `Processing ${file.name}...`
         })
         
         try {
@@ -778,12 +728,9 @@ export default {
           upload.summary = response.data.summary
           upload.batch_id = response.data.batch_id
           
-          const duplicatesMsg = response.data.summary.rows_duplicated ? 
-            ` (${response.data.summary.rows_duplicated} duplicates skipped)` : ''
-          
           emit('add-chat-message', {
             message: `File uploaded: ${file.name}`,
-            response: `Successfully imported ${file.name} with ${upload.rows} transactions!${duplicatesMsg} All CSV category data has been preserved.`
+            response: `Successfully imported ${upload.rows} transactions!`
           })
           
           await loadFilterOptions()
@@ -799,13 +746,11 @@ export default {
             errorMessage = 'Authentication failed. Please try signing out and back in.'
           } else if (error.response?.data?.detail) {
             errorMessage = error.response.data.detail
-          } else if (error.code === 'ECONNABORTED') {
-            errorMessage = 'Upload timeout. Please try with a smaller file.'
           }
           
           emit('add-chat-message', {
             message: `File upload: ${file.name}`,
-            response: `${errorMessage}`
+            response: errorMessage
           })
         }
       }
@@ -823,13 +768,13 @@ export default {
         
         let page = 1
         let hasMore = true
-        const pageSize = 1000
+        const batchSize = 1000
         
         while (hasMore && page <= 10) {
           const response = await axios.get(`${API_BASE}/transactions/list`, {
             params: {
               page: page,
-              limit: pageSize
+              limit: batchSize
             },
             headers: { 'Authorization': `Bearer ${token}` }
           })
@@ -864,7 +809,7 @@ export default {
             }
           })
           
-          if (pageTransactions.length < pageSize) {
+          if (pageTransactions.length < batchSize) {
             hasMore = false
           }
           
@@ -874,13 +819,6 @@ export default {
         csvMainCategories.value = Array.from(mainCats).sort()
         csvCategories.value = Array.from(cats.values())
         csvSubcategories.value = Array.from(subCats.values())
-        
-        console.log('Loaded filter options:', {
-          types: csvMainCategories.value.length,
-          categories: csvCategories.value.length,
-          subcategories: csvSubcategories.value.length,
-          pagesLoaded: page - 1
-        })
         
       } catch (error) {
         console.error('Failed to load filter options:', error)
@@ -897,7 +835,6 @@ export default {
         })
         
         summary.value = response.data
-        console.log('Loaded transaction summary:', response.data)
       } catch (error) {
         console.error('Failed to load summary:', error)
       }
@@ -913,7 +850,6 @@ export default {
         const hasCSVFilter = filters.value.typeFilter || filters.value.categoryFilter || filters.value.subcategoryFilter
         
         if (hasCSVFilter) {
-          // Load all transactions in batches when CSV filter is active
           let allTransactions = []
           let page = 1
           const batchSize = 1000
@@ -948,7 +884,6 @@ export default {
             page++
           }
           
-          // Filter by CSV categories
           let filtered = allTransactions.filter(t => {
             if (filters.value.typeFilter && t.main_category !== filters.value.typeFilter) {
               return false
@@ -965,14 +900,11 @@ export default {
             return true
           })
           
-          // Apply pagination to filtered results
           const start = (currentPage.value - 1) * pageSize.value
           const end = start + pageSize.value
           transactions.value = filtered.slice(start, end)
           
-          console.log('Loaded transactions (filtered):', transactions.value.length, 'of', filtered.length)
         } else {
-          // Normal backend pagination when no CSV filter
           const params = {
             page: currentPage.value,
             limit: pageSize.value,
@@ -992,8 +924,6 @@ export default {
           })
           
           transactions.value = response.data
-          
-          console.log('Loaded transactions:', transactions.value.length)
         }
       } catch (error) {
         console.error('Failed to load transactions:', error)
@@ -1192,44 +1122,6 @@ export default {
       loadTransactions()
     }
 
-    const confirmReset = async () => {
-      if (resetting.value) return
-      
-      resetting.value = true
-      
-      try {
-        const token = authStore.token
-        
-        await axios.post(`${API_BASE}/transactions/reset`, {
-          action: 'reset_all',
-          confirm: true
-        }, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        transactions.value = []
-        summary.value = null
-        selectedTransactions.value = []
-        localUploads.value = []
-        
-        emit('add-chat-message', {
-          message: 'Reset all transaction data',
-          response: 'All transaction data has been successfully reset.'
-        })
-        
-        showResetModal.value = false
-        
-      } catch (error) {
-        console.error('Reset failed:', error)
-        
-        emit('add-chat-message', {
-          response: 'Reset feature is not yet implemented on the server.'
-        })
-      } finally {
-        resetting.value = false
-      }
-    }
-
     const findCategoryById = (categoryId) => {
       const searchInTree = (categories) => {
         for (const cat of categories) {
@@ -1243,35 +1135,6 @@ export default {
       }
       
       return searchInTree(categoryTree.value)
-    }
-
-    const getCategoryHierarchy = (category) => {
-      const hierarchy = {
-        type: null,
-        category: null,
-        subcategory: null
-      }
-      
-      if (!category) return hierarchy
-      
-      let current = category
-      
-      if (current.parent_id) {
-        const parent = findCategoryById(current.parent_id)
-        
-        if (parent && parent.parent_id) {
-          hierarchy.subcategory = current
-          hierarchy.category = parent
-          hierarchy.type = findCategoryById(parent.parent_id)
-        } else if (parent) {
-          hierarchy.category = current
-          hierarchy.type = parent
-        }
-      } else {
-        hierarchy.type = current
-      }
-      
-      return hierarchy
     }
 
     const getCategoryType = (transaction) => {
@@ -1297,13 +1160,20 @@ export default {
       })
     }
 
-    const formatAmount = (amount) => {
-      const num = parseFloat(amount)
-      return new Intl.NumberFormat('en-EU', {
-        style: 'currency',
-        currency: 'EUR'
-      }).format(Math.abs(num))
-    }
+const formatAmount = (amount) => {
+  const num = parseFloat(amount)
+  const formattedValue = new Intl.NumberFormat('en-EU', {
+    style: 'currency',
+    currency: 'EUR'
+  }).format(Math.abs(num))
+  
+  if (num > 0) {
+    return `+ ${formattedValue}`
+  } else if (num < 0) {
+    return `- ${formattedValue}`
+  }
+  return formattedValue
+}
 
     const getAmountClass = (transaction) => {
       const amount = parseFloat(transaction.amount)
@@ -1347,19 +1217,17 @@ export default {
       availableSubcategories,
       selectedTransactions,
       bulkCategoryId,
-      categorizingTransactions,
       allVisibleTransactionsSelected,
-      showResetModal,
-      resetting,
       editingTransaction,
       deletingTransaction,
       saving,
       deleting,
       editForm,
       groupedCategories,
+      hexToRgba,
+      getTransactionRowStyle,
       triggerFileUpload,
       handleFileSelect,
-      handleFileDrop,
       loadFilterOptions,
       loadSummary,
       loadTransactions,
@@ -1378,9 +1246,7 @@ export default {
       clearSelection,
       changePage,
       changePageSize,
-      confirmReset,
       findCategoryById,
-      getCategoryHierarchy,
       getCategoryType,
       getCategoryName,
       getSubcategoryName,
@@ -1394,13 +1260,169 @@ export default {
 </script>
 
 <style scoped>
-/* Compact Filters Panel */
+/* ==============================================
+   ACTION BUTTONS COMPACT - TOP LEFT
+   ============================================== */
+
+.action-buttons-compact {
+
+  display: flex;
+  gap: var(--gap-large);
+
+}
+
+.action-buttons-compact .btn-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0.5rem;
+  backdrop-filter: blur(1.25rem);
+  background: var(--color-background);
+  box-shadow: var(--shadow);
+  margin: 0;
+}
+
+.action-buttons-compact .btn-icon:hover {
+  box-shadow: var(--shadow-hover);
+}
+
+/* ==============================================
+   TRANSACTIONS HEADER - REDESIGNED
+   ============================================== */
+
+.transactions-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--gap-standard);
+  flex-wrap: wrap;
+  gap: var(--gap-standard);
+  padding: var(--gap-small);
+  border-radius: var(--radius);
+}
+
+/* Header Stats - Left Side */
+.header-stats {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-standard);
+  flex-wrap: wrap;
+}
+
+.stat-item {
+  display: flex;
+  align-items: baseline;
+  gap: 0.25rem;
+}
+
+.stat-label {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.stat-value {
+  font-size: var(--text-medium);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+/* Upload Progress Inline */
+.upload-inline {
+  display: flex;
+  gap: var(--gap-small);
+}
+
+.upload-mini {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--color-background);
+  border-radius: var(--radius);
+  font-size: var(--text-small);
+}
+
+.loading-spinner-mini {
+  animation: spin 1s linear infinite;
+  display: inline-block;
+}
+
+.upload-mini-text {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.upload-mini-count {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+/* Pagination Controls - Right Side */
+.pagination-controls {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+
+.page-size-select {
+  padding: 0.375rem 0.5rem;
+  margin: 0 1rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: transparent;
+  font-size: var(--text-small);
+  cursor: pointer;
+}
+
+.page-size-select:focus {
+  outline: none;
+  border-color: var(--color-button-active);
+}
+
+.page-indicator {
+  font-size: var(--text-small);
+  color: var(--color-text);
+  padding: 0 var(--gap-small);
+  min-width: 2rem;
+  text-align: center;
+}
+
+.pagination-controls .btn-icon {
+  width: 2rem;
+  height: 2rem;
+  padding: 0.25rem;
+  margin: 0;
+  background-color: transparent;
+  box-shadow: none;
+
+}
+
+/* ==============================================
+   COMPACT FILTERS PANEL
+   ============================================== */
+
 .filters-panel-compact {
   background: var(--color-background-light);
   border-radius: var(--radius);
   padding: var(--gap-standard);
   margin-bottom: var(--gap-standard);
   animation: slideDown 0.3s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 20rem;
+    padding-top: var(--gap-standard);
+    padding-bottom: var(--gap-standard);
+  }
 }
 
 .filters-row {
@@ -1419,7 +1441,7 @@ export default {
 }
 
 .filters-row-actions {
-  grid-template-columns: 2fr 1fr;
+  grid-template-columns: 1fr 1fr;
 }
 
 .filter-group-compact {
@@ -1456,9 +1478,161 @@ export default {
   display: flex;
   gap: var(--gap-small);
   align-items: flex-end;
+  justify-content: flex-end;
 }
 
-/* Table improvements */
+/* ==============================================
+   BULK ACTIONS
+   ============================================== */
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-standard);
+  padding: var(--gap-standard);
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  margin-bottom: var(--gap-standard);
+  flex-wrap: wrap;
+}
+
+.bulk-selection {
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.bulk-category-select {
+  padding: 0.5rem;
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: var(--color-button);
+  min-width: 12rem;
+}
+
+/* ==============================================
+   LOADING AND EMPTY STATES
+   ============================================== */
+
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: var(--gap-large);
+  color: var(--color-text-light);
+}
+
+.loading-spinner {
+  font-size: var(--text-large);
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--gap-standard);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.empty-icon {
+  font-size: 3rem;
+  margin-bottom: var(--gap-standard);
+}
+
+.empty-title {
+  font-size: var(--text-large);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.empty-subtitle {
+  color: var(--color-text-muted);
+}
+
+/* ==============================================
+   TRANSACTIONS TABLE
+   ============================================== */
+
+.transactions-table-container {
+  overflow-x: auto;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.transactions-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: var(--color-background);
+  font-size: var(--text-small);
+}
+
+.transactions-table thead {
+  background: var(--color-background-dark);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.transactions-table th {
+  padding: var(--gap-standard);
+  text-align: left;
+  font-weight: 600;
+  color: var(--color-text);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+  user-select: none;
+}
+
+.transactions-table th.clickable {
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.transactions-table th.clickable:hover {
+  background: var(--color-background);
+}
+
+.transactions-table td {
+  padding: var(--gap-standard);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  vertical-align: top;
+}
+
+.transaction-row {
+  transition: background-color 0.2s ease;
+}
+
+.transaction-row:hover {
+  filter: brightness(0.95);
+}
+
+.transaction-row.selected {
+  outline: 2px solid var(--color-button-active);
+  outline-offset: -2px;
+}
+
+
+
+
+/* ==============================================
+   TABLE COLUMN WIDTHS
+   ============================================== */
+
+.col-select {
+  width: 3rem;
+  text-align: center;
+}
+
+.col-date {
+  width: 7rem;
+}
+
+.col-merchant {
+  min-width: 12rem;
+  max-width: 20rem;
+}
+
+.col-amount {
+  width: 8rem;
+  text-align: right;
+}
+
 .col-type {
   width: 6rem;
 }
@@ -1476,28 +1650,145 @@ export default {
   text-align: center;
 }
 
+
+/* ==============================================
+   TABLE CELL CONTENT
+   ============================================== */
+
+.date-primary {
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+
+.date-secondary {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.merchant-primary {
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+  word-break: break-word;
+}
+
+.merchant-secondary {
+  color: var(--color-text-light);
+  margin-bottom: 0.125rem;
+  line-height: 1.3;
+}
+
+.amount-primary {
+  font-weight: 600;
+  margin-bottom: 0.125rem;
+}
+
+.amount-positive {
+  color: none;
+}
+
+.amount-negative {
+  color: none;
+}
+
+.amount-neutral {
+  color: var(--color-text-light);
+}
+
 .category-text {
   font-size: var(--text-small);
   color: var(--color-text);
 }
 
-.type-badge {
-  display: inline-block;
-  padding: 0.25rem 0.5rem;
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  font-size: var(--text-small);
-  font-weight: 500;
-  text-transform: capitalize;
+/* ==============================================
+   MODALS
+   ============================================== */
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease;
 }
 
-/* Edit and Delete Modals */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal-content {
+  background: var(--color-background-light);
+  backdrop-filter: blur(1.25rem);
+  border-radius: var(--radius-large);
+  padding: 0;
+  width: 90%;
+  max-width: 40rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--gap-standard);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.modal-header h3 {
+  margin: 0;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: var(--color-text-muted);
+  padding: 0.25rem;
+}
+
+.close-btn:hover {
+  color: var(--color-text);
+}
+
+.modal-body {
+  padding: var(--gap-standard);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--gap-small);
+  padding: var(--gap-standard);
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+/* ==============================================
+   TRANSACTION EDIT MODAL
+   ============================================== */
+
 .transaction-edit-modal {
   max-width: 35rem;
-}
-
-.delete-modal {
-  max-width: 30rem;
 }
 
 .edit-form {
@@ -1537,6 +1828,14 @@ textarea.form-input {
   min-height: 4rem;
 }
 
+/* ==============================================
+   DELETE MODAL
+   ============================================== */
+
+.delete-modal {
+  max-width: 30rem;
+}
+
 .delete-warning {
   display: flex;
   gap: var(--gap-standard);
@@ -1561,8 +1860,48 @@ textarea.form-input {
   margin: var(--gap-small) 0;
 }
 
-/* Responsive */
+.btn-danger {
+  background: #ef4444;
+  color: white;
+}
+
+.btn-danger:hover {
+  background: #dc2626;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* ==============================================
+   RESPONSIVE DESIGN
+   ============================================== */
+
 @media (max-width: 64rem) {
+  .action-buttons-compact {
+    position: static;
+    margin-bottom: var(--gap-standard);
+  }
+
+  .transactions-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .header-stats {
+    justify-content: center;
+  }
+
+  .pagination-controls {
+    justify-content: center;
+  }
+  
+  .bulk-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
   .filters-row {
     grid-template-columns: repeat(2, 1fr);
   }
@@ -1593,10 +1932,39 @@ textarea.form-input {
     font-size: 0.75rem;
   }
   
+  .transactions-table th,
+  .transactions-table td {
+    padding: 0.5rem;
+  }
+  
   .col-type,
   .col-category,
   .col-subcategory {
     display: none;
+  }
+
+  .pagination-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .modal-content {
+    width: 95%;
+    margin: 1rem;
+  }
+}
+
+@media (max-width: 30rem) {
+  .transactions-table-container {
+    font-size: 0.6875rem;
+  }
+  
+  .col-merchant {
+    min-width: 8rem;
+  }
+  
+  .action-buttons-compact {
+    flex-wrap: wrap;
   }
 }
 </style>
