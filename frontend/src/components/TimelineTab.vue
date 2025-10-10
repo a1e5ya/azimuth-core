@@ -9,7 +9,6 @@
       </div>
       
       <div class="timeline-controls">
-        <!-- Refresh Button -->
         <button 
           class="btn btn-small" 
           @click="refreshData"
@@ -20,26 +19,261 @@
       </div>
     </div>
 
-    <!-- Main Timeline Chart -->
-    <div class="timeline-chart-wrapper">
-      <div v-if="loading" class="loading-state">
-        <div class="loading-spinner">⟳</div>
-        <p>Loading timeline data...</p>
+    <!-- Main Content: Legend + Chart -->
+    <div class="timeline-main-content">
+      <!-- Compact Legend - Left Side -->
+      <div class="timeline-legend-sidebar">
+        <!-- EXPENSES Section -->
+        <div class="legend-section">
+          <div 
+            class="legend-type-header" 
+            @click="toggleType('expenses')"
+          >
+            <span 
+              class="legend-indicator" 
+              :style="{ backgroundColor: isTypeVisible('expenses') ? getTypeColor('expenses') : '#fff' }"
+            ></span>
+            <span class="legend-type-name">EXPENSES</span>
+          </div>
+          
+          <div class="legend-categories-list">
+            <div 
+              class="legend-category-item" 
+              v-for="category in expenseCategories" 
+              :key="category.id"
+            >
+              <div class="legend-category-row">
+                <div 
+                  class="legend-category-header"
+                  @click="toggleCategory(category.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-small" 
+                    :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ category.name }}</span>
+                </div>
+                
+                <button 
+                  v-if="category.children && category.children.length > 0"
+                  class="legend-expand-btn"
+                  @click.stop="toggleCategoryExpanded(category.id)"
+                >
+                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                </button>
+              </div>
+              
+              <div 
+                v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+                class="legend-subcategories-list"
+              >
+                <div 
+                  class="legend-subcat-item" 
+                  v-for="subcat in category.children" 
+                  :key="subcat.id"
+                  @click="toggleSubcategory(subcat.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-tiny" 
+                    :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ subcat.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- INCOME Section -->
+        <div class="legend-section">
+          <div 
+            class="legend-type-header" 
+            @click="toggleType('income')"
+          >
+            <span 
+              class="legend-indicator" 
+              :style="{ backgroundColor: isTypeVisible('income') ? getTypeColor('income') : '#fff' }"
+            ></span>
+            <span class="legend-type-name">INCOME</span>
+          </div>
+          
+          <div class="legend-categories-list">
+            <div 
+              class="legend-category-item" 
+              v-for="category in incomeCategories" 
+              :key="category.id"
+            >
+              <div class="legend-category-row">
+                <div 
+                  class="legend-category-header"
+                  @click="toggleCategory(category.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-small" 
+                    :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ category.name }}</span>
+                </div>
+                
+                <button 
+                  v-if="category.children && category.children.length > 0"
+                  class="legend-expand-btn"
+                  @click.stop="toggleCategoryExpanded(category.id)"
+                >
+                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                </button>
+              </div>
+              
+              <div 
+                v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+                class="legend-subcategories-list"
+              >
+                <div 
+                  class="legend-subcat-item" 
+                  v-for="subcat in category.children" 
+                  :key="subcat.id"
+                  @click="toggleSubcategory(subcat.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-tiny" 
+                    :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ subcat.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TRANSFERS Section -->
+        <div class="legend-section">
+          <div 
+            class="legend-type-header" 
+            @click="toggleType('transfers')"
+          >
+            <span 
+              class="legend-indicator" 
+              :style="{ backgroundColor: isTypeVisible('transfers') ? getTypeColor('transfers') : '#fff' }"
+            ></span>
+            <span class="legend-type-name">TRANSFERS</span>
+          </div>
+          
+          <div class="legend-categories-list">
+            <div 
+              class="legend-category-item" 
+              v-for="category in transferCategories" 
+              :key="category.id"
+            >
+              <div class="legend-category-row">
+                <div 
+                  class="legend-category-header"
+                  @click="toggleCategory(category.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-small" 
+                    :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ category.name }}</span>
+                </div>
+                
+                <button 
+                  v-if="category.children && category.children.length > 0"
+                  class="legend-expand-btn"
+                  @click.stop="toggleCategoryExpanded(category.id)"
+                >
+                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                </button>
+              </div>
+              
+              <div 
+                v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+                class="legend-subcategories-list"
+              >
+                <div 
+                  class="legend-subcat-item" 
+                  v-for="subcat in category.children" 
+                  :key="subcat.id"
+                  @click="toggleSubcategory(subcat.id)"
+                >
+                  <span 
+                    class="legend-indicator legend-indicator-tiny" 
+                    :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                  ></span>
+                  <span class="legend-item-name">{{ subcat.name }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      
-      <div v-else-if="!hasData" class="empty-state">
-        <p class="empty-title">No transaction data available</p>
-        <p class="empty-subtitle">Import transactions to see your financial timeline</p>
-      </div>
-      
-      <div v-else class="timeline-chart">
-        <apexchart
-          ref="mainChart"
-          type="area"
-          height="500"
-          :options="chartOptions"
-          :series="chartSeries"
-        />
+
+      <!-- Chart Area -->
+      <div class="timeline-chart-area">
+        <div class="timeline-chart-wrapper">
+          <div v-if="loading" class="loading-state">
+            <div class="loading-spinner">⟳</div>
+            <p>Loading timeline data...</p>
+          </div>
+          
+          <div v-else-if="!hasData" class="empty-state">
+            <p class="empty-title">No transaction data available</p>
+            <p class="empty-subtitle">Import transactions to see your financial timeline</p>
+          </div>
+          
+          <div v-else class="timeline-chart">
+            <apexchart
+              ref="mainChart"
+              type="area"
+              height="500"
+              :options="chartOptions"
+              :series="chartSeries"
+            />
+          </div>
+        </div>
+
+        <!-- Hover Info Field - Below Chart -->
+        <div v-if="hoveredData" class="hover-info-field">
+          <div class="hover-info-header">
+            <h4>{{ formatDate(hoveredData.date) }}</h4>
+            <button class="btn-icon btn-small" @click="hoveredData = null">×</button>
+          </div>
+          
+          <div class="hover-info-content">
+            <div class="hover-info-section" v-if="hoveredData.income > 0">
+              <div class="hover-info-label positive">Income</div>
+              <div class="hover-info-value">{{ formatCurrency(hoveredData.income) }}</div>
+            </div>
+
+            <div class="hover-info-section" v-if="hoveredData.expenses > 0">
+              <div class="hover-info-label negative">Expenses</div>
+              <div class="hover-info-value">{{ formatCurrency(hoveredData.expenses) }}</div>
+              
+              <div class="hover-info-categories" v-if="hoveredData.expensesByCategory">
+                <div 
+                  class="hover-info-category" 
+                  v-for="(amount, category) in hoveredData.expensesByCategory" 
+                  :key="category"
+                  v-show="amount > 0"
+                >
+                  <span class="hover-category-name">{{ category }}</span>
+                  <span class="hover-category-amount">{{ formatCurrency(amount) }}</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="hover-info-section" v-if="hoveredData.transfers > 0">
+              <div class="hover-info-label neutral">Transfers</div>
+              <div class="hover-info-value">{{ formatCurrency(hoveredData.transfers) }}</div>
+            </div>
+
+            <div class="hover-info-section hover-info-total" v-if="hoveredData.balance !== undefined">
+              <div class="hover-info-label">Balance Change</div>
+              <div class="hover-info-value" :class="hoveredData.balance >= 0 ? 'positive' : 'negative'">
+                {{ formatCurrency(hoveredData.balance) }}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
@@ -65,66 +299,12 @@
         <div class="stat-value" :class="stats.netSavings >= 0 ? 'positive' : 'negative'">
           {{ formatCurrency(stats.netSavings) }}
         </div>
-        <div class="stat-detail">
-          Income minus Expenses
-        </div>
-      </div>
-    </div>
-
-    <!-- Top Categories Breakdown -->
-    <div v-if="hasData && topCategories.length > 0" class="container">
-      <h3 style="margin-bottom: var(--gap-standard);">Top Spending Categories</h3>
-      <div class="category-breakdown-grid">
-        <div v-for="(cat, index) in topCategories" :key="index" class="category-breakdown-item">
-          <div class="category-breakdown-header">
-            <div class="category-breakdown-rank">{{ index + 1 }}</div>
-            <div class="category-breakdown-info">
-              <div class="category-breakdown-name">{{ cat.name }}</div>
-              <div class="category-breakdown-amount">{{ formatCurrency(cat.amount) }}</div>
-            </div>
-          </div>
-          <div class="category-breakdown-bar-container">
-            <div class="category-breakdown-bar" :style="{ width: cat.percentage + '%' }"></div>
-          </div>
-          <div class="category-breakdown-details">
-            <span>{{ cat.count }} transactions</span>
-            <span>{{ cat.percentage.toFixed(1) }}%</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Monthly Comparison -->
-    <div v-if="hasData && monthlyComparison.length > 0" class="container">
-      <h3 style="margin-bottom: var(--gap-standard);">Monthly Comparison</h3>
-      <div class="comparison-grid">
-        <div v-for="item in monthlyComparison" :key="item.period" class="comparison-item">
-          <div class="comparison-period-name">{{ item.periodName }}</div>
-          <div class="comparison-stats">
-            <div class="comparison-stat">
-              <span class="comparison-label">Income:</span>
-              <span class="comparison-value positive">{{ formatCurrency(item.income) }}</span>
-            </div>
-            <div class="comparison-stat">
-              <span class="comparison-label">Expenses:</span>
-              <span class="comparison-value negative">{{ formatCurrency(item.expenses) }}</span>
-            </div>
-            <div class="comparison-stat">
-              <span class="comparison-label">Transfers:</span>
-              <span class="comparison-value neutral">{{ formatCurrency(item.transfers) }}</span>
-            </div>
-            <div class="comparison-stat">
-              <span class="comparison-label">Net:</span>
-              <span class="comparison-value" :class="item.net >= 0 ? 'positive' : 'negative'">
-                {{ formatCurrency(item.net) }}
-              </span>
-            </div>
-          </div>
-        </div>
+        <div class="stat-detail">Income minus Expenses</div>
       </div>
     </div>
   </div>
 </template>
+
 <script>
 import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
@@ -144,9 +324,14 @@ export default {
     // State
     const loading = ref(false)
     const transactions = ref([])
-    
-    // Chart ref
     const mainChart = ref(null)
+    const hoveredData = ref(null)
+    
+    // Visibility toggles
+    const visibleTypes = ref(['income', 'expenses', 'transfers'])
+    const visibleCategories = ref([])
+    const visibleSubcategories = ref([])
+    const expandedCategories = ref([])
     
     const dateRange = ref({
       start: null,
@@ -155,6 +340,21 @@ export default {
     
     // Computed
     const hasData = computed(() => transactions.value.length > 0)
+    
+    const expenseCategories = computed(() => {
+      const expenseType = categoryStore.categories?.find(t => t.code === 'expenses')
+      return expenseType?.children || []
+    })
+    
+    const incomeCategories = computed(() => {
+      const incomeType = categoryStore.categories?.find(t => t.code === 'income')
+      return incomeType?.children || []
+    })
+    
+    const transferCategories = computed(() => {
+      const transferType = categoryStore.categories?.find(t => t.code === 'transfers')
+      return transferType?.children || []
+    })
     
     const stats = computed(() => {
       const income = transactions.value
@@ -193,243 +393,87 @@ export default {
     
     const timelineData = computed(() => {
       if (!transactions.value.length) return []
-      
-      return groupTransactionsByDay(transactions.value)
+      return groupTransactionsByPeriod(transactions.value)
     })
-    
-    const topCategories = computed(() => {
-      if (!transactions.value.length) return []
-      
-      const categoryTotals = {}
-      let maxAmount = 0
-      
-      transactions.value
-        .filter(t => t.transaction_type === 'expense')
-        .forEach(t => {
-          const category = t.csv_category || t.main_category || 'Uncategorized'
-          const amount = Math.abs(parseFloat(t.amount))
-          
-          if (!categoryTotals[category]) {
-            categoryTotals[category] = { amount: 0, count: 0 }
-          }
-          
-          categoryTotals[category].amount += amount
-          categoryTotals[category].count += 1
-          maxAmount = Math.max(maxAmount, categoryTotals[category].amount)
-        })
-      
-      return Object.entries(categoryTotals)
-        .map(([name, data]) => ({
-          name,
-          amount: data.amount,
-          count: data.count,
-          percentage: maxAmount > 0 ? (data.amount / maxAmount) * 100 : 0
-        }))
-        .sort((a, b) => b.amount - a.amount)
-        .slice(0, 10)
-    })
-    
-    const monthlyComparison = computed(() => {
-      if (!transactions.value.length) return []
-      
-      const monthlyData = {}
-      
-      transactions.value.forEach(t => {
-        const date = new Date(t.posted_at)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        
-        if (!monthlyData[monthKey]) {
-          monthlyData[monthKey] = {
-            period: monthKey,
-            income: 0,
-            expenses: 0,
-            transfers: 0,
-            net: 0
-          }
-        }
-        
-        const amount = Math.abs(parseFloat(t.amount))
-        
-        if (t.transaction_type === 'income') {
-          monthlyData[monthKey].income += amount
-        } else if (t.transaction_type === 'expense') {
-          monthlyData[monthKey].expenses += amount
-        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
-          monthlyData[monthKey].transfers += amount
-        }
-      })
-      
-      return Object.values(monthlyData)
-        .map(month => ({
-          ...month,
-          net: month.income - month.expenses,
-          periodName: new Date(month.period + '-01').toLocaleDateString('en-US', {
-            month: 'short',
-            year: 'numeric'
-          })
-        }))
-        .sort((a, b) => b.period.localeCompare(a.period))
-        .slice(0, 12)
-    })
-    
-    const categoryColors = {
-      // Food & Dining
-      'Groceries': '#10b981',
-      'Restaurants': '#ef4444',
-      'Cafes & Coffee': '#f59e0b',
-      'Sweets': '#ec4899',
-      
-      // Shopping
-      'Clothing & Shoes': '#8b5cf6',
-      'Electronics': '#3b82f6',
-      'Household': '#06b6d4',
-      'Accessories': '#d946ef',
-      'Subscriptions': '#f97316',
-      'Guilty Pleasure': '#db2777',
-      
-      // Housing & Utilities
-      'Monthly Rent': '#0891b2',
-      'Internet & Phone': '#6366f1',
-      'Energy & Water': '#14b8a6',
-      
-      // Transport
-      'Fuel': '#f59e0b',
-      'Public Transport': '#84cc16',
-      'Vehicle Registration & Tax': '#eab308',
-      'Maintenance & Repairs': '#f97316',
-      'Parking Fees': '#facc15',
-      
-      // Health
-      'Pharmacy': '#22c55e',
-      'Medical Services': '#10b981',
-      'Dental Care': '#059669',
-      'Gym & Fitness': '#84cc16',
-      
-      // Leisure & Culture
-      'Music': '#a855f7',
-      'Social Activities': '#ec4899',
-      'Education': '#3b82f6',
-      'Books & Media': '#6366f1',
-      'Hobbies & Crafts': '#8b5cf6',
-      
-      // Family
-      'Sports Activities': '#0ea5e9',
-      "Child's Activities": '#06b6d4',
-      'Toys & Games': '#14b8a6',
-      
-      // Insurance
-      'Health Insurance': '#f43f5e',
-      'Home Insurance': '#e11d48',
-      'Vehicle Insurance': '#be123c',
-      
-      // Financial
-      'Bureaucracy': '#64748b',
-      'Investment Accounts': '#475569',
-      'Withdrawal': '#334155',
-      'Payment Provider': '#1e293b',
-      'Bank Services': '#0f172a',
-      
-      // Transfers
-      'Between Own Accounts': '#06b6d4',
-      'Family Support': '#14b8a6',
-      'Reserve Transfer': '#0891b2',
-      'Savings Transfer': '#0e7490',
-      'House Savings': '#155e75',
-      
-      // Default
-      'Uncategorized': '#94a3b8'
-    }
     
     const chartSeries = computed(() => {
       if (!timelineData.value.length) return []
       
       const series = []
       
-      // Group expenses by category
-      const expensesByCategory = {}
-      transactions.value
-        .filter(t => t.transaction_type === 'expense')
-        .forEach(t => {
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
-          if (!expensesByCategory[category]) {
-            expensesByCategory[category] = new Map()
-          }
-          
-          const date = new Date(t.posted_at)
-          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-          const amount = Math.abs(parseFloat(t.amount))
-          
-          expensesByCategory[category].set(key, (expensesByCategory[category].get(key) || 0) + amount)
-        })
+      // Build expense series by category/subcategory (negative values - below zero)
+      if (isTypeVisible('expenses')) {
+        const expensesByCategory = buildExpensesByCategory()
+        
+        Object.entries(expensesByCategory)
+          .sort((a, b) => {
+            const sumA = Array.from(a[1].values()).reduce((s, v) => s + v, 0)
+            const sumB = Array.from(b[1].values()).reduce((s, v) => s + v, 0)
+            return sumB - sumA
+          })
+          .forEach(([category, dateMap]) => {
+            const color = getCategoryColor(category)
+            
+            series.push({
+              name: category,
+              type: 'area',
+              data: timelineData.value.map(d => ({
+                x: d.date,
+                y: -(dateMap.get(d.date) || 0)
+              })),
+              color: color
+            })
+          })
+      }
       
-      // Create expense series (positive values above zero line)
-      Object.entries(expensesByCategory)
-        .sort((a, b) => {
-          const sumA = Array.from(a[1].values()).reduce((s, v) => s + v, 0)
-          const sumB = Array.from(b[1].values()).reduce((s, v) => s + v, 0)
-          return sumB - sumA
+      // Income series (positive values - above zero)
+      if (isTypeVisible('income')) {
+        const incomeByCategory = buildIncomeByCategory()
+        
+        Object.entries(incomeByCategory).forEach(([category, dateMap]) => {
+          const color = getCategoryColor(category)
+          
+          series.push({
+            name: category,
+            type: 'area',
+            data: timelineData.value.map(d => ({
+              x: d.date,
+              y: dateMap.get(d.date) || 0
+            })),
+            color: color
+          })
         })
-        .slice(0, 15) // Top 15 categories
-        .forEach(([category, dateMap]) => {
+      }
+      
+      // Transfers series (line)
+      if (isTypeVisible('transfers')) {
+        const transfersByCategory = buildTransfersByCategory()
+        
+        Object.entries(transfersByCategory).forEach(([category, dateMap]) => {
+          const color = getCategoryColor(category)
+          
           series.push({
             name: category,
             type: 'line',
             data: timelineData.value.map(d => ({
               x: d.date,
               y: dateMap.get(d.date) || 0
-            }))
+            })),
+            color: color
           })
         })
-      
-      // Income series (negative values below zero line)
-      series.push({
-        name: 'Income',
-        type: 'line',
-        data: timelineData.value.map(d => ({
-          x: d.date,
-          y: -d.income // Negative to show below zero
-        }))
-      })
-      
-      // Running balance line (thicker, more prominent)
-      let runningBalance = 0
-      const balanceData = timelineData.value.map(d => {
-        runningBalance += (d.income - d.expenses)
-        return {
-          x: d.date,
-          y: runningBalance
-        }
-      })
-      
-      series.push({
-        name: 'Balance',
-        type: 'line',
-        data: balanceData
-      })
+      }
       
       return series
     })
     
     const chartOptions = computed(() => {
-      const colors = []
-      
-      // Generate colors for expense categories
-      chartSeries.value.forEach((serie, index) => {
-        if (serie.name === 'Income') {
-          colors.push('#22c55e')
-        } else if (serie.name === 'Balance') {
-          colors.push('#8b5cf6')
-        } else {
-          colors.push(categoryColors[serie.name] || `hsl(${index * 25}, 70%, 60%)`)
-        }
-      })
-      
       return {
         chart: {
           id: 'timeline-main',
-          type: 'line',
+          type: 'area',
           height: 500,
-          stacked: false,
+          stacked: true,
           toolbar: {
             show: true,
             tools: {
@@ -451,6 +495,16 @@ export default {
             enabled: true,
             easing: 'easeinout',
             speed: 800
+          },
+          events: {
+            mouseMove: (event, chartContext, config) => {
+              if (config.dataPointIndex >= 0) {
+                handleChartHover(config)
+              }
+            },
+            mouseLeave: () => {
+              // Keep hover info visible
+            }
           }
         },
         dataLabels: {
@@ -458,29 +512,27 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: chartSeries.value.map((serie, index) => {
-            if (serie.name === 'Balance') return 3
-            if (serie.name === 'Income') return 2
-            return 1.5
+          width: chartSeries.value.map((serie) => {
+            if (serie.type === 'line') return 2
+            return 0
           })
         },
         fill: {
           type: 'solid',
           opacity: chartSeries.value.map((serie) => {
-            if (serie.name === 'Balance') return 1
-            if (serie.name === 'Income') return 0.8
-            return 0.6
+            if (serie.type === 'line') return 0.3
+            return 0.8
           })
         },
         legend: {
-          position: 'top',
-          horizontalAlign: 'left',
-          floating: false,
-          offsetY: 0,
-          markers: {
-            width: 12,
-            height: 12,
-            radius: 2
+          show: false
+        },
+        markers: {
+          size: 0,
+          strokeWidth: 0,
+          hover: {
+            size: 5,
+            sizeOffset: 3
           }
         },
         grid: {
@@ -504,6 +556,15 @@ export default {
             style: {
               colors: '#6b7280'
             }
+          },
+          crosshairs: {
+            show: true,
+            position: 'front',
+            stroke: {
+              color: '#374151',
+              width: 1,
+              dashArray: 4
+            }
           }
         },
         yaxis: {
@@ -521,6 +582,7 @@ export default {
           }
         },
         tooltip: {
+          enabled: true,
           shared: true,
           intersect: false,
           x: {
@@ -530,26 +592,177 @@ export default {
             formatter: (val) => '€' + Math.abs(val).toFixed(2)
           }
         },
-        colors: colors,
         annotations: {
           yaxis: [{
             y: 0,
             borderColor: '#374151',
             borderWidth: 2,
-            opacity: 0.8,
-            label: {
-              text: 'Zero Line',
-              style: {
-                color: '#fff',
-                background: '#374151'
-              }
-            }
+            opacity: 0.8
           }]
         }
       }
     })
     
     // Methods
+    function getTypeColor(typeId) {
+      const typeMap = {
+        'income': '#00C9A0',
+        'expenses': '#F17D99',
+        'transfers': '#F0C46C'
+      }
+      
+      const type = categoryStore.categories?.find(t => t.code === typeId || t.id === typeId)
+      if (type?.color) return type.color
+      
+      return typeMap[typeId] || '#94a3b8'
+    }
+    
+    function isTypeVisible(typeId) {
+      return visibleTypes.value.includes(typeId)
+    }
+    
+    function isCategoryVisible(categoryId) {
+      return visibleCategories.value.includes(categoryId)
+    }
+    
+    function isSubcategoryVisible(subcategoryId) {
+      return visibleSubcategories.value.includes(subcategoryId)
+    }
+    
+    function isCategoryExpanded(categoryId) {
+      return expandedCategories.value.includes(categoryId)
+    }
+    
+    function toggleCategoryExpanded(categoryId) {
+      const index = expandedCategories.value.indexOf(categoryId)
+      if (index > -1) {
+        expandedCategories.value.splice(index, 1)
+      } else {
+        expandedCategories.value.push(categoryId)
+      }
+    }
+    
+    function toggleType(typeId) {
+      const index = visibleTypes.value.indexOf(typeId)
+      
+      if (index > -1) {
+        visibleTypes.value.splice(index, 1)
+        
+        let categories = []
+        if (typeId === 'expenses') {
+          categories = expenseCategories.value
+        } else if (typeId === 'income') {
+          categories = incomeCategories.value
+        } else if (typeId === 'transfers') {
+          categories = transferCategories.value
+        }
+        
+        categories.forEach(cat => {
+          const catIndex = visibleCategories.value.indexOf(cat.id)
+          if (catIndex > -1) {
+            visibleCategories.value.splice(catIndex, 1)
+          }
+          
+          if (cat.children) {
+            cat.children.forEach(subcat => {
+              const subcatIndex = visibleSubcategories.value.indexOf(subcat.id)
+              if (subcatIndex > -1) {
+                visibleSubcategories.value.splice(subcatIndex, 1)
+              }
+            })
+          }
+        })
+      } else {
+        visibleTypes.value.push(typeId)
+        
+        let categories = []
+        if (typeId === 'expenses') {
+          categories = expenseCategories.value
+        } else if (typeId === 'income') {
+          categories = incomeCategories.value
+        } else if (typeId === 'transfers') {
+          categories = transferCategories.value
+        }
+        
+        categories.forEach(cat => {
+          if (!visibleCategories.value.includes(cat.id)) {
+            visibleCategories.value.push(cat.id)
+          }
+          
+          if (cat.children) {
+            cat.children.forEach(subcat => {
+              if (!visibleSubcategories.value.includes(subcat.id)) {
+                visibleSubcategories.value.push(subcat.id)
+              }
+            })
+          }
+        })
+      }
+    }
+    
+    function toggleCategory(categoryId) {
+      const index = visibleCategories.value.indexOf(categoryId)
+      
+      let category = null
+      for (const categories of [expenseCategories.value, incomeCategories.value, transferCategories.value]) {
+        category = categories.find(c => c.id === categoryId)
+        if (category) break
+      }
+      
+      if (!category) return
+      
+      if (index > -1) {
+        visibleCategories.value.splice(index, 1)
+        
+        if (category.children) {
+          category.children.forEach(subcat => {
+            const subcatIndex = visibleSubcategories.value.indexOf(subcat.id)
+            if (subcatIndex > -1) {
+              visibleSubcategories.value.splice(subcatIndex, 1)
+            }
+          })
+        }
+      } else {
+        visibleCategories.value.push(categoryId)
+        
+        if (category.children) {
+          category.children.forEach(subcat => {
+            if (!visibleSubcategories.value.includes(subcat.id)) {
+              visibleSubcategories.value.push(subcat.id)
+            }
+          })
+        }
+      }
+    }
+    
+    function toggleSubcategory(subcategoryId) {
+      const index = visibleSubcategories.value.indexOf(subcategoryId)
+      
+      if (index > -1) {
+        visibleSubcategories.value.splice(index, 1)
+      } else {
+        visibleSubcategories.value.push(subcategoryId)
+      }
+    }
+    
+    function groupTransactionsByPeriod(txs) {
+      if (!dateRange.value.start || !dateRange.value.end) {
+        return groupTransactionsByDay(txs)
+      }
+      
+      const daysDiff = Math.floor((dateRange.value.end - dateRange.value.start) / (1000 * 60 * 60 * 24))
+      
+      if (daysDiff > 730) {
+        return groupTransactionsByQuarter(txs)
+      } else if (daysDiff > 180) {
+        return groupTransactionsByMonth(txs)
+      } else if (daysDiff > 60) {
+        return groupTransactionsByWeek(txs)
+      } else {
+        return groupTransactionsByDay(txs)
+      }
+    }
+    
     function groupTransactionsByDay(txs) {
       const grouped = new Map()
       
@@ -563,7 +776,8 @@ export default {
             date: key.getTime(),
             income: 0,
             expenses: 0,
-            transfers: 0
+            transfers: 0,
+            expensesByCategory: {}
           })
         }
         
@@ -574,13 +788,259 @@ export default {
           period.income += amount
         } else if (t.transaction_type === 'expense') {
           period.expenses += amount
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
           period.transfers += amount
         }
       })
       
-      return Array.from(grouped.values())
-        .sort((a, b) => a.date - b.date)
+      return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
+    }
+    
+    function groupTransactionsByWeek(txs) {
+      const grouped = new Map()
+      
+      txs.forEach(t => {
+        const date = new Date(t.posted_at)
+        const weekStart = new Date(date)
+        weekStart.setDate(date.getDate() - date.getDay())
+        weekStart.setHours(0, 0, 0, 0)
+        const keyStr = weekStart.toISOString()
+        
+        if (!grouped.has(keyStr)) {
+          grouped.set(keyStr, {
+            date: weekStart.getTime(),
+            income: 0,
+            expenses: 0,
+            transfers: 0,
+            expensesByCategory: {}
+          })
+        }
+        
+        const period = grouped.get(keyStr)
+        const amount = Math.abs(parseFloat(t.amount))
+        
+        if (t.transaction_type === 'income') {
+          period.income += amount
+        } else if (t.transaction_type === 'expense') {
+          period.expenses += amount
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
+        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+          period.transfers += amount
+        }
+      })
+      
+      return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
+    }
+    
+    function groupTransactionsByMonth(txs) {
+      const grouped = new Map()
+      
+      txs.forEach(t => {
+        const date = new Date(t.posted_at)
+        const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
+        const keyStr = monthStart.toISOString()
+        
+        if (!grouped.has(keyStr)) {
+          grouped.set(keyStr, {
+            date: monthStart.getTime(),
+            income: 0,
+            expenses: 0,
+            transfers: 0,
+            expensesByCategory: {}
+          })
+        }
+        
+        const period = grouped.get(keyStr)
+        const amount = Math.abs(parseFloat(t.amount))
+        
+        if (t.transaction_type === 'income') {
+          period.income += amount
+        } else if (t.transaction_type === 'expense') {
+          period.expenses += amount
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
+        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+          period.transfers += amount
+        }
+      })
+      
+      return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
+    }
+    
+    function groupTransactionsByQuarter(txs) {
+      const grouped = new Map()
+      
+      txs.forEach(t => {
+        const date = new Date(t.posted_at)
+        const quarter = Math.floor(date.getMonth() / 3)
+        const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
+        const keyStr = quarterStart.toISOString()
+        
+        if (!grouped.has(keyStr)) {
+          grouped.set(keyStr, {
+            date: quarterStart.getTime(),
+            income: 0,
+            expenses: 0,
+            transfers: 0,
+            expensesByCategory: {}
+          })
+        }
+        
+        const period = grouped.get(keyStr)
+        const amount = Math.abs(parseFloat(t.amount))
+        
+        if (t.transaction_type === 'income') {
+          period.income += amount
+        } else if (t.transaction_type === 'expense') {
+          period.expenses += amount
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
+        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+          period.transfers += amount
+        }
+      })
+      
+      return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
+    }
+    
+    function buildExpensesByCategory() {
+      const expensesByCategory = {}
+      
+      transactions.value
+        .filter(t => t.transaction_type === 'expense')
+        .forEach(t => {
+          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          
+          const categoryId = findCategoryId(category)
+          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
+            return
+          }
+          
+          if (!expensesByCategory[category]) {
+            expensesByCategory[category] = new Map()
+          }
+          
+          const date = new Date(t.posted_at)
+          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          const amount = Math.abs(parseFloat(t.amount))
+          
+          expensesByCategory[category].set(key, (expensesByCategory[category].get(key) || 0) + amount)
+        })
+      
+      return expensesByCategory
+    }
+    
+    function buildIncomeByCategory() {
+      const incomeByCategory = {}
+      
+      transactions.value
+        .filter(t => t.transaction_type === 'income')
+        .forEach(t => {
+          const category = t.csv_subcategory || t.csv_category || 'Income'
+          
+          const categoryId = findCategoryId(category)
+          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
+            return
+          }
+          
+          if (!incomeByCategory[category]) {
+            incomeByCategory[category] = new Map()
+          }
+          
+          const date = new Date(t.posted_at)
+          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          const amount = Math.abs(parseFloat(t.amount))
+          
+          incomeByCategory[category].set(key, (incomeByCategory[category].get(key) || 0) + amount)
+        })
+      
+      return incomeByCategory
+    }
+    
+    function buildTransfersByCategory() {
+      const transfersByCategory = {}
+      
+      transactions.value
+        .filter(t => t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS')
+        .forEach(t => {
+          const category = t.csv_subcategory || t.csv_category || 'Transfer'
+          
+          const categoryId = findCategoryId(category)
+          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
+            return
+          }
+          
+          if (!transfersByCategory[category]) {
+            transfersByCategory[category] = new Map()
+          }
+          
+          const date = new Date(t.posted_at)
+          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          const amount = Math.abs(parseFloat(t.amount))
+          
+          transfersByCategory[category].set(key, (transfersByCategory[category].get(key) || 0) + amount)
+        })
+      
+      return transfersByCategory
+    }
+    
+    function findCategoryId(categoryName) {
+      if (!categoryStore.categories) return null
+      
+      for (const type of categoryStore.categories) {
+        if (type.children) {
+          for (const cat of type.children) {
+            if (cat.name === categoryName) return cat.id
+            
+            if (cat.children) {
+              for (const subcat of cat.children) {
+                if (subcat.name === categoryName) return subcat.id
+              }
+            }
+          }
+        }
+      }
+      
+      return null
+    }
+    
+    function getCategoryColor(categoryName) {
+      if (!categoryStore.categories) return '#94a3b8'
+      
+      for (const type of categoryStore.categories) {
+        if (type.children) {
+          for (const cat of type.children) {
+            if (cat.name === categoryName) return cat.color || '#94a3b8'
+            
+            if (cat.children) {
+              for (const subcat of cat.children) {
+                if (subcat.name === categoryName) return subcat.color || cat.color || '#94a3b8'
+              }
+            }
+          }
+        }
+      }
+      
+      return '#94a3b8'
+    }
+    
+    function handleChartHover(config) {
+      if (!config || config.dataPointIndex === -1) return
+      
+      const dataPoint = timelineData.value[config.dataPointIndex]
+      if (!dataPoint) return
+      
+      hoveredData.value = {
+        date: dataPoint.date,
+        income: dataPoint.income,
+        expenses: dataPoint.expenses,
+        transfers: dataPoint.transfers,
+        balance: dataPoint.income - dataPoint.expenses,
+        expensesByCategory: dataPoint.expensesByCategory
+      }
     }
     
     async function loadTransactions() {
@@ -622,6 +1082,8 @@ export default {
           dateRange.value.end = new Date(Math.max(...dates))
         }
         
+        initializeVisibility()
+        
         console.log('Timeline loaded:', allTransactions.length, 'transactions')
         
       } catch (error) {
@@ -632,6 +1094,27 @@ export default {
       } finally {
         loading.value = false
       }
+    }
+    
+    function initializeVisibility() {
+      visibleCategories.value = []
+      visibleSubcategories.value = []
+      
+      const allCategories = [
+        ...expenseCategories.value,
+        ...incomeCategories.value,
+        ...transferCategories.value
+      ]
+      
+      allCategories.forEach(cat => {
+        visibleCategories.value.push(cat.id)
+        
+        if (cat.children) {
+          cat.children.forEach(subcat => {
+            visibleSubcategories.value.push(subcat.id)
+          })
+        }
+      })
     }
     
     async function refreshData() {
@@ -661,7 +1144,6 @@ export default {
       }).format(Math.abs(amount))
     }
     
-    // Initialize
     onMounted(async () => {
       if (authStore.user) {
         await categoryStore.loadCategories()
@@ -669,7 +1151,6 @@ export default {
       }
     })
     
-    // Watch for auth changes
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
         loadTransactions()
@@ -683,10 +1164,25 @@ export default {
       hasData,
       stats,
       timelineData,
-      topCategories,
-      monthlyComparison,
       chartSeries,
       chartOptions,
+      expenseCategories,
+      incomeCategories,
+      transferCategories,
+      visibleTypes,
+      visibleCategories,
+      visibleSubcategories,
+      expandedCategories,
+      hoveredData,
+      getTypeColor,
+      isTypeVisible,
+      isCategoryVisible,
+      isSubcategoryVisible,
+      isCategoryExpanded,
+      toggleCategoryExpanded,
+      toggleType,
+      toggleCategory,
+      toggleSubcategory,
       refreshData,
       formatDateRange,
       formatDate,
@@ -706,7 +1202,7 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--gap-large);
+  margin-bottom: var(--gap-standard);
   flex-wrap: wrap;
   gap: var(--gap-standard);
 }
@@ -726,17 +1222,278 @@ export default {
   align-items: center;
 }
 
-/* Chart Wrapper */
+/* Main Content Layout */
+.timeline-main-content {
+  display: flex;
+  gap: var(--gap-standard);
+  margin-bottom: var(--gap-standard);
+}
+
+/* Legend Sidebar */
+.timeline-legend-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--color-background);
+  border-radius: var(--radius);
+  padding: var(--gap-small);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
+.legend-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legend-type-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-weight: 600;
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.legend-type-header:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-type-name {
+  user-select: none;
+}
+
+.legend-indicator {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 2px solid var(--color-background-dark);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.legend-indicator-small {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.legend-indicator-tiny {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.legend-categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.legend-category-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.legend-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.legend-category-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.8125rem;
+  flex: 1;
+}
+
+.legend-category-header:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-item-name {
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend-expand-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background-light);
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: bold;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.legend-expand-btn:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-subcategories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 1rem;
+  margin-top: 0.25rem;
+}
+
+.legend-subcat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.75rem;
+}
+
+.legend-subcat-item:hover {
+  background: var(--color-background-dark);
+}
+
+/* Chart Area */
+.timeline-chart-area {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
 .timeline-chart-wrapper {
   background: var(--color-background);
   border-radius: var(--radius);
   padding: var(--gap-standard);
-  margin-bottom: var(--gap-standard);
   min-height: 500px;
 }
 
 .timeline-chart {
   width: 100%;
+}
+
+/* Hover Info Field */
+.hover-info-field {
+  background: var(--color-background);
+  border-radius: var(--radius);
+  padding: var(--gap-standard);
+  border: 2px solid var(--color-background-dark);
+}
+
+.hover-info-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--gap-standard);
+  padding-bottom: 0.5rem;
+  border-bottom: 2px solid var(--color-background-dark);
+}
+
+.hover-info-header h4 {
+  margin: 0;
+  font-size: var(--text-medium);
+  font-weight: 600;
+}
+
+.hover-info-content {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--gap-standard);
+}
+
+.hover-info-section {
+  padding: 0.75rem;
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+}
+
+.hover-info-total {
+  grid-column: 1 / -1;
+  background: var(--color-background-dark);
+}
+
+.hover-info-label {
+  font-size: var(--text-small);
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.hover-info-label.positive {
+  color: #22c55e;
+}
+
+.hover-info-label.negative {
+  color: #ef4444;
+}
+
+.hover-info-label.neutral {
+  color: #3b82f6;
+}
+
+.hover-info-value {
+  font-size: var(--text-large);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.hover-info-value.positive {
+  color: #22c55e;
+}
+
+.hover-info-value.negative {
+  color: #ef4444;
+}
+
+.hover-info-categories {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.5rem;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--color-background-dark);
+}
+
+.hover-info-category {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--text-small);
+  padding: 0.25rem 0;
+}
+
+.hover-category-name {
+  color: var(--color-text-light);
+}
+
+.hover-category-amount {
+  font-weight: 500;
+  color: var(--color-text);
 }
 
 /* Loading and Empty States */
@@ -763,11 +1520,6 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: var(--gap-standard);
-}
-
 .empty-title {
   font-size: var(--text-large);
   font-weight: 600;
@@ -785,7 +1537,6 @@ export default {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: var(--gap-standard);
-  margin-bottom: var(--gap-standard);
 }
 
 .stat-card {
@@ -824,134 +1575,17 @@ export default {
   color: var(--color-text-light);
 }
 
-/* Category Breakdown */
-.category-breakdown-grid {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-standard);
-}
-
-.category-breakdown-item {
-  background: var(--color-background-light);
-  padding: var(--gap-standard);
-  border-radius: var(--radius);
-}
-
-.category-breakdown-header {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-standard);
-  margin-bottom: 0.5rem;
-}
-
-.category-breakdown-rank {
-  width: 2rem;
-  height: 2rem;
-  background: var(--color-background-dark);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-weight: 600;
-  font-size: var(--text-small);
-  flex-shrink: 0;
-}
-
-.category-breakdown-info {
-  flex: 1;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.category-breakdown-name {
-  font-weight: 500;
-  font-size: var(--text-medium);
-}
-
-.category-breakdown-amount {
-  font-weight: 600;
-  color: var(--color-text);
-  font-size: var(--text-medium);
-}
-
-.category-breakdown-bar-container {
-  height: 0.5rem;
-  background: var(--color-background-dark);
-  border-radius: 0.25rem;
-  overflow: hidden;
-  margin-bottom: 0.5rem;
-}
-
-.category-breakdown-bar {
-  height: 100%;
-  background: linear-gradient(90deg, #ef4444, #dc2626);
-  border-radius: 0.25rem;
-  transition: width 0.3s ease;
-}
-
-.category-breakdown-details {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-}
-
-/* Period Comparison */
-.comparison-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--gap-standard);
-}
-
-.comparison-item {
-  background: var(--color-background-light);
-  padding: var(--gap-standard);
-  border-radius: var(--radius);
-}
-
-.comparison-period-name {
-  font-weight: 600;
-  margin-bottom: var(--gap-small);
-  text-align: center;
-  font-size: var(--text-medium);
-}
-
-.comparison-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.comparison-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--text-small);
-}
-
-.comparison-label {
-  color: var(--color-text-muted);
-}
-
-.comparison-value {
-  font-weight: 600;
-}
-
-.comparison-value.positive {
-  color: #22c55e;
-}
-
-.comparison-value.negative {
-  color: #ef4444;
-}
-
-.comparison-value.neutral {
-  color: #3b82f6;
-}
-
 /* Responsive Design */
 @media (max-width: 64rem) {
+  .timeline-main-content {
+    flex-direction: column;
+  }
+  
+  .timeline-legend-sidebar {
+    width: 100%;
+    max-height: 300px;
+  }
+  
   .timeline-header {
     flex-direction: column;
     align-items: stretch;
@@ -968,6 +1602,14 @@ export default {
   .timeline-stats {
     grid-template-columns: repeat(2, 1fr);
   }
+  
+  .hover-info-content {
+    grid-template-columns: 1fr;
+  }
+  
+  .hover-info-total {
+    grid-column: 1;
+  }
 }
 
 @media (max-width: 48rem) {
@@ -975,11 +1617,11 @@ export default {
     padding: var(--gap-small);
   }
   
-  .timeline-stats {
-    grid-template-columns: 1fr;
+  .timeline-legend-sidebar {
+    padding: var(--gap-small);
   }
   
-  .comparison-grid {
+  .timeline-stats {
     grid-template-columns: 1fr;
   }
   
@@ -991,6 +1633,10 @@ export default {
   .loading-state,
   .empty-state {
     min-height: 400px;
+  }
+  
+  .hover-info-field {
+    padding: var(--gap-small);
   }
 }
 
@@ -1007,16 +1653,17 @@ export default {
     flex: 1;
   }
   
-  .category-breakdown-header {
-    flex-direction: column;
-    align-items: flex-start;
+  .legend-type-header {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
   }
   
-  .category-breakdown-info {
-    width: 100%;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 0.25rem;
+  .legend-category-header {
+    font-size: 0.75rem;
+  }
+  
+  .legend-subcat-item {
+    font-size: 0.6875rem;
   }
 }
 </style>
