@@ -1,24 +1,5 @@
 <template>
   <div class="timeline-container">
-    <!-- Header Controls -->
-    <div class="timeline-header">
-      <div class="timeline-title">
-        <span class="timeline-subtitle">
-          {{ formatDateRange(dateRange.start, dateRange.end) }}
-        </span>
-      </div>
-      
-      <div class="timeline-controls">
-        <button 
-          class="btn btn-small" 
-          @click="refreshData"
-          :disabled="loading"
-        >
-          Refresh
-        </button>
-      </div>
-    </div>
-
     <!-- Main Content: Legend + Chart -->
     <div class="timeline-main-content">
       <!-- Compact Legend - Left Side -->
@@ -59,7 +40,10 @@
                   class="legend-expand-btn"
                   @click.stop="toggleCategoryExpanded(category.id)"
                 >
-                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                  <AppIcon 
+                    :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                    size="small" 
+                  />
                 </button>
               </div>
               
@@ -120,7 +104,10 @@
                   class="legend-expand-btn"
                   @click.stop="toggleCategoryExpanded(category.id)"
                 >
-                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                  <AppIcon 
+                    :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                    size="small" 
+                  />
                 </button>
               </div>
               
@@ -181,7 +168,10 @@
                   class="legend-expand-btn"
                   @click.stop="toggleCategoryExpanded(category.id)"
                 >
-                  {{ isCategoryExpanded(category.id) ? '−' : '+' }}
+                  <AppIcon 
+                    :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                    size="small" 
+                  />
                 </button>
               </div>
               
@@ -231,48 +221,87 @@
           </div>
         </div>
 
-        <!-- Hover Info Field - Below Chart -->
-        <div v-if="hoveredData" class="hover-info-field">
-          <div class="hover-info-header">
-            <h4>{{ formatDate(hoveredData.date) }}</h4>
-            <button class="btn-icon btn-small" @click="hoveredData = null">×</button>
+        <!-- Hover Info Field - Below Chart - ALWAYS VISIBLE -->
+        <div class="hover-info-field" :class="{ 'hover-info-empty': !hoveredData }">
+          <div v-if="!hoveredData" class="hover-info-placeholder">
+            
           </div>
           
-          <div class="hover-info-content">
-            <div class="hover-info-section" v-if="hoveredData.income > 0">
-              <div class="hover-info-label positive">Income</div>
-              <div class="hover-info-value">{{ formatCurrency(hoveredData.income) }}</div>
+          <template v-else>
+            <div class="hover-info-header">
+              <h4>{{ formatDate(hoveredData.date) }}</h4>
+              <button class="btn-icon btn-small" @click="unpinHoverData">
+                <AppIcon name="times" size="small" />
+              </button>
             </div>
+            
+            <div class="hover-info-content">
+              <!-- Row 1: Income and Transfers (side by side) -->
+              <div class="hover-info-row-split">
+                <!-- Income Section -->
+                <div class="hover-info-section" v-if="hoveredData.income > 0">
+                  <div class="hover-info-label positive">Income</div>
+                  <div class="hover-info-value">{{ formatCurrency(hoveredData.income) }}</div>
+                  
+                  <div class="hover-info-categories" v-if="hoveredData.incomeByCategory">
+                    <div 
+                      class="hover-info-category" 
+                      v-for="(amount, category) in hoveredData.incomeByCategory" 
+                      :key="category"
+                      v-show="amount > 0"
+                    >
+                      <span class="hover-category-name">{{ category }}</span>
+                      <span class="hover-category-amount">{{ formatCurrency(amount) }}</span>
+                    </div>
+                  </div>
+                </div>
 
-            <div class="hover-info-section" v-if="hoveredData.expenses > 0">
-              <div class="hover-info-label negative">Expenses</div>
-              <div class="hover-info-value">{{ formatCurrency(hoveredData.expenses) }}</div>
-              
-              <div class="hover-info-categories" v-if="hoveredData.expensesByCategory">
-                <div 
-                  class="hover-info-category" 
-                  v-for="(amount, category) in hoveredData.expensesByCategory" 
-                  :key="category"
-                  v-show="amount > 0"
-                >
-                  <span class="hover-category-name">{{ category }}</span>
-                  <span class="hover-category-amount">{{ formatCurrency(amount) }}</span>
+                <!-- Transfers Section -->
+                <div class="hover-info-section" v-if="hoveredData.transfers > 0">
+                  <div class="hover-info-label neutral">Transfers</div>
+                  <div class="hover-info-value">{{ formatCurrency(hoveredData.transfers) }}</div>
+                  
+                  <div class="hover-info-categories" v-if="hoveredData.transfersByCategory">
+                    <div 
+                      class="hover-info-category" 
+                      v-for="(amount, category) in hoveredData.transfersByCategory" 
+                      :key="category"
+                      v-show="amount > 0"
+                    >
+                      <span class="hover-category-name">{{ category }}</span>
+                      <span class="hover-category-amount">{{ formatCurrency(amount) }}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row 2: Expenses (full width) -->
+              <div class="hover-info-section hover-info-expenses" v-if="hoveredData.expenses > 0">
+                <div class="hover-info-label negative">Expenses</div>
+                <div class="hover-info-value">{{ formatCurrency(hoveredData.expenses) }}</div>
+                
+                <div class="hover-info-categories" v-if="hoveredData.expensesByCategory">
+                  <div 
+                    class="hover-info-category" 
+                    v-for="(amount, category) in hoveredData.expensesByCategory" 
+                    :key="category"
+                    v-show="amount > 0"
+                  >
+                    <span class="hover-category-name">{{ category }}</span>
+                    <span class="hover-category-amount">{{ formatCurrency(amount) }}</span>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Row 3: Balance Change (full width) -->
+              <div class="hover-info-section hover-info-total" v-if="hoveredData.balance !== undefined">
+                <div class="hover-info-label">Balance Change</div>
+                <div class="hover-info-value" :class="hoveredData.balance >= 0 ? 'positive' : 'negative'">
+                  {{ formatCurrency(hoveredData.balance) }}
                 </div>
               </div>
             </div>
-
-            <div class="hover-info-section" v-if="hoveredData.transfers > 0">
-              <div class="hover-info-label neutral">Transfers</div>
-              <div class="hover-info-value">{{ formatCurrency(hoveredData.transfers) }}</div>
-            </div>
-
-            <div class="hover-info-section hover-info-total" v-if="hoveredData.balance !== undefined">
-              <div class="hover-info-label">Balance Change</div>
-              <div class="hover-info-value" :class="hoveredData.balance >= 0 ? 'positive' : 'negative'">
-                {{ formatCurrency(hoveredData.balance) }}
-              </div>
-            </div>
-          </div>
+          </template>
         </div>
       </div>
     </div>
@@ -310,11 +339,13 @@ import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/categories'
 import VueApexCharts from 'vue3-apexcharts'
+import AppIcon from './AppIcon.vue'
 
 export default {
   name: 'TimelineTab',
   components: {
-    apexchart: VueApexCharts
+    apexchart: VueApexCharts,
+    AppIcon
   },
   setup() {
     const authStore = useAuthStore()
@@ -326,6 +357,7 @@ export default {
     const transactions = ref([])
     const mainChart = ref(null)
     const hoveredData = ref(null)
+    const isPinned = ref(false)
     
     // Visibility toggles
     const visibleTypes = ref(['income', 'expenses', 'transfers'])
@@ -445,7 +477,7 @@ export default {
         })
       }
       
-      // Transfers series (line)
+      // Transfers series (area)
       if (isTypeVisible('transfers')) {
         const transfersByCategory = buildTransfersByCategory()
         
@@ -454,7 +486,7 @@ export default {
           
           series.push({
             name: category,
-            type: 'line',
+            type: 'area',
             data: timelineData.value.map(d => ({
               x: d.date,
               y: dateMap.get(d.date) || 0
@@ -478,12 +510,21 @@ export default {
             show: true,
             tools: {
               download: true,
-              selection: true,
-              zoom: true,
+              selection: false,
+              zoom: false,
               zoomin: true,
               zoomout: true,
-              pan: true,
-              reset: true
+              pan: false,
+              reset: true,
+              customIcons: [{
+                icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>',
+                index: 0,
+                title: 'Refresh',
+                class: 'custom-icon-refresh',
+                click: function() {
+                  refreshData()
+                }
+              }]
             }
           },
           zoom: {
@@ -492,18 +533,30 @@ export default {
             autoScaleYaxis: true
           },
           animations: {
-            enabled: true,
-            easing: 'easeinout',
-            speed: 800
+            enabled: false
           },
           events: {
             mouseMove: (event, chartContext, config) => {
-              if (config.dataPointIndex >= 0) {
+              if (!isPinned.value && config.dataPointIndex >= 0) {
                 handleChartHover(config)
               }
             },
-            mouseLeave: () => {
-              // Keep hover info visible
+            click: (event, chartContext, config) => {
+              if (config.dataPointIndex >= 0) {
+                isPinned.value = true
+                handleChartHover(config)
+              }
+            },
+            zoomed: (chartContext, { xaxis }) => {
+              if (!xaxis || !xaxis.min || !xaxis.max) return
+              
+              const newStart = new Date(xaxis.min)
+              const newEnd = new Date(xaxis.max)
+              
+              if (dateRange.value.start?.getTime() !== newStart.getTime() || 
+                  dateRange.value.end?.getTime() !== newEnd.getTime()) {
+                dateRange.value = { start: newStart, end: newEnd }
+              }
             }
           }
         },
@@ -512,28 +565,17 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: chartSeries.value.map((serie) => {
-            if (serie.type === 'line') return 2
-            return 0
-          })
+          width: 0
         },
         fill: {
           type: 'solid',
-          opacity: chartSeries.value.map((serie) => {
-            if (serie.type === 'line') return 0.3
-            return 0.8
-          })
+          opacity: 0.8
         },
         legend: {
           show: false
         },
         markers: {
-          size: 0,
-          strokeWidth: 0,
-          hover: {
-            size: 5,
-            sizeOffset: 3
-          }
+          size: 0
         },
         grid: {
           borderColor: '#e5e7eb',
@@ -556,15 +598,6 @@ export default {
             style: {
               colors: '#6b7280'
             }
-          },
-          crosshairs: {
-            show: true,
-            position: 'front',
-            stroke: {
-              color: '#374151',
-              width: 1,
-              dashArray: 4
-            }
           }
         },
         yaxis: {
@@ -579,18 +612,11 @@ export default {
             style: {
               colors: '#6b7280'
             }
-          }
+          },
+          forceNiceScale: false
         },
         tooltip: {
-          enabled: true,
-          shared: true,
-          intersect: false,
-          x: {
-            format: 'dd MMM yyyy'
-          },
-          y: {
-            formatter: (val) => '€' + Math.abs(val).toFixed(2)
-          }
+          enabled: false
         },
         annotations: {
           yaxis: [{
@@ -752,12 +778,10 @@ export default {
       
       const daysDiff = Math.floor((dateRange.value.end - dateRange.value.start) / (1000 * 60 * 60 * 24))
       
-      if (daysDiff > 730) {
+      if (daysDiff > 1825) {
         return groupTransactionsByQuarter(txs)
-      } else if (daysDiff > 180) {
+      } else if (daysDiff > 365) {
         return groupTransactionsByMonth(txs)
-      } else if (daysDiff > 60) {
-        return groupTransactionsByWeek(txs)
       } else {
         return groupTransactionsByDay(txs)
       }
@@ -777,58 +801,25 @@ export default {
             income: 0,
             expenses: 0,
             transfers: 0,
-            expensesByCategory: {}
+            incomeByCategory: {},
+            expensesByCategory: {},
+            transfersByCategory: {}
           })
         }
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
+        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
         if (t.transaction_type === 'income') {
           period.income += amount
+          period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'expense') {
           period.expenses += amount
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
           period.transfers += amount
-        }
-      })
-      
-      return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
-    }
-    
-    function groupTransactionsByWeek(txs) {
-      const grouped = new Map()
-      
-      txs.forEach(t => {
-        const date = new Date(t.posted_at)
-        const weekStart = new Date(date)
-        weekStart.setDate(date.getDate() - date.getDay())
-        weekStart.setHours(0, 0, 0, 0)
-        const keyStr = weekStart.toISOString()
-        
-        if (!grouped.has(keyStr)) {
-          grouped.set(keyStr, {
-            date: weekStart.getTime(),
-            income: 0,
-            expenses: 0,
-            transfers: 0,
-            expensesByCategory: {}
-          })
-        }
-        
-        const period = grouped.get(keyStr)
-        const amount = Math.abs(parseFloat(t.amount))
-        
-        if (t.transaction_type === 'income') {
-          period.income += amount
-        } else if (t.transaction_type === 'expense') {
-          period.expenses += amount
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
-          period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
-          period.transfers += amount
+          period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
       })
       
@@ -849,21 +840,25 @@ export default {
             income: 0,
             expenses: 0,
             transfers: 0,
-            expensesByCategory: {}
+            incomeByCategory: {},
+            expensesByCategory: {},
+            transfersByCategory: {}
           })
         }
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
+        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
         if (t.transaction_type === 'income') {
           period.income += amount
+          period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'expense') {
           period.expenses += amount
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
           period.transfers += amount
+          period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
       })
       
@@ -885,21 +880,25 @@ export default {
             income: 0,
             expenses: 0,
             transfers: 0,
-            expensesByCategory: {}
+            incomeByCategory: {},
+            expensesByCategory: {},
+            transfersByCategory: {}
           })
         }
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
+        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
         if (t.transaction_type === 'income') {
           period.income += amount
+          period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'expense') {
           period.expenses += amount
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
           period.transfers += amount
+          period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
       })
       
@@ -1039,8 +1038,15 @@ export default {
         expenses: dataPoint.expenses,
         transfers: dataPoint.transfers,
         balance: dataPoint.income - dataPoint.expenses,
-        expensesByCategory: dataPoint.expensesByCategory
+        incomeByCategory: dataPoint.incomeByCategory,
+        expensesByCategory: dataPoint.expensesByCategory,
+        transfersByCategory: dataPoint.transfersByCategory
       }
+    }
+    
+    function unpinHoverData() {
+      isPinned.value = false
+      hoveredData.value = null
     }
     
     async function loadTransactions() {
@@ -1088,9 +1094,6 @@ export default {
         
       } catch (error) {
         console.error('Failed to load transactions:', error)
-        if (error.response?.status === 401) {
-          await authStore.verifyToken()
-        }
       } finally {
         loading.value = false
       }
@@ -1121,13 +1124,9 @@ export default {
       await loadTransactions()
     }
     
-    function formatDateRange(start, end) {
-      if (!start || !end) return 'All Time'
-      return `${formatDate(start)} - ${formatDate(end)}`
-    }
-    
-    function formatDate(dateStr) {
-      const date = typeof dateStr === 'string' ? new Date(dateStr) : dateStr
+    function formatDate(dateValue) {
+      const date = typeof dateValue === 'number' ? new Date(dateValue) : 
+                   typeof dateValue === 'string' ? new Date(dateValue) : dateValue
       return date.toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
@@ -1174,6 +1173,7 @@ export default {
       visibleSubcategories,
       expandedCategories,
       hoveredData,
+      isPinned,
       getTypeColor,
       isTypeVisible,
       isCategoryVisible,
@@ -1183,8 +1183,8 @@ export default {
       toggleType,
       toggleCategory,
       toggleSubcategory,
+      unpinHoverData,
       refreshData,
-      formatDateRange,
       formatDate,
       formatCurrency
     }
@@ -1195,31 +1195,6 @@ export default {
 <style scoped>
 .timeline-container {
   padding: var(--gap-standard);
-}
-
-/* Header */
-.timeline-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--gap-standard);
-  flex-wrap: wrap;
-  gap: var(--gap-standard);
-}
-
-.timeline-title h2 {
-  margin: 0 0 0.25rem 0;
-}
-
-.timeline-subtitle {
-  color: var(--color-text-light);
-  font-size: var(--text-small);
-}
-
-.timeline-controls {
-  display: flex;
-  gap: var(--gap-small);
-  align-items: center;
 }
 
 /* Main Content Layout */
@@ -1343,10 +1318,9 @@ export default {
   border: none;
   border-radius: 0.25rem;
   cursor: pointer;
-  font-size: 1rem;
-  font-weight: bold;
   transition: background 0.2s;
   flex-shrink: 0;
+  padding: 0;
 }
 
 .legend-expand-btn:hover {
@@ -1396,12 +1370,65 @@ export default {
   width: 100%;
 }
 
-/* Hover Info Field */
+/* Loading and Empty States */
+.loading-state,
+.empty-state {
+  text-align: center;
+  padding: var(--gap-large);
+  color: var(--color-text-light);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 500px;
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+  margin-bottom: var(--gap-standard);
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.empty-title {
+  font-size: var(--text-large);
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+  color: var(--color-text);
+}
+
+.empty-subtitle {
+  color: var(--color-text-muted);
+  font-size: var(--text-small);
+}
+
+/* Hover Info Field - Below Chart - ALWAYS VISIBLE */
 .hover-info-field {
   background: var(--color-background);
   border-radius: var(--radius);
   padding: var(--gap-standard);
   border: 2px solid var(--color-background-dark);
+  min-height: 8rem;
+}
+
+.hover-info-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.hover-info-placeholder {
+  text-align: center;
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.hover-info-placeholder p {
+  margin: 0;
 }
 
 .hover-info-header {
@@ -1419,9 +1446,28 @@ export default {
   font-weight: 600;
 }
 
+.hover-info-header .btn-icon {
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0.25rem;
+  background: transparent;
+  box-shadow: none;
+}
+
+.hover-info-header .btn-icon:hover {
+  background: var(--color-background-dark);
+}
+
 .hover-info-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
+/* Row 1: Income and Transfers side by side */
+.hover-info-row-split {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  grid-template-columns: 1fr 1fr;
   gap: var(--gap-standard);
 }
 
@@ -1431,8 +1477,13 @@ export default {
   border-radius: var(--radius);
 }
 
+/* Full width sections (Expenses and Balance) */
+.hover-info-expenses,
 .hover-info-total {
   grid-column: 1 / -1;
+}
+
+.hover-info-total {
   background: var(--color-background-dark);
 }
 
@@ -1496,42 +1547,6 @@ export default {
   color: var(--color-text);
 }
 
-/* Loading and Empty States */
-.loading-state,
-.empty-state {
-  text-align: center;
-  padding: var(--gap-large);
-  color: var(--color-text-light);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 500px;
-}
-
-.loading-spinner {
-  font-size: 2rem;
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--gap-standard);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.empty-title {
-  font-size: var(--text-large);
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-  color: var(--color-text);
-}
-
-.empty-subtitle {
-  color: var(--color-text-muted);
-  font-size: var(--text-small);
-}
-
 /* Statistics */
 .timeline-stats {
   display: grid;
@@ -1575,6 +1590,24 @@ export default {
   color: var(--color-text-light);
 }
 
+/* Custom Refresh Icon in ApexCharts Toolbar */
+:deep(.apexcharts-toolbar) {
+  z-index: 11;
+}
+
+:deep(.custom-icon-refresh) {
+  cursor: pointer;
+}
+
+:deep(.custom-icon-refresh):hover {
+  fill: var(--color-text);
+}
+
+/* Hide Pan Icon */
+:deep(.apexcharts-pan-icon) {
+  display: none !important;
+}
+
 /* Responsive Design */
 @media (max-width: 64rem) {
   .timeline-main-content {
@@ -1586,29 +1619,12 @@ export default {
     max-height: 300px;
   }
   
-  .timeline-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .timeline-title {
-    text-align: center;
-  }
-  
-  .timeline-controls {
-    justify-content: center;
-  }
-  
   .timeline-stats {
     grid-template-columns: repeat(2, 1fr);
   }
   
-  .hover-info-content {
+  .hover-info-row-split {
     grid-template-columns: 1fr;
-  }
-  
-  .hover-info-total {
-    grid-column: 1;
   }
 }
 
@@ -1641,18 +1657,6 @@ export default {
 }
 
 @media (max-width: 30rem) {
-  .timeline-header {
-    gap: var(--gap-small);
-  }
-  
-  .timeline-controls {
-    width: 100%;
-  }
-  
-  .timeline-controls button {
-    flex: 1;
-  }
-  
   .legend-type-header {
     font-size: 0.75rem;
     padding: 0.375rem 0.5rem;
@@ -1663,6 +1667,10 @@ export default {
   }
   
   .legend-subcat-item {
+    font-size: 0.6875rem;
+  }
+  
+  .hover-info-categories {
     font-size: 0.6875rem;
   }
 }
