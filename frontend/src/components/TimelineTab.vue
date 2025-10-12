@@ -200,6 +200,35 @@
       <!-- Chart Area -->
       <div class="timeline-chart-area">
         <div class="timeline-chart-wrapper">
+          <!-- Zoom Controls - Top Right Corner -->
+          <div class="zoom-controls">
+            <button 
+              class="btn btn-icon btn-small"
+              :disabled="currentZoomLevel <= 0"
+              @click="zoomOut"
+              title="Zoom Out"
+            >
+              <AppIcon name="zoom-out" size="small" />
+            </button>
+            
+            <button 
+              class="btn btn-icon btn-small"
+              :disabled="currentZoomLevel >= 2"
+              @click="zoomIn"
+              title="Zoom In"
+            >
+              <AppIcon name="zoom-in" size="small" />
+            </button>
+            
+            <button 
+              class="btn btn-icon btn-small"
+              @click="resetZoom"
+              title="Reset Zoom"
+            >
+              <AppIcon name="refresh" size="small" />
+            </button>
+          </div>
+          
           <div v-if="loading" class="loading-state">
             <div class="loading-spinner">⟳</div>
             <p>Loading timeline data...</p>
@@ -352,25 +381,24 @@ export default {
     const categoryStore = useCategoryStore()
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     
-    // State
     const loading = ref(false)
     const transactions = ref([])
     const mainChart = ref(null)
     const hoveredData = ref(null)
     const isPinned = ref(false)
     
-    // Visibility toggles
     const visibleTypes = ref(['income', 'expenses', 'transfers'])
     const visibleCategories = ref([])
     const visibleSubcategories = ref([])
     const expandedCategories = ref([])
+    
+    const currentZoomLevel = ref(0)
     
     const dateRange = ref({
       start: null,
       end: null
     })
     
-    // Computed
     const hasData = computed(() => transactions.value.length > 0)
     
     const expenseCategories = computed(() => {
@@ -423,9 +451,43 @@ export default {
       }
     })
     
+    const zoomLevelName = computed(() => {
+      const levels = ['All Time (Quarters)', 'Year View (Months)', 'Detail View (Days)']
+      return levels[currentZoomLevel.value] || 'All Time'
+    })
+    
+    const currentGrouping = computed(() => {
+      if (currentZoomLevel.value === 0) return 'quarter'
+      if (currentZoomLevel.value === 1) return 'month'
+      return 'day'
+    })
+    
+    const visibleDateRange = computed(() => {
+      if (!dateRange.value.start || !dateRange.value.end) return null
+      
+      const totalDays = Math.floor((dateRange.value.end - dateRange.value.start) / (1000 * 60 * 60 * 24))
+      
+      if (currentZoomLevel.value === 0) {
+        return {
+          start: dateRange.value.start,
+          end: dateRange.value.end
+        }
+      } else if (currentZoomLevel.value === 1) {
+        const daysToShow = Math.min(365, totalDays)
+        const end = dateRange.value.end
+        const start = new Date(end.getTime() - (daysToShow * 24 * 60 * 60 * 1000))
+        return { start, end }
+      } else {
+        const daysToShow = Math.min(90, totalDays)
+        const end = dateRange.value.end
+        const start = new Date(end.getTime() - (daysToShow * 24 * 60 * 60 * 1000))
+        return { start, end }
+      }
+    })
+    
     const timelineData = computed(() => {
       if (!transactions.value.length) return []
-      return groupTransactionsByPeriod(transactions.value)
+      return groupTransactionsByPeriod(transactions.value, currentGrouping.value)
     })
     
     const chartSeries = computed(() => {
@@ -433,7 +495,6 @@ export default {
       
       const series = []
       
-      // Build expense series by category/subcategory (negative values - below zero)
       if (isTypeVisible('expenses')) {
         const expensesByCategory = buildExpensesByCategory()
         
@@ -458,7 +519,6 @@ export default {
           })
       }
       
-      // Income series (positive values - above zero)
       if (isTypeVisible('income')) {
         const incomeByCategory = buildIncomeByCategory()
         
@@ -477,7 +537,6 @@ export default {
         })
       }
       
-      // Transfers series (area)
       if (isTypeVisible('transfers')) {
         const transfersByCategory = buildTransfersByCategory()
         
@@ -499,7 +558,30 @@ export default {
       return series
     })
     
+    const yAxisMax = computed(() => {
+      if (!chartSeries.value.length) return 1000
+      
+      let maxPositive = 0
+      let maxNegative = 0
+      
+      chartSeries.value.forEach(series => {
+        series.data.forEach(point => {
+          if (point.y > 0 && point.y > maxPositive) {
+            maxPositive = point.y
+          }
+          if (point.y < 0 && Math.abs(point.y) > maxNegative) {
+            maxNegative = Math.abs(point.y)
+          }
+        })
+      })
+      
+      const maxValue = Math.max(maxPositive, maxNegative)
+      return maxValue * 1.05
+    })
+    
     const chartOptions = computed(() => {
+      const range = visibleDateRange.value
+      
       return {
         chart: {
           id: 'timeline-main',
@@ -507,55 +589,33 @@ export default {
           height: 500,
           stacked: true,
           toolbar: {
-            show: true,
-            tools: {
-              download: true,
-              selection: false,
-              zoom: false,
-              zoomin: true,
-              zoomout: true,
-              pan: false,
-              reset: true,
-              customIcons: [{
-                icon: '<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>',
-                index: 0,
-                title: 'Refresh',
-                class: 'custom-icon-refresh',
-                click: function() {
-                  refreshData()
-                }
-              }]
-            }
+            show: false
           },
           zoom: {
-            enabled: true,
-            type: 'x',
-            autoScaleYaxis: true
+            enabled: false
           },
           animations: {
             enabled: false
           },
           events: {
             mouseMove: (event, chartContext, config) => {
-              if (!isPinned.value && config.dataPointIndex >= 0) {
+              if (config.dataPointIndex >= 0) {
                 handleChartHover(config)
+              }
+            },
+            mouseLeave: () => {
+              if (!isPinned.value) {
+                hoveredData.value = null
               }
             },
             click: (event, chartContext, config) => {
               if (config.dataPointIndex >= 0) {
-                isPinned.value = true
-                handleChartHover(config)
-              }
-            },
-            zoomed: (chartContext, { xaxis }) => {
-              if (!xaxis || !xaxis.min || !xaxis.max) return
-              
-              const newStart = new Date(xaxis.min)
-              const newEnd = new Date(xaxis.max)
-              
-              if (dateRange.value.start?.getTime() !== newStart.getTime() || 
-                  dateRange.value.end?.getTime() !== newEnd.getTime()) {
-                dateRange.value = { start: newStart, end: newEnd }
+                isPinned.value = !isPinned.value
+                if (isPinned.value) {
+                  handleChartHover(config)
+                } else {
+                  hoveredData.value = null
+                }
               }
             }
           }
@@ -593,10 +653,21 @@ export default {
         },
         xaxis: {
           type: 'datetime',
+          min: range?.start?.getTime(),
+          max: range?.end?.getTime(),
           labels: {
             datetimeUTC: false,
             style: {
               colors: '#6b7280'
+            }
+          },
+          crosshairs: {
+            show: true,
+            position: 'back',
+            stroke: {
+              color: '#374151',
+              width: 2,
+              dashArray: 4
             }
           }
         },
@@ -613,7 +684,8 @@ export default {
               colors: '#6b7280'
             }
           },
-          forceNiceScale: false
+          min: -yAxisMax.value,
+          max: yAxisMax.value
         },
         tooltip: {
           enabled: false
@@ -629,7 +701,6 @@ export default {
       }
     })
     
-    // Methods
     function getTypeColor(typeId) {
       const typeMap = {
         'income': '#00C9A0',
@@ -771,16 +842,28 @@ export default {
       }
     }
     
-    function groupTransactionsByPeriod(txs) {
-      if (!dateRange.value.start || !dateRange.value.end) {
-        return groupTransactionsByDay(txs)
+    function zoomIn() {
+      if (currentZoomLevel.value < 2) {
+        currentZoomLevel.value++
       }
-      
-      const daysDiff = Math.floor((dateRange.value.end - dateRange.value.start) / (1000 * 60 * 60 * 24))
-      
-      if (daysDiff > 1825) {
+    }
+    
+    function zoomOut() {
+      if (currentZoomLevel.value > 0) {
+        currentZoomLevel.value--
+      }
+    }
+    
+    function resetZoom() {
+      currentZoomLevel.value = 0
+      isPinned.value = false
+      hoveredData.value = null
+    }
+    
+    function groupTransactionsByPeriod(txs, grouping) {
+      if (grouping === 'quarter') {
         return groupTransactionsByQuarter(txs)
-      } else if (daysDiff > 365) {
+      } else if (grouping === 'month') {
         return groupTransactionsByMonth(txs)
       } else {
         return groupTransactionsByDay(txs)
@@ -905,28 +988,76 @@ export default {
       return Array.from(grouped.values()).sort((a, b) => a.date - b.date)
     }
     
+    function findParentCategory(subcategoryName) {
+      const allCategories = [
+        ...expenseCategories.value,
+        ...incomeCategories.value,
+        ...transferCategories.value
+      ]
+      
+      for (const cat of allCategories) {
+        if (cat.children) {
+          for (const subcat of cat.children) {
+            if (subcat.name === subcategoryName) {
+              return cat
+            }
+          }
+        }
+      }
+      
+      return null
+    }
+    
     function buildExpensesByCategory() {
       const expensesByCategory = {}
       
       transactions.value
         .filter(t => t.transaction_type === 'expense')
         .forEach(t => {
-          const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+          const subcategoryName = t.csv_subcategory
+          const categoryName = t.csv_category || 'Uncategorized'
           
-          const categoryId = findCategoryId(category)
-          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
-            return
+          const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
+          
+          let displayName = subcategoryName || categoryName
+          let shouldInclude = true
+          
+          if (parentCategory) {
+            if (!isCategoryVisible(parentCategory.id)) {
+              shouldInclude = false
+            } else if (!isCategoryExpanded(parentCategory.id)) {
+              displayName = parentCategory.name
+            } else if (subcategoryName) {
+              const subcategoryId = findCategoryId(subcategoryName)
+              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
+                shouldInclude = false
+              }
+            }
           }
           
-          if (!expensesByCategory[category]) {
-            expensesByCategory[category] = new Map()
+          if (!shouldInclude) return
+          
+          if (!expensesByCategory[displayName]) {
+            expensesByCategory[displayName] = new Map()
           }
           
           const date = new Date(t.posted_at)
-          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          let key
+          
+          if (currentGrouping.value === 'quarter') {
+            const quarter = Math.floor(date.getMonth() / 3)
+            const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
+            key = quarterStart.getTime()
+          } else if (currentGrouping.value === 'month') {
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
+            key = monthStart.getTime()
+          } else {
+            key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          }
+          
           const amount = Math.abs(parseFloat(t.amount))
           
-          expensesByCategory[category].set(key, (expensesByCategory[category].get(key) || 0) + amount)
+          expensesByCategory[displayName].set(key, (expensesByCategory[displayName].get(key) || 0) + amount)
         })
       
       return expensesByCategory
@@ -938,22 +1069,50 @@ export default {
       transactions.value
         .filter(t => t.transaction_type === 'income')
         .forEach(t => {
-          const category = t.csv_subcategory || t.csv_category || 'Income'
+          const subcategoryName = t.csv_subcategory
+          const categoryName = t.csv_category || 'Income'
           
-          const categoryId = findCategoryId(category)
-          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
-            return
+          const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
+          
+          let displayName = subcategoryName || categoryName
+          let shouldInclude = true
+          
+          if (parentCategory) {
+            if (!isCategoryVisible(parentCategory.id)) {
+              shouldInclude = false
+            } else if (!isCategoryExpanded(parentCategory.id)) {
+              displayName = parentCategory.name
+            } else if (subcategoryName) {
+              const subcategoryId = findCategoryId(subcategoryName)
+              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
+                shouldInclude = false
+              }
+            }
           }
           
-          if (!incomeByCategory[category]) {
-            incomeByCategory[category] = new Map()
+          if (!shouldInclude) return
+          
+          if (!incomeByCategory[displayName]) {
+            incomeByCategory[displayName] = new Map()
           }
           
           const date = new Date(t.posted_at)
-          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          let key
+          
+          if (currentGrouping.value === 'quarter') {
+            const quarter = Math.floor(date.getMonth() / 3)
+            const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
+            key = quarterStart.getTime()
+          } else if (currentGrouping.value === 'month') {
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
+            key = monthStart.getTime()
+          } else {
+            key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          }
+          
           const amount = Math.abs(parseFloat(t.amount))
           
-          incomeByCategory[category].set(key, (incomeByCategory[category].get(key) || 0) + amount)
+          incomeByCategory[displayName].set(key, (incomeByCategory[displayName].get(key) || 0) + amount)
         })
       
       return incomeByCategory
@@ -965,22 +1124,50 @@ export default {
       transactions.value
         .filter(t => t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS')
         .forEach(t => {
-          const category = t.csv_subcategory || t.csv_category || 'Transfer'
+          const subcategoryName = t.csv_subcategory
+          const categoryName = t.csv_category || 'Transfer'
           
-          const categoryId = findCategoryId(category)
-          if (categoryId && !isSubcategoryVisible(categoryId) && !isCategoryVisible(categoryId)) {
-            return
+          const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
+          
+          let displayName = subcategoryName || categoryName
+          let shouldInclude = true
+          
+          if (parentCategory) {
+            if (!isCategoryVisible(parentCategory.id)) {
+              shouldInclude = false
+            } else if (!isCategoryExpanded(parentCategory.id)) {
+              displayName = parentCategory.name
+            } else if (subcategoryName) {
+              const subcategoryId = findCategoryId(subcategoryName)
+              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
+                shouldInclude = false
+              }
+            }
           }
           
-          if (!transfersByCategory[category]) {
-            transfersByCategory[category] = new Map()
+          if (!shouldInclude) return
+          
+          if (!transfersByCategory[displayName]) {
+            transfersByCategory[displayName] = new Map()
           }
           
           const date = new Date(t.posted_at)
-          const key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          let key
+          
+          if (currentGrouping.value === 'quarter') {
+            const quarter = Math.floor(date.getMonth() / 3)
+            const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
+            key = quarterStart.getTime()
+          } else if (currentGrouping.value === 'month') {
+            const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
+            key = monthStart.getTime()
+          } else {
+            key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+          }
+          
           const amount = Math.abs(parseFloat(t.amount))
           
-          transfersByCategory[category].set(key, (transfersByCategory[category].get(key) || 0) + amount)
+          transfersByCategory[displayName].set(key, (transfersByCategory[displayName].get(key) || 0) + amount)
         })
       
       return transfersByCategory
@@ -1143,6 +1330,16 @@ export default {
       }).format(Math.abs(amount))
     }
     
+    watch([visibleTypes, visibleCategories, visibleSubcategories, expandedCategories], () => {
+      console.log('Visibility changed, chart will rebuild')
+    }, { deep: true })
+    
+    watch(() => currentZoomLevel.value, (newLevel) => {
+      console.log('Zoom level changed to:', zoomLevelName.value)
+      isPinned.value = false
+      hoveredData.value = null
+    })
+    
     onMounted(async () => {
       if (authStore.user) {
         await categoryStore.loadCategories()
@@ -1174,6 +1371,8 @@ export default {
       expandedCategories,
       hoveredData,
       isPinned,
+      currentZoomLevel,
+      zoomLevelName,
       getTypeColor,
       isTypeVisible,
       isCategoryVisible,
@@ -1183,6 +1382,9 @@ export default {
       toggleType,
       toggleCategory,
       toggleSubcategory,
+      zoomIn,
+      zoomOut,
+      resetZoom,
       unpinHoverData,
       refreshData,
       formatDate,
@@ -1192,19 +1394,17 @@ export default {
 }
 </script>
 
-<style scoped>
+<style>
 .timeline-container {
   padding: var(--gap-standard);
 }
 
-/* Main Content Layout */
 .timeline-main-content {
   display: flex;
   gap: var(--gap-standard);
   margin-bottom: var(--gap-standard);
 }
 
-/* Legend Sidebar */
 .timeline-legend-sidebar {
   width: 250px;
   flex-shrink: 0;
@@ -1351,12 +1551,39 @@ export default {
   background: var(--color-background-dark);
 }
 
-/* Chart Area */
 .timeline-chart-area {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: var(--gap-standard);
+}
+
+.zoom-controls {
+  display: flex;
+  align-items: center;
+      justify-content: flex-end;
+  gap: var(--gap-small);
+  border-radius: var(--radius);
+}
+
+.zoom-controls .btn-icon {
+  background: transparent;
+  border: none;
+  padding: 0;
+  margin: 0;
+  width: 1.5rem;
+  height: 1.5rem;
+  box-shadow: none;
+}
+
+
+.zoom-level-indicator {
+  font-size: var(--text-small);
+  font-weight: 500;
+  color: var(--color-text);
+  padding: 0 var(--gap-small);
+  min-width: 12rem;
+  text-align: center;
 }
 
 .timeline-chart-wrapper {
@@ -1370,7 +1597,6 @@ export default {
   width: 100%;
 }
 
-/* Loading and Empty States */
 .loading-state,
 .empty-state {
   text-align: center;
@@ -1406,7 +1632,6 @@ export default {
   font-size: var(--text-small);
 }
 
-/* Hover Info Field - Below Chart - ALWAYS VISIBLE */
 .hover-info-field {
   background: var(--color-background);
   border-radius: var(--radius);
@@ -1464,7 +1689,6 @@ export default {
   gap: var(--gap-standard);
 }
 
-/* Row 1: Income and Transfers side by side */
 .hover-info-row-split {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -1477,7 +1701,6 @@ export default {
   border-radius: var(--radius);
 }
 
-/* Full width sections (Expenses and Balance) */
 .hover-info-expenses,
 .hover-info-total {
   grid-column: 1 / -1;
@@ -1547,7 +1770,6 @@ export default {
   color: var(--color-text);
 }
 
-/* Statistics */
 .timeline-stats {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -1590,7 +1812,6 @@ export default {
   color: var(--color-text-light);
 }
 
-/* Custom Refresh Icon in ApexCharts Toolbar */
 :deep(.apexcharts-toolbar) {
   z-index: 11;
 }
@@ -1603,12 +1824,10 @@ export default {
   fill: var(--color-text);
 }
 
-/* Hide Pan Icon */
 :deep(.apexcharts-pan-icon) {
   display: none !important;
 }
 
-/* Responsive Design */
 @media (max-width: 64rem) {
   .timeline-main-content {
     flex-direction: column;
@@ -1635,6 +1854,17 @@ export default {
   
   .timeline-legend-sidebar {
     padding: var(--gap-small);
+  }
+  
+  .zoom-controls {
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  
+  .zoom-level-indicator {
+    width: 100%;
+    order: -1;
+    margin-bottom: var(--gap-small);
   }
   
   .timeline-stats {
