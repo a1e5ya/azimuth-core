@@ -1,0 +1,454 @@
+<template>
+  <div class="timeline-legend-sidebar">
+    <!-- EXPENSES Section -->
+    <div class="legend-section">
+      <div 
+        class="legend-type-header" 
+        @click="$emit('toggle-type', 'expenses')"
+      >
+        <span 
+          class="legend-indicator" 
+          :style="{ backgroundColor: isTypeVisible('expenses') ? getTypeColor('expenses') : '#fff' }"
+        ></span>
+        <span class="legend-type-name">EXPENSES</span>
+      </div>
+      
+      <div class="legend-categories-list">
+        <div 
+          class="legend-category-item" 
+          v-for="category in expenseCategories" 
+          :key="category.id"
+        >
+          <div class="legend-category-row">
+            <div 
+              class="legend-category-header"
+              @click="$emit('toggle-category', category.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-small" 
+                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ category.name }}</span>
+            </div>
+            
+            <button 
+              v-if="category.children && category.children.length > 0"
+              class="legend-expand-btn"
+              @click.stop="$emit('toggle-category-expanded', category.id)"
+            >
+              <AppIcon 
+                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                size="small" 
+              />
+            </button>
+          </div>
+          
+          <div 
+            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+            class="legend-subcategories-list"
+          >
+            <div 
+              class="legend-subcat-item" 
+              v-for="subcat in category.children" 
+              :key="subcat.id"
+              @click="$emit('toggle-subcategory', subcat.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-tiny" 
+                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ subcat.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- INCOME Section -->
+    <div class="legend-section">
+      <div 
+        class="legend-type-header" 
+        @click="$emit('toggle-type', 'income')"
+      >
+        <span 
+          class="legend-indicator" 
+          :style="{ backgroundColor: isTypeVisible('income') ? getTypeColor('income') : '#fff' }"
+        ></span>
+        <span class="legend-type-name">INCOME</span>
+      </div>
+      
+      <div class="legend-categories-list">
+        <div 
+          class="legend-category-item" 
+          v-for="category in incomeCategories" 
+          :key="category.id"
+        >
+          <div class="legend-category-row">
+            <div 
+              class="legend-category-header"
+              @click="$emit('toggle-category', category.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-small" 
+                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ category.name }}</span>
+            </div>
+            
+            <button 
+              v-if="category.children && category.children.length > 0"
+              class="legend-expand-btn"
+              @click.stop="$emit('toggle-category-expanded', category.id)"
+            >
+              <AppIcon 
+                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                size="small" 
+              />
+            </button>
+          </div>
+          
+          <div 
+            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+            class="legend-subcategories-list"
+          >
+            <div 
+              class="legend-subcat-item" 
+              v-for="subcat in category.children" 
+              :key="subcat.id"
+              @click="$emit('toggle-subcategory', subcat.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-tiny" 
+                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ subcat.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TRANSFERS Section -->
+    <div class="legend-section">
+      <div 
+        class="legend-type-header" 
+        @click="$emit('toggle-type', 'transfers')"
+      >
+        <span 
+          class="legend-indicator" 
+          :style="{ backgroundColor: isTypeVisible('transfers') ? getTypeColor('transfers') : '#fff' }"
+        ></span>
+        <span class="legend-type-name">TRANSFERS</span>
+      </div>
+      
+      <div class="legend-categories-list">
+        <div 
+          class="legend-category-item" 
+          v-for="category in transferCategories" 
+          :key="category.id"
+        >
+          <div class="legend-category-row">
+            <div 
+              class="legend-category-header"
+              @click="$emit('toggle-category', category.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-small" 
+                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ category.name }}</span>
+            </div>
+            
+            <button 
+              v-if="category.children && category.children.length > 0"
+              class="legend-expand-btn"
+              @click.stop="$emit('toggle-category-expanded', category.id)"
+            >
+              <AppIcon 
+                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                size="small" 
+              />
+            </button>
+          </div>
+          
+          <div 
+            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+            class="legend-subcategories-list"
+          >
+            <div 
+              class="legend-subcat-item" 
+              v-for="subcat in category.children" 
+              :key="subcat.id"
+              @click="$emit('toggle-subcategory', subcat.id)"
+            >
+              <span 
+                class="legend-indicator legend-indicator-tiny" 
+                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+              ></span>
+              <span class="legend-item-name">{{ subcat.name }}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
+
+<script>
+import { useCategoryStore } from '@/stores/categories'
+import AppIcon from './AppIcon.vue'
+
+export default {
+  name: 'CategoryLegend',
+  components: {
+    AppIcon
+  },
+  props: {
+    expenseCategories: {
+      type: Array,
+      required: true
+    },
+    incomeCategories: {
+      type: Array,
+      required: true
+    },
+    transferCategories: {
+      type: Array,
+      required: true
+    },
+    visibleTypes: {
+      type: Array,
+      required: true
+    },
+    visibleCategories: {
+      type: Array,
+      required: true
+    },
+    visibleSubcategories: {
+      type: Array,
+      required: true
+    },
+    expandedCategories: {
+      type: Array,
+      required: true
+    }
+  },
+  emits: ['toggle-type', 'toggle-category', 'toggle-subcategory', 'toggle-category-expanded'],
+  setup(props) {
+    const categoryStore = useCategoryStore()
+    
+    function getTypeColor(typeId) {
+      const typeMap = {
+        'income': '#00C9A0',
+        'expenses': '#F17D99',
+        'transfers': '#F0C46C'
+      }
+      
+      const type = categoryStore.categories?.find(t => t.code === typeId || t.id === typeId)
+      if (type?.color) return type.color
+      
+      return typeMap[typeId] || '#94a3b8'
+    }
+    
+    function isTypeVisible(typeId) {
+      return props.visibleTypes.includes(typeId)
+    }
+    
+    function isCategoryVisible(categoryId) {
+      return props.visibleCategories.includes(categoryId)
+    }
+    
+    function isSubcategoryVisible(subcategoryId) {
+      return props.visibleSubcategories.includes(subcategoryId)
+    }
+    
+    function isCategoryExpanded(categoryId) {
+      return props.expandedCategories.includes(categoryId)
+    }
+    
+    return {
+      getTypeColor,
+      isTypeVisible,
+      isCategoryVisible,
+      isSubcategoryVisible,
+      isCategoryExpanded
+    }
+  }
+}
+</script>
+
+<style scoped>
+.timeline-legend-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--color-background);
+  border-radius: var(--radius);
+  padding: var(--gap-small);
+  max-height: 80vh;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
+.legend-section {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.legend-type-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-weight: 600;
+  font-size: var(--text-small);
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.legend-type-header:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-type-name {
+  user-select: none;
+}
+
+.legend-indicator {
+  width: 1rem;
+  height: 1rem;
+  border-radius: 0.25rem;
+  border: 2px solid var(--color-background-dark);
+  flex-shrink: 0;
+  transition: all 0.2s;
+}
+
+.legend-indicator-small {
+  width: 0.875rem;
+  height: 0.875rem;
+}
+
+.legend-indicator-tiny {
+  width: 0.625rem;
+  height: 0.625rem;
+}
+
+.legend-categories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.legend-category-item {
+  display: flex;
+  flex-direction: column;
+}
+
+.legend-category-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
+}
+
+.legend-category-header {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.8125rem;
+  flex: 1;
+}
+
+.legend-category-header:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-item-name {
+  user-select: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.legend-expand-btn {
+  width: 1.5rem;
+  height: 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-background-light);
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  flex-shrink: 0;
+  padding: 0;
+}
+
+.legend-expand-btn:hover {
+  background: var(--color-background-dark);
+}
+
+.legend-subcategories-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  padding-left: 1rem;
+  margin-top: 0.25rem;
+}
+
+.legend-subcat-item {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.25rem 0.375rem;
+  background: var(--color-background-light);
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  font-size: 0.75rem;
+}
+
+.legend-subcat-item:hover {
+  background: var(--color-background-dark);
+}
+
+@media (max-width: 64rem) {
+  .timeline-legend-sidebar {
+    width: 100%;
+    max-height: 300px;
+  }
+}
+
+@media (max-width: 48rem) {
+  .timeline-legend-sidebar {
+    padding: var(--gap-small);
+  }
+}
+
+@media (max-width: 30rem) {
+  .legend-type-header {
+    font-size: 0.75rem;
+    padding: 0.375rem 0.5rem;
+  }
+  
+  .legend-category-header {
+    font-size: 0.75rem;
+  }
+  
+  .legend-subcat-item {
+    font-size: 0.6875rem;
+  }
+}
+</style>
