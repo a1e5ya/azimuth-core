@@ -115,25 +115,25 @@ export default {
     
     const stats = computed(() => {
       const income = transactions.value
-        .filter(t => t.transaction_type === 'income')
+        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS')
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const expenses = transactions.value
-        .filter(t => t.transaction_type === 'expense')
+        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS')
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const transfers = transactions.value
-        .filter(t => t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS')
+        .filter(t => t.main_category === 'TRANSFERS')
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const incomeCount = transactions.value
-        .filter(t => t.transaction_type === 'income').length
+        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS').length
       
       const expenseCount = transactions.value
-        .filter(t => t.transaction_type === 'expense').length
+        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS').length
       
       const transferCount = transactions.value
-        .filter(t => t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS').length
+        .filter(t => t.main_category === 'TRANSFERS').length
       
       const netSavings = income - expenses
       
@@ -187,68 +187,157 @@ export default {
       return groupTransactionsByPeriod(transactions.value, currentGrouping.value)
     })
     
-    const chartSeries = computed(() => {
+const chartSeries = computed(() => {
       if (!timelineData.value.length) return []
       
       const series = []
       
+      // EXPENSES - Build as cumulative ranges
       if (isTypeVisible('expenses')) {
         const expensesByCategory = buildExpensesByCategory()
         
-        Object.entries(expensesByCategory)
+        const sortedExpenses = Object.entries(expensesByCategory)
           .sort((a, b) => {
             const sumA = Array.from(a[1].values()).reduce((s, v) => s + v, 0)
             const sumB = Array.from(b[1].values()).reduce((s, v) => s + v, 0)
             return sumB - sumA
           })
-          .forEach(([category, dateMap]) => {
-            const color = getCategoryColor(category)
+        
+        let cumulativeExpenses = new Map()
+        
+        sortedExpenses.forEach(([category, dateMap]) => {
+          const color = getCategoryColor(category)
+          
+          // Create line data for the TOP of this band
+          const lineData = timelineData.value.map(d => {
+            const amount = dateMap.get(d.date) || 0
+            const cumulative = cumulativeExpenses.get(d.date) || 0
+            const newCumulative = cumulative - amount
             
-            series.push({
-              name: category,
-              type: 'area',
-              data: timelineData.value.map(d => ({
-                x: d.date,
-                y: -(dateMap.get(d.date) || 0)
-              })),
-              color: color
-            })
+            cumulativeExpenses.set(d.date, newCumulative)
+            
+            return {
+              x: d.date,
+              y: newCumulative
+            }
           })
+          
+          series.push({
+            name: category,
+            type: 'area',  // Changed from 'line' to 'area'
+            data: lineData,
+            color: color
+          })
+        })
+        
       }
       
+      // INCOME - Build as cumulative ranges
       if (isTypeVisible('income')) {
         const incomeByCategory = buildIncomeByCategory()
+        
+        let cumulativeIncome = new Map()
         
         Object.entries(incomeByCategory).forEach(([category, dateMap]) => {
           const color = getCategoryColor(category)
           
-          series.push({
-            name: category,
-            type: 'area',
-            data: timelineData.value.map(d => ({
+          const lineData = timelineData.value.map(d => {
+            const amount = dateMap.get(d.date) || 0
+            const cumulative = cumulativeIncome.get(d.date) || 0
+            const newCumulative = cumulative + amount
+            
+            cumulativeIncome.set(d.date, newCumulative)
+            
+            return {
               x: d.date,
-              y: dateMap.get(d.date) || 0
-            })),
-            color: color
+              y: newCumulative
+            }
           })
-        })
-      }
-      
-      if (isTypeVisible('transfers')) {
-        const transfersByCategory = buildTransfersByCategory()
-        
-        Object.entries(transfersByCategory).forEach(([category, dateMap]) => {
-          const color = getCategoryColor(category)
           
           series.push({
             name: category,
-            type: 'area',
-            data: timelineData.value.map(d => ({
-              x: d.date,
-              y: dateMap.get(d.date) || 0
-            })),
+            type: 'area',  // Changed from 'line' to 'area'
+            data: lineData,
             color: color
           })
+        })
+        
+      }
+      
+      // TRANSFERS
+      if (isTypeVisible('transfers')) {
+        const transfersByCategory = buildTransfersByCategory()
+        
+        const positiveTransfers = {}
+        const negativeTransfers = {}
+        
+        Object.entries(transfersByCategory).forEach(([category, dateMap]) => {
+          positiveTransfers[category] = new Map()
+          negativeTransfers[category] = new Map()
+          
+          dateMap.forEach((amount, date) => {
+            if (amount >= 0) {
+              positiveTransfers[category].set(date, amount)
+            } else {
+              negativeTransfers[category].set(date, amount)
+            }
+          })
+        })
+        
+        // Positive transfers
+        let cumulativeTransfersPos = new Map()
+        Object.entries(positiveTransfers).forEach(([category, dateMap]) => {
+          if (Array.from(dateMap.values()).some(v => v > 0)) {
+            const color = getCategoryColor(category)
+            
+            const lineData = timelineData.value.map(d => {
+              const amount = dateMap.get(d.date) || 0
+              const cumulative = cumulativeTransfersPos.get(d.date) || 0
+              const newCumulative = cumulative + amount
+              
+              cumulativeTransfersPos.set(d.date, newCumulative)
+              
+              return {
+                x: d.date,
+                y: newCumulative
+              }
+            })
+            
+            series.push({
+              name: `${category} (In)`,
+              type: 'area',  // Changed from 'line' to 'area'
+              data: lineData,
+              color: color
+            })
+          }
+        })
+        
+        // Negative transfers
+        let cumulativeTransfersNeg = new Map()
+        Object.entries(negativeTransfers).forEach(([category, dateMap]) => {
+          if (Array.from(dateMap.values()).some(v => v < 0)) {
+            const color = getCategoryColor(category)
+            
+            const lineData = timelineData.value.map(d => {
+              const amount = dateMap.get(d.date) || 0
+              const cumulative = cumulativeTransfersNeg.get(d.date) || 0
+              const newCumulative = cumulative + amount
+              
+              cumulativeTransfersNeg.set(d.date, newCumulative)
+              
+              return {
+                x: d.date,
+                y: newCumulative
+              }
+            })
+            
+            series.push({
+              name: `${category} (Out)`,
+              type: 'area',  // Changed from 'line' to 'area'
+              data: lineData,
+              color: color
+            })
+          }
         })
       }
       
@@ -263,28 +352,27 @@ export default {
       
       chartSeries.value.forEach(series => {
         series.data.forEach(point => {
-          if (point.y > 0 && point.y > maxPositive) {
-            maxPositive = point.y
-          }
-          if (point.y < 0 && Math.abs(point.y) > maxNegative) {
-            maxNegative = Math.abs(point.y)
-          }
+          const values = Array.isArray(point.y) ? point.y : [point.y]
+          values.forEach(val => {
+            if (val > maxPositive) maxPositive = val
+            if (val < maxNegative) maxNegative = val
+          })
         })
       })
       
-      const maxValue = Math.max(maxPositive, maxNegative)
+      const maxValue = Math.max(maxPositive, Math.abs(maxNegative))
       return maxValue * 1.05
     })
     
-    const chartOptions = computed(() => {
+const chartOptions = computed(() => {
       const range = visibleDateRange.value
       
       return {
         chart: {
           id: 'timeline-main',
-          type: 'area',
+          type: 'area',  // Changed from 'line' to 'area'
           height: 500,
-          stacked: true,
+          stacked: false,
           toolbar: {
             show: false
           },
@@ -322,11 +410,11 @@ export default {
         },
         stroke: {
           curve: 'smooth',
-          width: 0
+          width: 1  // Thin border for areas
         },
         fill: {
           type: 'solid',
-          opacity: 0.8
+          opacity: 0.15  // Good visibility with slight transparency
         },
         legend: {
           show: false
@@ -591,13 +679,13 @@ export default {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
-        if (t.transaction_type === 'income') {
+        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense') {
+        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+        } else if (t.main_category === 'TRANSFERS') {
           period.transfers += amount
           period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
@@ -630,13 +718,13 @@ export default {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
-        if (t.transaction_type === 'income') {
+        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense') {
+        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+        } else if (t.main_category === 'TRANSFERS') {
           period.transfers += amount
           period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
@@ -670,13 +758,13 @@ export default {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
         
-        if (t.transaction_type === 'income') {
+        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense') {
+        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS') {
+        } else if (t.main_category === 'TRANSFERS') {
           period.transfers += amount
           period.transfersByCategory[category] = (period.transfersByCategory[category] || 0) + amount
         }
@@ -705,34 +793,59 @@ export default {
       return null
     }
     
-    function buildExpensesByCategory() {
+function buildExpensesByCategory() {
       const expensesByCategory = {}
+      const processedTransactions = new Set()
       
       transactions.value
-        .filter(t => t.transaction_type === 'expense')
+        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS')
         .forEach(t => {
+          if (processedTransactions.has(t.id)) return
+          
           const subcategoryName = t.csv_subcategory
           const categoryName = t.csv_category || 'Uncategorized'
+          const amount = Math.abs(parseFloat(t.amount))
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
           
-          let displayName = subcategoryName || categoryName
+          let displayName = categoryName
           let shouldInclude = true
           
           if (parentCategory) {
+            // Has parent category - check visibility
             if (!isCategoryVisible(parentCategory.id)) {
               shouldInclude = false
-            } else if (!isCategoryExpanded(parentCategory.id)) {
-              displayName = parentCategory.name
-            } else if (subcategoryName) {
-              const subcategoryId = findCategoryId(subcategoryName)
-              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
-                shouldInclude = false
+            } else {
+              if (isCategoryExpanded(parentCategory.id)) {
+                // Parent is expanded - show subcategory if visible
+                if (subcategoryName) {
+                  const subcategoryId = findCategoryId(subcategoryName)
+                  if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
+                    displayName = subcategoryName
+                  } else {
+                    shouldInclude = false
+                  }
+                } else {
+                  displayName = categoryName
+                }
+              } else {
+                // Parent is collapsed - show parent name
+                displayName = parentCategory.name
               }
+            }
+          } else {
+            // No parent found - check if this category itself is visible
+            const categoryId = findCategoryId(categoryName)
+            if (categoryId && isCategoryVisible(categoryId)) {
+              displayName = categoryName
+            } else {
+              shouldInclude = false
             }
           }
           
           if (!shouldInclude) return
+          
+          processedTransactions.add(t.id)
           
           if (!expensesByCategory[displayName]) {
             expensesByCategory[displayName] = new Map()
@@ -752,9 +865,10 @@ export default {
             key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
           }
           
-          const amount = Math.abs(parseFloat(t.amount))
-          
-          expensesByCategory[displayName].set(key, (expensesByCategory[displayName].get(key) || 0) + amount)
+          expensesByCategory[displayName].set(
+            key, 
+            (expensesByCategory[displayName].get(key) || 0) + amount
+          )
         })
       
       return expensesByCategory
@@ -762,32 +876,57 @@ export default {
     
     function buildIncomeByCategory() {
       const incomeByCategory = {}
+      const processedTransactions = new Set()
       
       transactions.value
-        .filter(t => t.transaction_type === 'income')
+        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS')
         .forEach(t => {
+          if (processedTransactions.has(t.id)) return
+          
           const subcategoryName = t.csv_subcategory
           const categoryName = t.csv_category || 'Income'
+          const amount = Math.abs(parseFloat(t.amount))
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
           
-          let displayName = subcategoryName || categoryName
+          let displayName = categoryName
           let shouldInclude = true
           
           if (parentCategory) {
+            // Has parent category - check visibility
             if (!isCategoryVisible(parentCategory.id)) {
               shouldInclude = false
-            } else if (!isCategoryExpanded(parentCategory.id)) {
-              displayName = parentCategory.name
-            } else if (subcategoryName) {
-              const subcategoryId = findCategoryId(subcategoryName)
-              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
-                shouldInclude = false
+            } else {
+              if (isCategoryExpanded(parentCategory.id)) {
+                // Parent is expanded - show subcategory if visible
+                if (subcategoryName) {
+                  const subcategoryId = findCategoryId(subcategoryName)
+                  if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
+                    displayName = subcategoryName
+                  } else {
+                    shouldInclude = false
+                  }
+                } else {
+                  displayName = categoryName
+                }
+              } else {
+                // Parent is collapsed - show parent name
+                displayName = parentCategory.name
               }
+            }
+          } else {
+            // No parent found - check if this category itself is visible
+            const categoryId = findCategoryId(categoryName)
+            if (categoryId && isCategoryVisible(categoryId)) {
+              displayName = categoryName
+            } else {
+              shouldInclude = false
             }
           }
           
           if (!shouldInclude) return
+          
+          processedTransactions.add(t.id)
           
           if (!incomeByCategory[displayName]) {
             incomeByCategory[displayName] = new Map()
@@ -807,9 +946,10 @@ export default {
             key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
           }
           
-          const amount = Math.abs(parseFloat(t.amount))
-          
-          incomeByCategory[displayName].set(key, (incomeByCategory[displayName].get(key) || 0) + amount)
+          incomeByCategory[displayName].set(
+            key,
+            (incomeByCategory[displayName].get(key) || 0) + amount
+          )
         })
       
       return incomeByCategory
@@ -817,32 +957,57 @@ export default {
     
     function buildTransfersByCategory() {
       const transfersByCategory = {}
+      const processedTransactions = new Set()
       
       transactions.value
-        .filter(t => t.transaction_type === 'transfer' || t.main_category === 'TRANSFERS')
+        .filter(t => t.main_category === 'TRANSFERS')
         .forEach(t => {
+          if (processedTransactions.has(t.id)) return
+          
           const subcategoryName = t.csv_subcategory
           const categoryName = t.csv_category || 'Transfer'
+          const amount = parseFloat(t.amount)
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
           
-          let displayName = subcategoryName || categoryName
+          let displayName = categoryName
           let shouldInclude = true
           
           if (parentCategory) {
+            // Has parent category - check visibility
             if (!isCategoryVisible(parentCategory.id)) {
               shouldInclude = false
-            } else if (!isCategoryExpanded(parentCategory.id)) {
-              displayName = parentCategory.name
-            } else if (subcategoryName) {
-              const subcategoryId = findCategoryId(subcategoryName)
-              if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
-                shouldInclude = false
+            } else {
+              if (isCategoryExpanded(parentCategory.id)) {
+                // Parent is expanded - show subcategory if visible
+                if (subcategoryName) {
+                  const subcategoryId = findCategoryId(subcategoryName)
+                  if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
+                    displayName = subcategoryName
+                  } else {
+                    shouldInclude = false
+                  }
+                } else {
+                  displayName = categoryName
+                }
+              } else {
+                // Parent is collapsed - show parent name
+                displayName = parentCategory.name
               }
+            }
+          } else {
+            // No parent found - check if this category itself is visible
+            const categoryId = findCategoryId(categoryName)
+            if (categoryId && isCategoryVisible(categoryId)) {
+              displayName = categoryName
+            } else {
+              shouldInclude = false
             }
           }
           
           if (!shouldInclude) return
+          
+          processedTransactions.add(t.id)
           
           if (!transfersByCategory[displayName]) {
             transfersByCategory[displayName] = new Map()
@@ -862,9 +1027,10 @@ export default {
             key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
           }
           
-          const amount = Math.abs(parseFloat(t.amount))
-          
-          transfersByCategory[displayName].set(key, (transfersByCategory[displayName].get(key) || 0) + amount)
+          transfersByCategory[displayName].set(
+            key,
+            (transfersByCategory[displayName].get(key) || 0) + amount
+          )
         })
       
       return transfersByCategory
@@ -893,20 +1059,29 @@ export default {
     function getCategoryColor(categoryName) {
       if (!categoryStore.categories) return '#94a3b8'
       
+      // Check all categories and subcategories
       for (const type of categoryStore.categories) {
         if (type.children) {
           for (const cat of type.children) {
-            if (cat.name === categoryName) return cat.color || '#94a3b8'
+            // Check if this is the category we're looking for
+            if (cat.name === categoryName) {
+              return cat.color || '#94a3b8'
+            }
             
+            // Check subcategories
             if (cat.children) {
               for (const subcat of cat.children) {
-                if (subcat.name === categoryName) return subcat.color || cat.color || '#94a3b8'
+                if (subcat.name === categoryName) {
+                  // Subcategory found - return its color or parent color
+                  return subcat.color || cat.color || '#94a3b8'
+                }
               }
             }
           }
         }
       }
       
+      // If not found in store, return default color
       return '#94a3b8'
     }
     
@@ -1090,6 +1265,9 @@ export default {
   }
 }
 </script>
+
+
+
 
 <style>
 .timeline-container {
