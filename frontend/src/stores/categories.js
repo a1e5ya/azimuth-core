@@ -50,7 +50,6 @@ export const useCategoryStore = defineStore('categories', () => {
       
       categories.value = response.data.tree || []
       console.log('✅ Categories loaded:', categories.value.length)
-      console.log('🎨 First category color:', categories.value[0]?.color)
       
     } catch (err) {
       console.error('❌ Failed to load categories:', err)

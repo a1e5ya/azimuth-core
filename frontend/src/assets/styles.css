@@ -71,14 +71,14 @@ body, #app {
 }
 
 @keyframes full-waves {
-  0% { background: #fff5f0; }
-  15% { background: #e2d6fa; }
-  30% { background: #fff5f0; }
-  45% { background: #d5e8ff; }
-  60% { background: #fff9ed; }
-  75% { background: #f0fde0; }
-  90% { background: #e9e8fc; }
-  100% { background: #fff5f0; }
+  0% { background: rgba(255, 245, 240, 0.5); }
+  15% { background: rgba(237, 228, 255, 0.3); }
+  30% { background: rgba(255, 245, 240, 0.5); }
+  45% { background: rgba(213, 232, 255, 0.5); }
+  60% { background: rgba(255, 249, 237, 0.5); }
+  75% { background: rgba(240, 253, 224, 0.5); }
+  90% { background: rgba(233, 232, 252, 0.5); }
+  100% { background: rgba(255, 245, 240, 0.5); }
 }
 
 #app {

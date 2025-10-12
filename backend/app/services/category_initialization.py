@@ -65,14 +65,14 @@ DEFAULT_CATEGORIES = {
         'id': 'expenses',
         'name': 'EXPENSES',
         'icon': 'apps-delete',
-        'color': '#F17D99',
+        'color': '#9B7EDE',
         'categories': [
             {
                 'id': 'food',
                 'name': 'Food',
                 'icon': 'coffee',
-                'color': '#F17D99',
-                'subcolors': ['#F9D1DD', '#F7C3D2', '#F5B5C7', '#FBDFE8', '#F9EAF0', '#F6DCE2'],
+                'color': '#9B7EDE',
+                'subcolors': ['#D5C9F0', '#C7B8E8', '#B9A7E0', '#E3DBF7', '#EBE5F9', '#F3EFFB'],
                 'subcategories': [
                     {'id': 'cafes-coffee', 'name': 'Cafes & Coffee', 'icon': 'coffee'},
                     {'id': 'groceries', 'name': 'Groceries', 'icon': 'salad'},
@@ -84,8 +84,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'family',
                 'name': 'Family',
                 'icon': 'kite',
-                'color': '#9C4257',
-                'subcolors': ['#D8C5C9', '#BF9FA6', '#E0D7D9', '#A87080', '#C9AEB3', '#E5D8DA'],
+                'color': '#7B68B8',
+                'subcolors': ['#C9C1DC', '#B8ACCE', '#A697C0', '#D7D0E6', '#E5E0F0', '#F0EDF7'],
                 'subcategories': [
                     {'id': 'sports-activities', 'name': 'Sports Activities', 'icon': 'ice-skate'},
                     {'id': 'child-activities', 'name': "Child's Activities", 'icon': 'ferris-wheel'},
@@ -96,8 +96,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'housing-utilities',
                 'name': 'Housing & Utilities',
                 'icon': 'key',
-                'color': '#7A4F6A',
-                'subcolors': ['#D6CBD2', '#C0A8B4', '#E3DDE1', '#9E7A8E', '#B398A7', '#C7B8C0'],
+                'color': '#6A5B9B',
+                'subcolors': ['#C3BDD6', '#AFA6C9', '#9B8FBC', '#D1CDDF', '#DFDCe8', '#EDEAF3'],
                 'subcategories': [
                     {'id': 'monthly-rent', 'name': 'Monthly Rent', 'icon': 'key'},
                     {'id': 'internet-phone', 'name': 'Internet & Phone', 'icon': 'signal-alt-2'},
@@ -108,8 +108,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'shopping',
                 'name': 'Shopping',
                 'icon': 'shopping-cart',
-                'color': '#E85D9A',
-                'subcolors': ['#F5C5DD', '#F2B7D5', '#F8D3E6', '#EFABCD', '#FADBED', '#EC9EC5'],
+                'color': '#BA8ED9',
+                'subcolors': ['#E3CFF2', '#D9BFED', '#CFAFE8', '#ECDFF7', '#F5EBF9', '#F9F3FB'],
                 'subcategories': [
                     {'id': 'household', 'name': 'Household', 'icon': 'soap'},
                     {'id': 'electronics', 'name': 'Electronics', 'icon': 'gamepad'},
@@ -123,8 +123,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'leisure-culture',
                 'name': 'Leisure & Culture',
                 'icon': 'ticket',
-                'color': '#D96BB8',
-                'subcolors': ['#F0C8E3', '#EBBADB', '#F5D6EC', '#E5ACD3', '#F8E2F1', '#FCEAF8'],
+                'color': '#8B6FC4',
+                'subcolors': ['#CDC1E3', '#BEAED9', '#AF9BCF', '#DBD1ED', '#E9E0F5', '#F4EEFC'],
                 'subcategories': [
                     {'id': 'music', 'name': 'Music', 'icon': 'guitar'},
                     {'id': 'social-activities', 'name': 'Social Activities', 'icon': 'ticket'},
@@ -137,8 +137,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'health',
                 'name': 'Health',
                 'icon': 'stethoscope',
-                'color': '#C45151',
-                'subcolors': ['#EBD1D1', '#E0BCBC', '#F4E0E0', '#F0D8D8', '#D89999', '#E3B6B6'],
+                'color': '#7A9FD9',
+                'subcolors': ['#C9DCF2', '#B5CEEC', '#A1C0E6', '#D7E6F7', '#E5F0FB', '#F2F7FD'],
                 'subcategories': [
                     {'id': 'pharmacy', 'name': 'Pharmacy', 'icon': 'band-aid'},
                     {'id': 'medical-services', 'name': 'Medical Services', 'icon': 'stethoscope'},
@@ -150,8 +150,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'transport',
                 'name': 'Transport',
                 'icon': 'car',
-                'color': '#F57D65',
-                'subcolors': ['#FBD8D1', '#F9C3B9', '#F7AEAA', '#FCF0EC', '#FFF4F2', '#FCD6CE'],
+                'color': '#6B8FCC',
+                'subcolors': ['#C1D3EB', '#ADC4E3', '#99B5DB', '#CFE1F3', '#DDEAF7', '#EAF2FB'],
                 'subcategories': [
                     {'id': 'vehicle-registration', 'name': 'Vehicle Registration & Tax', 'icon': 'car'},
                     {'id': 'maintenance-repairs', 'name': 'Maintenance & Repairs', 'icon': 'dashboard'},
@@ -164,8 +164,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'insurance',
                 'name': 'Insurance',
                 'icon': 'document-signed',
-                'color': '#D15842',
-                'subcolors': ['#F0D0C9', '#E7B9B0', '#F7E3DE', '#F2C7BB', '#E3A398', '#ECC9C1'],
+                'color': '#5C7FBF',
+                'subcolors': ['#BBC9E3', '#A7B8DB', '#93A7D3', '#C9D7ED', '#D7E3F3', '#E5EFF9'],
                 'subcategories': [
                     {'id': 'health-insurance', 'name': 'Health Insurance', 'icon': 'syringe'},
                     {'id': 'home-insurance', 'name': 'Home Insurance', 'icon': 'document-signed'},
@@ -176,8 +176,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'financial-management',
                 'name': 'Financial Management',
                 'icon': 'diploma',
-                'color': '#D16345',
-                'subcolors': ['#F0D2CB', '#E8C2B8', '#F5E0DB', '#F7E6E1', '#E0A79B', '#ECC9C1'],
+                'color': '#D9A8A8',
+                'subcolors': ['#F0DCDC', '#E8CCCC', '#E0BCBC', '#F7E6E6', '#FAEAEA', '#FCF3F3'],
                 'subcategories': [
                     {'id': 'bureaucracy', 'name': 'Bureaucracy', 'icon': 'diploma'},
                     {'id': 'investment-accounts', 'name': 'Investment Accounts', 'icon': 'earnings'}
@@ -187,8 +187,8 @@ DEFAULT_CATEGORIES = {
                 'id': 'financial-services',
                 'name': 'Financial Services',
                 'icon': 'bank',
-                'color': '#B85C42',
-                'subcolors': ['#E8D3CC', '#DBC1B7', '#F0E7E3', '#CFA08D', '#E6C9BF', '#F2E8E4'],
+                'color': '#C49999',
+                'subcolors': ['#E8D6D6', '#DFC5C5', '#D6B4B4', '#F0E2E2', '#F5EAEA', '#FAF2F2'],
                 'subcategories': [
                     {'id': 'withdrawal', 'name': 'Withdrawal', 'icon': 'euro'},
                     {'id': 'payment-provider', 'name': 'Payment Provider', 'icon': 'shopping-cart'},
