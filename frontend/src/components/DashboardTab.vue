@@ -1,54 +1,48 @@
 <template>
   <div class="tab-content">
-    <!-- View Mode Toggle -->
-    <div class="dashboard-header">
-      <div class="view-toggle">
-        <button 
-          class="btn btn-small"
-          :class="{ 'btn-active': viewMode === 'monthly' }"
-          @click="viewMode = 'monthly'"
-        >
-          Monthly View
-        </button>
-        <button 
-          class="btn btn-small"
-          :class="{ 'btn-active': viewMode === 'yearly' }"
-          @click="viewMode = 'yearly'"
-        >
-          Yearly View
-        </button>
-      </div>
-    </div>
+<div class="stats-overview">
 
-    <!-- KPI Cards -->
+    <!-- KPI Cards - Updated styling with background colors -->
     <div class="grid grid-4">
-      <div class="container stat-card">
+      <div 
+        class="container stat-card"
+        :style="{ backgroundColor: hexToRgba(getTypeColor('expenses'), 0.1) }"
+      >
         <div class="stat-label">{{ viewMode === 'monthly' ? 'This Month' : 'This Year' }} Spending</div>
-        <div class="stat-value negative">{{ formatCurrency(kpis.currentPeriodSpending) }}</div>
+        <div class="stat-value">{{ formatCurrency(kpis.currentPeriodSpending) }}</div>
         <div class="stat-detail" :class="spendingTrendClass">
           {{ spendingTrendText }}
         </div>
       </div>
 
-      <div class="container stat-card">
+      <div 
+        class="container stat-card"
+        :style="{ backgroundColor: hexToRgba(getTypeColor('income'), 0.1) }"
+      >
         <div class="stat-label">{{ viewMode === 'monthly' ? 'This Month' : 'This Year' }} Income</div>
-        <div class="stat-value positive">{{ formatCurrency(kpis.currentPeriodIncome) }}</div>
+        <div class="stat-value">{{ formatCurrency(kpis.currentPeriodIncome) }}</div>
         <div class="stat-detail">
           {{ kpis.incomeTransactionCount }} transactions
         </div>
       </div>
 
-      <div class="container stat-card">
+      <div 
+        class="container stat-card"
+        :style="{ backgroundColor: hexToRgba(getTypeColor('transfers'), 0.1) }"
+      >
         <div class="stat-label">{{ viewMode === 'monthly' ? 'This Month' : 'This Year' }} Transfers</div>
-        <div class="stat-value neutral">{{ formatCurrency(kpis.currentPeriodTransfers) }}</div>
+        <div class="stat-value">{{ formatCurrency(kpis.currentPeriodTransfers) }}</div>
         <div class="stat-detail">
           {{ kpis.transferTransactionCount }} transfers
         </div>
       </div>
 
-      <div class="container stat-card">
+      <div 
+        class="container stat-card"
+        :style="{ backgroundColor: kpis.netSavings >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }"
+      >
         <div class="stat-label">Net Savings</div>
-        <div class="stat-value" :class="kpis.netSavings >= 0 ? 'positive' : 'negative'">
+        <div class="stat-value">
           {{ formatCurrency(kpis.netSavings) }}
         </div>
         <div class="stat-detail">
@@ -57,10 +51,31 @@
       </div>
     </div>
 
-    <!-- Spending Trend Chart -->
+        <!-- View Mode Toggle -->
+<div class="dashboard-header">
+      <div class="view-toggle">
+        <button 
+          class="btn btn-small"
+          :class="{ 'btn-active': viewMode === 'monthly' }"
+          @click="viewMode = 'monthly'"
+        >
+          Monthly 
+        </button>
+        <button 
+          class="btn btn-small"
+          :class="{ 'btn-active': viewMode === 'yearly' }"
+          @click="viewMode = 'yearly'"
+        >
+          Yearly 
+        </button>
+      </div>
+      </div>
+  </div>
+
+    <!-- Income vs Expenses Trend Chart - Timeline Style -->
     <div class="container">
       <div class="chart-header">
-        <h3>Spending Trend</h3>
+        <h3>Income vs Expenses Trend</h3>
       </div>
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
@@ -74,15 +89,16 @@
         <apexchart
           type="area"
           height="300"
-          :options="chartOptions"
-          :series="chartSeries"
+          :options="timelineChartOptions"
+          :series="timelineChartSeries"
         />
       </div>
+
     </div>
 
-    <!-- Two Column Layout -->
+    <!-- Two Column Layout: Top Spending Categories + Accounts Overview -->
     <div class="grid grid-2">
-      <!-- Top Spending Categories -->
+      <!-- Top Spending Categories - No Transfers -->
       <div class="container">
         <h3 style="margin-bottom: var(--gap-standard);">Top Spending Categories ({{ viewMode === 'monthly' ? 'This Month' : 'This Year' }})</h3>
         <div v-if="topCategories.length === 0" class="empty-state-small">
@@ -102,52 +118,53 @@
         </div>
       </div>
 
-      <!-- Recent Activity -->
+      <!-- Accounts Overview by Owner and Type -->
       <div class="container">
-        <h3 style="margin-bottom: var(--gap-standard);">Recent Activity</h3>
-        <div v-if="recentTransactions.length === 0" class="empty-state-small">
-          No recent transactions
+        <h3 style="margin-bottom: var(--gap-standard);">Accounts Overview ({{ viewMode === 'monthly' ? 'This Month' : 'This Year' }})</h3>
+        <div v-if="loading" class="loading-state">
+          <div class="loading-spinner">⟳</div>
+          <div>Loading data...</div>
         </div>
-        <div v-else class="transaction-list">
-          <div v-for="tx in recentTransactions" :key="tx.id" class="transaction-item">
-            <div class="transaction-date">{{ formatDate(tx.posted_at) }}</div>
-            <div class="transaction-details">
-              <div class="transaction-merchant">{{ tx.merchant || 'Unknown' }}</div>
-              <div class="transaction-category">{{ tx.csv_category || tx.main_category || 'Uncategorized' }}</div>
-            </div>
-            <div class="transaction-amount" :class="getAmountClass(tx)">
-              {{ formatCurrency(tx.amount) }}
-            </div>
-          </div>
+        <div v-else-if="accountStats.length === 0" class="empty-state-small">
+          No account data
         </div>
-      </div>
-    </div>
-
-    <!-- Monthly Comparison -->
-    <div class="container">
-      <div class="chart-header">
-        <h3>{{ viewMode === 'monthly' ? 'Monthly' : 'Yearly' }} Comparison</h3>
-      </div>
-      <div v-if="monthlyComparison.length === 0" class="empty-state-small">
-        Not enough data for comparison
-      </div>
-      <div v-else class="comparison-grid">
-        <div v-for="item in monthlyComparison" :key="item.period" class="comparison-item">
-          <div class="comparison-month">{{ item.periodName }}</div>
-          <div class="comparison-stats">
-            <div class="comparison-stat">
-              <span class="comparison-label">Spending:</span>
-              <span class="comparison-value negative">{{ formatCurrency(item.spending) }}</span>
+        <div v-else class="accounts-list">
+          <div 
+            v-for="account in accountStats" 
+            :key="account.key" 
+            class="account-card-compact"
+          >
+            <div class="account-header-compact">
+              <div class="account-title-compact">
+                <AppIcon name="credit-card" size="small" />
+                <div>
+                  <div class="account-owner-compact">{{ account.owner || 'Unknown' }}</div>
+                  <div class="account-type-compact">{{ account.accountType || 'Unknown Type' }}</div>
+                </div>
+              </div>
             </div>
-            <div class="comparison-stat">
-              <span class="comparison-label">Income:</span>
-              <span class="comparison-value positive">{{ formatCurrency(item.income) }}</span>
-            </div>
-            <div class="comparison-stat">
-              <span class="comparison-label">Net:</span>
-              <span class="comparison-value" :class="item.net >= 0 ? 'positive' : 'negative'">
-                {{ formatCurrency(item.net) }}
-              </span>
+            <div class="account-stats-compact">
+              <div class="account-stat-compact">
+                <span class="account-stat-label-compact">Income:</span>
+                <span class="account-stat-value-compact positive">{{ formatCurrency(account.income) }}</span>
+              </div>
+              <div class="account-stat-compact">
+                <span class="account-stat-label-compact">Expenses:</span>
+                <span class="account-stat-value-compact negative">{{ formatCurrency(account.expenses) }}</span>
+              </div>
+              <div class="account-stat-compact">
+                <span class="account-stat-label-compact">Transfers:</span>
+                <span class="account-stat-value-compact neutral">{{ formatCurrency(account.transfers) }}</span>
+              </div>
+              <div class="account-stat-compact account-stat-total-compact">
+                <span class="account-stat-label-compact">Net:</span>
+                <span 
+                  class="account-stat-value-compact" 
+                  :class="account.net >= 0 ? 'positive' : 'negative'"
+                >
+                  {{ formatCurrency(account.net) }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
@@ -155,19 +172,22 @@
     </div>
   </div>
 </template>
-
 <script>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
+import { useCategoryStore } from '@/stores/categories'
 import VueApexCharts from 'vue3-apexcharts'
+import AppIcon from './AppIcon.vue'
 
 export default {
   name: 'DashboardTab',
   components: {
-    apexchart: VueApexCharts
+    apexchart: VueApexCharts,
+    AppIcon
   },
   setup() {
     const authStore = useAuthStore()
+    const categoryStore = useCategoryStore()
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     
     const loading = ref(false)
@@ -221,26 +241,24 @@ export default {
         const txMonth = txDate.getMonth()
         const txYear = txDate.getFullYear()
         const amount = Math.abs(parseFloat(tx.amount))
-        const txType = (tx.transaction_type || '').toLowerCase()
-        const mainCategory = (tx.main_category || '').toLowerCase()
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
         
         if (txMonth === currentMonth && txYear === currentYear) {
           currentPeriodTransactions++
           
-          // Check if it's a transfer by type or main_category
-          if (txType === 'transfer' || txType === 'transfers' || mainCategory === 'transfers') {
+          if (mainCategory === 'TRANSFERS') {
             currentPeriodTransfers += amount
             transferTransactionCount++
-          } else if (txType === 'expense') {
+          } else if (mainCategory === 'EXPENSES') {
             currentPeriodSpending += amount
-          } else if (txType === 'income') {
+          } else if (mainCategory === 'INCOME') {
             currentPeriodIncome += amount
             incomeTransactionCount++
           }
         }
         
         if (txMonth === lastMonth && txYear === lastMonthYear) {
-          if (txType === 'expense') {
+          if (mainCategory === 'EXPENSES') {
             lastPeriodSpending += amount
           }
         }
@@ -281,26 +299,24 @@ export default {
         const txDate = new Date(tx.posted_at)
         const txYear = txDate.getFullYear()
         const amount = Math.abs(parseFloat(tx.amount))
-        const txType = (tx.transaction_type || '').toLowerCase()
-        const mainCategory = (tx.main_category || '').toLowerCase()
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
         
         if (txYear === currentYear) {
           currentPeriodTransactions++
           
-          // Check if it's a transfer by type or main_category
-          if (txType === 'transfer' || txType === 'transfers' || mainCategory === 'transfers') {
+          if (mainCategory === 'TRANSFERS') {
             currentPeriodTransfers += amount
             transferTransactionCount++
-          } else if (txType === 'expense') {
+          } else if (mainCategory === 'EXPENSES') {
             currentPeriodSpending += amount
-          } else if (txType === 'income') {
+          } else if (mainCategory === 'INCOME') {
             currentPeriodIncome += amount
             incomeTransactionCount++
           }
         }
         
         if (txYear === lastYear) {
-          if (txType === 'expense') {
+          if (mainCategory === 'EXPENSES') {
             lastPeriodSpending += amount
           }
         }
@@ -324,6 +340,61 @@ export default {
         transferTransactionCount
       }
     }
+    
+    const accountStats = computed(() => {
+      if (transactions.value.length === 0) return []
+      
+      const accountMap = new Map()
+      const now = new Date()
+      const currentPeriod = viewMode.value === 'monthly' 
+        ? { month: now.getMonth(), year: now.getFullYear() }
+        : { year: now.getFullYear() }
+      
+      transactions.value.forEach(tx => {
+        const txDate = new Date(tx.posted_at)
+        const isCurrentPeriod = viewMode.value === 'monthly'
+          ? txDate.getMonth() === currentPeriod.month && txDate.getFullYear() === currentPeriod.year
+          : txDate.getFullYear() === currentPeriod.year
+        
+        if (!isCurrentPeriod) return
+        
+        // Try multiple field names for account type
+        const owner = tx.owner || 'Unknown'
+        const accountType = tx.csv_account_type || tx.account_type || tx.Account_Type || 'Unknown Type'
+        const key = `${owner}|${accountType}`
+        
+        if (!accountMap.has(key)) {
+          accountMap.set(key, {
+            key,
+            owner,
+            accountType,
+            income: 0,
+            expenses: 0,
+            transfers: 0,
+            net: 0
+          })
+        }
+        
+        const account = accountMap.get(key)
+        const amount = Math.abs(parseFloat(tx.amount))
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
+        
+        if (mainCategory === 'INCOME') {
+          account.income += amount
+        } else if (mainCategory === 'EXPENSES') {
+          account.expenses += amount
+        } else if (mainCategory === 'TRANSFERS') {
+          account.transfers += amount
+        }
+      })
+      
+      const accounts = Array.from(accountMap.values())
+      accounts.forEach(account => {
+        account.net = account.income - account.expenses
+      })
+      
+      return accounts.sort((a, b) => b.net - a.net)
+    })
     
     const spendingTrendClass = computed(() => {
       const diff = kpis.value.currentPeriodSpending - kpis.value.lastPeriodSpending
@@ -361,7 +432,9 @@ export default {
         : { year: now.getFullYear() }
       
       transactions.value.forEach(tx => {
-        if (tx.transaction_type !== 'expense') return
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
+        // Only count EXPENSES, exclude TRANSFERS
+        if (mainCategory !== 'EXPENSES') return
         
         const txDate = new Date(tx.posted_at)
         const isCurrentPeriod = viewMode.value === 'monthly'
@@ -370,7 +443,7 @@ export default {
         
         if (!isCurrentPeriod) return
         
-        const category = tx.csv_category || tx.main_category || 'Uncategorized'
+        const category = tx.csv_category || 'Uncategorized'
         const amount = Math.abs(parseFloat(tx.amount))
         
         categoryTotals[category] = (categoryTotals[category] || 0) + amount
@@ -387,21 +460,135 @@ export default {
         .slice(0, 5)
     })
     
-    const recentTransactions = computed(() => {
-      return [...transactions.value]
-        .sort((a, b) => new Date(b.posted_at) - new Date(a.posted_at))
-        .slice(0, 8)
+    const timelineChartSeries = computed(() => {
+      if (chartData.value.length === 0) return []
+      
+      const data = viewMode.value === 'monthly' ? chartData.value : yearlyChartData.value
+      
+      return [
+        {
+          name: 'Income',
+          data: data.map(d => ({
+            x: new Date(d.period + '-01').getTime(),
+            y: d.income
+          }))
+        },
+        {
+          name: 'Expenses',
+          data: data.map(d => ({
+            x: new Date(d.period + '-01').getTime(),
+            y: d.spending
+          }))
+        }
+      ]
     })
     
-    const monthlyComparison = computed(() => {
-      if (transactions.value.length === 0) return []
-      
-      const data = viewMode.value === 'monthly' ? getMonthlyData() : getYearlyData()
-      
-      return data
-        .sort((a, b) => b.period.localeCompare(a.period))
-        .slice(0, 6)
-    })
+    const timelineChartOptions = computed(() => ({
+      chart: {
+        type: 'area',
+        height: 300,
+        stacked: false,
+        toolbar: {
+          show: false
+        },
+        zoom: {
+          enabled: false
+        },
+        animations: {
+          enabled: true,
+          easing: 'easeinout',
+          speed: 800
+        }
+      },
+      dataLabels: {
+        enabled: false
+      },
+      stroke: {
+        curve: 'smooth',
+        width: 2
+      },
+      fill: {
+        type: 'gradient',
+        gradient: {
+          opacityFrom: 0.4,
+          opacityTo: 0.1,
+          stops: [0, 90, 100]
+        }
+      },
+      legend: {
+        position: 'top',
+        horizontalAlign: 'left',
+        fontSize: '14px',
+        fontWeight: 500
+      },
+      grid: {
+        borderColor: '#e5e7eb',
+        strokeDashArray: 4,
+        xaxis: {
+          lines: {
+            show: true
+          }
+        },
+        yaxis: {
+          lines: {
+            show: true
+          }
+        }
+      },
+      xaxis: {
+        type: 'datetime',
+        labels: {
+          format: 'MMM yyyy',
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          }
+        },
+        axisBorder: {
+          show: true,
+          color: '#e5e7eb'
+        },
+        axisTicks: {
+          show: true,
+          color: '#e5e7eb'
+        }
+      },
+      yaxis: {
+        title: {
+          text: 'Amount (€)',
+          style: {
+            color: '#6b7280',
+            fontSize: '12px',
+            fontWeight: 500
+          }
+        },
+        labels: {
+          formatter: (val) => '€' + Math.round(val).toLocaleString(),
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          }
+        }
+      },
+      tooltip: {
+        shared: true,
+        intersect: false,
+        x: {
+          format: 'MMM yyyy'
+        },
+        y: {
+          formatter: (val) => '€' + val.toFixed(2)
+        },
+        theme: 'light'
+      },
+      colors: ['#22c55e', '#ef4444'],
+      markers: {
+        size: 0,
+        hover: {
+          size: 5
+        }
+      }
+    }))
     
     const yearlyChartData = computed(() => {
       if (transactions.value.length === 0) return []
@@ -409,6 +596,10 @@ export default {
       const yearlyData = {}
       
       transactions.value.forEach(tx => {
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
+        // Exclude TRANSFERS from chart
+        if (mainCategory === 'TRANSFERS') return
+        
         const date = new Date(tx.posted_at)
         const yearKey = date.getFullYear().toString()
         
@@ -422,9 +613,9 @@ export default {
         
         const amount = Math.abs(parseFloat(tx.amount))
         
-        if (tx.transaction_type === 'expense') {
+        if (mainCategory === 'EXPENSES') {
           yearlyData[yearKey].spending += amount
-        } else if (tx.transaction_type === 'income') {
+        } else if (mainCategory === 'INCOME') {
           yearlyData[yearKey].income += amount
         }
       })
@@ -433,159 +624,12 @@ export default {
         .sort((a, b) => a.period.localeCompare(b.period))
     })
     
-    function getMonthlyData() {
-      const monthlyData = {}
-      
-      transactions.value.forEach(tx => {
-        const date = new Date(tx.posted_at)
-        const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
-        
-        if (!monthlyData[monthKey]) {
-          monthlyData[monthKey] = {
-            period: monthKey,
-            spending: 0,
-            income: 0,
-            net: 0
-          }
-        }
-        
-        const amount = Math.abs(parseFloat(tx.amount))
-        
-        if (tx.transaction_type === 'expense') {
-          monthlyData[monthKey].spending += amount
-        } else if (tx.transaction_type === 'income') {
-          monthlyData[monthKey].income += amount
-        }
-      })
-      
-      return Object.values(monthlyData)
-        .map(month => ({
-          ...month,
-          net: month.income - month.spending,
-          periodName: new Date(month.period + '-01').toLocaleDateString('en-US', {
-            month: 'short',
-            year: 'numeric'
-          })
-        }))
-    }
-    
-    function getYearlyData() {
-      const yearlyData = {}
-      
-      transactions.value.forEach(tx => {
-        const date = new Date(tx.posted_at)
-        const yearKey = date.getFullYear().toString()
-        
-        if (!yearlyData[yearKey]) {
-          yearlyData[yearKey] = {
-            period: yearKey,
-            spending: 0,
-            income: 0,
-            net: 0
-          }
-        }
-        
-        const amount = Math.abs(parseFloat(tx.amount))
-        
-        if (tx.transaction_type === 'expense') {
-          yearlyData[yearKey].spending += amount
-        } else if (tx.transaction_type === 'income') {
-          yearlyData[yearKey].income += amount
-        }
-      })
-      
-      return Object.values(yearlyData)
-        .map(year => ({
-          ...year,
-          net: year.income - year.spending,
-          periodName: year.period
-        }))
-    }
-    
-    const chartSeries = computed(() => {
-      if (chartData.value.length === 0) return []
-      
-      const data = viewMode.value === 'monthly' ? chartData.value : yearlyChartData.value
-      
-      return [
-        {
-          name: 'Spending',
-          data: data.map(d => ({
-            x: new Date(d.period + '-01').getTime(),
-            y: d.spending
-          }))
-        },
-        {
-          name: 'Income',
-          data: data.map(d => ({
-            x: new Date(d.period + '-01').getTime(),
-            y: d.income
-          }))
-        }
-      ]
-    })
-    
-    const chartOptions = computed(() => ({
-      chart: {
-        type: 'area',
-        height: 300,
-        toolbar: {
-          show: false
-        },
-        zoom: {
-          enabled: false
-        }
-      },
-      dataLabels: {
-        enabled: false
-      },
-      stroke: {
-        curve: 'smooth',
-        width: 2
-      },
-      fill: {
-        type: 'gradient',
-        gradient: {
-          opacityFrom: 0.6,
-          opacityTo: 0.1
-        }
-      },
-      legend: {
-        position: 'top',
-        horizontalAlign: 'left'
-      },
-      xaxis: {
-        type: 'datetime',
-        labels: {
-          format: 'MMM yyyy'
-        }
-      },
-      yaxis: {
-        title: {
-          text: 'Amount (€)'
-        },
-        labels: {
-          formatter: (val) => '€' + Math.round(val).toLocaleString()
-        }
-      },
-      tooltip: {
-        x: {
-          format: 'MMM yyyy'
-        },
-        y: {
-          formatter: (val) => '€' + val.toFixed(2)
-        }
-      },
-      colors: ['#ef4444', '#22c55e']
-    }))
-    
     async function loadTransactions() {
       if (!authStore.token) return
       
       loading.value = true
       
       try {
-        // Fetch transactions in batches to avoid limit issues
         let allTransactions = []
         let page = 1
         const batchSize = 1000
@@ -623,6 +667,11 @@ export default {
         
         console.log('Dashboard loaded:', allTransactions.length, 'transactions')
         
+        // Debug: Check first few transactions
+        if (allTransactions.length > 0) {
+          console.log('Sample transaction fields:', allTransactions[0])
+        }
+        
       } catch (error) {
         console.error('Failed to load transactions:', error)
         if (error.response?.status === 401) {
@@ -659,6 +708,10 @@ export default {
       const monthlyData = {}
       
       transactions.value.forEach(tx => {
+        const mainCategory = (tx.main_category || '').toUpperCase().trim()
+        // Exclude TRANSFERS from chart
+        if (mainCategory === 'TRANSFERS') return
+        
         const date = new Date(tx.posted_at)
         const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
         
@@ -672,16 +725,37 @@ export default {
         
         const amount = Math.abs(parseFloat(tx.amount))
         
-        if (tx.transaction_type === 'expense') {
+        if (mainCategory === 'EXPENSES') {
           monthlyData[monthKey].spending += amount
-        } else if (tx.transaction_type === 'income') {
+        } else if (mainCategory === 'INCOME') {
           monthlyData[monthKey].income += amount
         }
       })
       
       chartData.value = Object.values(monthlyData)
         .sort((a, b) => a.period.localeCompare(b.period))
-        .slice(-6)
+        .slice(-12) // Show last 12 months
+    }
+    
+    function getTypeColor(typeId) {
+      const typeMap = {
+        'income': '#00C9A0',
+        'expenses': '#F17D99',
+        'transfers': '#F0C46C'
+      }
+      
+      const type = categoryStore.categories?.find(t => t.code === typeId || t.id === typeId)
+      if (type?.color) return type.color
+      
+      return typeMap[typeId] || '#94a3b8'
+    }
+    
+    function hexToRgba(hex, alpha) {
+      if (!hex) return 'transparent'
+      const r = parseInt(hex.slice(1, 3), 16)
+      const g = parseInt(hex.slice(3, 5), 16)
+      const b = parseInt(hex.slice(5, 7), 16)
+      return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
     
     function formatCurrency(amount) {
@@ -701,9 +775,10 @@ export default {
     }
     
     function getAmountClass(transaction) {
-      if (transaction.transaction_type === 'income') {
+      const mainCategory = (transaction.main_category || '').toUpperCase().trim()
+      if (mainCategory === 'INCOME') {
         return 'positive'
-      } else if (transaction.transaction_type === 'expense') {
+      } else if (mainCategory === 'EXPENSES') {
         return 'negative'
       }
       return ''
@@ -722,10 +797,11 @@ export default {
       }
     })
     
-    onMounted(() => {
+    onMounted(async () => {
       if (authStore.user) {
-        loadSummary()
-        loadTransactions()
+        await categoryStore.loadCategories()
+        await loadSummary()
+        await loadTransactions()
       }
     })
     
@@ -735,25 +811,33 @@ export default {
       spendingTrendClass,
       spendingTrendText,
       topCategories,
-      recentTransactions,
-      monthlyComparison,
+      accountStats,
       chartData,
-      chartSeries,
-      chartOptions,
+      timelineChartSeries,
+      timelineChartOptions,
       viewMode,
       formatCurrency,
       formatDate,
       getAmountClass,
+      getTypeColor,
+      hexToRgba,
       loadTransactions
     }
   }
 }
 </script>
-
 <style scoped>
+
+.stats-overview {
+  display: flex;
+  justify-content: space-between;
+    align-items: flex-start;
+}
+
 .stat-card {
   text-align: center;
   padding: var(--gap-large);
+  border-radius: var(--radius);
 }
 
 .stat-label {
@@ -766,18 +850,7 @@ export default {
   font-size: var(--text-large);
   font-weight: 600;
   margin-bottom: var(--gap-small);
-}
-
-.stat-value.positive {
-  color: #22c55e;
-}
-
-.stat-value.negative {
-  color: #ef4444;
-}
-
-.stat-value.neutral {
-  color: #3b82f6;
+  color: var(--color-text);
 }
 
 .stat-detail {
@@ -791,6 +864,84 @@ export default {
 
 .stat-detail.trend-down {
   color: #22c55e;
+}
+
+/* Accounts List - Compact for Grid */
+.accounts-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
+}
+
+.account-card-compact {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-small);
+}
+
+.account-header-compact {
+  margin-bottom: var(--gap-small);
+  padding-bottom: var(--gap-small);
+  border-bottom: 1px solid var(--color-background-dark);
+}
+
+.account-title-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.account-owner-compact {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.account-type-compact {
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
+}
+
+.account-stats-compact {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.account-stat-compact {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.25rem 0;
+  font-size: 0.75rem;
+}
+
+.account-stat-total-compact {
+  padding-top: 0.375rem;
+  border-top: 1px solid var(--color-background-dark);
+  font-weight: 600;
+  margin-top: 0.25rem;
+}
+
+.account-stat-label-compact {
+  color: var(--color-text-light);
+}
+
+.account-stat-value-compact {
+  font-weight: 600;
+  font-size: 0.75rem;
+}
+
+.account-stat-value-compact.positive {
+  color: #22c55e;
+}
+
+.account-stat-value-compact.negative {
+  color: #ef4444;
+}
+
+.account-stat-value-compact.neutral {
+  color: #3b82f6;
 }
 
 .loading-state,
@@ -880,55 +1031,6 @@ export default {
   transition: width 0.3s ease;
 }
 
-.transaction-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-small);
-}
-
-.transaction-item {
-  display: grid;
-  grid-template-columns: 4rem 1fr auto;
-  gap: var(--gap-small);
-  align-items: center;
-  padding: var(--gap-small);
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-}
-
-.transaction-date {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-  font-weight: 500;
-}
-
-.transaction-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.125rem;
-}
-
-.transaction-merchant {
-  font-size: var(--text-small);
-  font-weight: 500;
-}
-
-.transaction-category {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-}
-
-.transaction-amount {
-  font-weight: 600;
-  font-size: var(--text-small);
-}
-
-.comparison-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
-  gap: var(--gap-standard);
-}
-
 .chart-header {
   display: flex;
   justify-content: space-between;
@@ -947,51 +1049,45 @@ export default {
   gap: 0.25rem;
 }
 
-.comparison-item {
-  background: var(--color-background-light);
-  padding: var(--gap-standard);
-  border-radius: var(--radius);
-}
-
-.comparison-month {
-  font-weight: 600;
-  margin-bottom: var(--gap-small);
-  text-align: center;
-}
-
-.comparison-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.375rem;
-}
-
-.comparison-stat {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: var(--text-small);
-}
-
-.comparison-label {
-  color: var(--color-text-muted);
-}
-
-.comparison-value {
-  font-weight: 600;
-}
-
-.comparison-value.positive {
-  color: #22c55e;
-}
-
-.comparison-value.negative {
-  color: #ef4444;
-}
-
 .dashboard-header {
   display: flex;
   justify-content: flex-end;
   margin-bottom: var(--gap-standard);
+}
+
+/* ApexCharts customization */
+:deep(.apexcharts-tooltip) {
+  background: var(--color-background-light) !important;
+  border: 1px solid var(--color-background-dark) !important;
+  box-shadow: var(--shadow) !important;
+}
+
+:deep(.apexcharts-tooltip-title) {
+  background: var(--color-background-dark) !important;
+  border-bottom: 1px solid var(--color-background-dark) !important;
+  color: var(--color-text) !important;
+  font-weight: 600 !important;
+}
+
+:deep(.apexcharts-tooltip-text-y-label) {
+  color: var(--color-text-light) !important;
+}
+
+:deep(.apexcharts-tooltip-text-y-value) {
+  color: var(--color-text) !important;
+  font-weight: 600 !important;
+}
+
+:deep(.apexcharts-legend-text) {
+  color: var(--color-text) !important;
+}
+
+:deep(.apexcharts-xaxis-label) {
+  fill: #6b7280 !important;
+}
+
+:deep(.apexcharts-yaxis-label) {
+  fill: #6b7280 !important;
 }
 
 @media (max-width: 64rem) {
@@ -1010,8 +1106,38 @@ export default {
     grid-template-columns: 1fr;
   }
   
-  .comparison-grid {
-    grid-template-columns: 1fr;
+  .stat-card {
+    padding: var(--gap-standard);
+  }
+  
+  .account-card-compact {
+    padding: var(--gap-small);
+  }
+}
+
+@media (max-width: 30rem) {
+  .stat-card {
+    padding: var(--gap-small);
+  }
+  
+  .stat-label {
+    font-size: 0.6875rem;
+  }
+  
+  .stat-value {
+    font-size: var(--text-medium);
+  }
+  
+  .account-owner-compact {
+    font-size: 0.6875rem;
+  }
+  
+  .account-type-compact {
+    font-size: 0.625rem;
+  }
+  
+  .account-stat-compact {
+    font-size: 0.6875rem;
   }
 }
 </style>
