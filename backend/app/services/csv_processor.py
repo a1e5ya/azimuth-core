@@ -432,23 +432,23 @@ class EnhancedCSVProcessor:
                     'account_id': account_id,
                     'posted_at': date,
                     'amount': amount,
-                    'currency': 'EUR',  # Default for European data
+                    'currency': 'EUR',
                     'merchant': safe_get('merchant'),
                     'memo': safe_get('message'),
                     'import_batch_id': batch_id,
                     'source_category': 'imported',
                     
-                    # Enhanced fields from your CSV format
-                    'full_description': safe_get('full_description'),
+                    # Categories (direct from CSV, no csv_ prefix)
                     'main_category': safe_get('main_category'),
-                    'csv_category': safe_get('category'),
-                    'csv_subcategory': safe_get('subcategory'),
-                    'csv_account': safe_get('account'),
-                    'owner': safe_get('owner'),
-                    'csv_account_type': safe_get('account_type'),
+                    'category': safe_get('category'),
+                    'subcategory': safe_get('subcategory'),
                     
-                    # Pre-calculated fields
-                    'amount_abs': self.normalize_amount(row.get(column_map.get('amount_abs', ''), amount)),
+                    # Account info (renamed from csv_*)
+                    'bank_account': safe_get('account'),
+                    'owner': safe_get('owner'),
+                    'bank_account_type': safe_get('account_type'),
+                    
+                    # Financial flags
                     'is_expense': safe_get_bool('is_expense'),
                     'is_income': safe_get_bool('is_income'),
                     
@@ -461,21 +461,13 @@ class EnhancedCSVProcessor:
                     # Transfer linking
                     'transfer_pair_id': safe_get('transfer_pair_id') or None,
                     
-                    # Determine transaction type
-                    'transaction_type': self._determine_transaction_type(
-                        safe_get_bool('is_income'),
-                        safe_get_bool('is_expense'),
-                        amount,
-                        safe_get('merchant')
-                    ),
-                    
                     # Metadata
-                    'confidence_score': None,  # Will be set by categorization
-                    'review_needed': False,    # Will be determined by rules
+                    'confidence_score': None,
+                    'review_needed': False,
                     'tags': None,
                     'notes': None
                 }
-                
+
                 # Generate deduplication hash
                 transaction['hash_dedupe'] = self.generate_dedup_hash(user_id, transaction)
                 
@@ -502,30 +494,6 @@ class EnhancedCSVProcessor:
         logger.info(f"Processing complete: {self.stats['processed_rows']}/{self.stats['total_rows']} rows successful ({self.stats['success_rate']:.1%})")
         
         return transactions
-    
-    def _determine_transaction_type(self, is_income: bool, is_expense: bool, amount: Decimal, merchant: str) -> str:
-        """Determine transaction type using available data"""
-        if is_income:
-            return "income"
-        elif is_expense:
-            return "expense"
-        
-        # Fallback logic
-        if amount is None:
-            return "unknown"
-        
-        # Check for transfer keywords
-        transfer_keywords = ['transfer', 'xfer', 'payment to', 'payment from', 'internal', 'between accounts']
-        if any(keyword in merchant.lower() for keyword in transfer_keywords):
-            return "transfer"
-        
-        # Amount-based detection
-        if amount > 0:
-            return "income"
-        elif amount < 0:
-            return "expense"
-        else:
-            return "transfer"
     
     def get_processing_summary(self) -> Dict[str, Any]:
         """Generate comprehensive processing summary"""
@@ -585,10 +553,6 @@ def process_csv_upload(
                     'earliest': min(t['posted_at'] for t in transactions).isoformat(),
                     'latest': max(t['posted_at'] for t in transactions).isoformat()
                 },
-                'transaction_types': {
-                    t_type: len([t for t in transactions if t['transaction_type'] == t_type])
-                    for t_type in set(t['transaction_type'] for t in transactions)
-                },
                 'category_distribution': {
                     cat: len([t for t in transactions if t['main_category'] == cat])
                     for cat in set(t['main_category'] for t in transactions if t['main_category'])
@@ -597,7 +561,6 @@ def process_csv_upload(
         else:
             summary.update({
                 'date_range': {'earliest': None, 'latest': None},
-                'transaction_types': {},
                 'category_distribution': {}
             })
         
@@ -616,7 +579,6 @@ def process_csv_upload(
             'error_messages': [f"Processing failed: {str(e)}"],
             'warning_messages': processor.warnings,
             'success_rate': 0.0,
-            'transaction_types': {},
             'category_distribution': {},
             'date_range': {'earliest': None, 'latest': None},
             'processing_stats': processor.stats

@@ -360,7 +360,7 @@ export default {
         
         // Try multiple field names for account type
         const owner = tx.owner || 'Unknown'
-        const accountType = tx.csv_account_type || tx.account_type || tx.Account_Type || 'Unknown Type'
+        const accountType = tx.bank_account_type || 'Unknown Type'
         const key = `${owner}|${accountType}`
         
         if (!accountMap.has(key)) {
@@ -443,7 +443,7 @@ export default {
         
         if (!isCurrentPeriod) return
         
-        const category = tx.csv_category || 'Uncategorized'
+        const category = tx.category || 'Uncategorized'
         const amount = Math.abs(parseFloat(tx.amount))
         
         categoryTotals[category] = (categoryTotals[category] || 0) + amount
@@ -581,7 +581,7 @@ export default {
         },
         theme: 'light'
       },
-      colors: ['#22c55e', '#ef4444'],
+      colors: [getTypeColor('income'), getTypeColor('expenses')],
       markers: {
         size: 0,
         hover: {

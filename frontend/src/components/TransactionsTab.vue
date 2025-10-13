@@ -790,19 +790,19 @@ export default {
             if (t.main_category) {
               mainCats.add(t.main_category)
               
-              if (t.csv_category) {
-                const key = `${t.main_category}|${t.csv_category}`
+              if (t.category) {
+                const key = `${t.main_category}|${t.category}`
                 cats.set(key, {
                   main: t.main_category,
-                  name: t.csv_category
+                  name: t.category
                 })
                 
-                if (t.csv_subcategory) {
-                  const subKey = `${t.main_category}|${t.csv_category}|${t.csv_subcategory}`
+                if (t.subcategory) {
+                  const subKey = `${t.main_category}|${t.category}|${t.subcategory}`
                   subCats.set(subKey, {
                     main: t.main_category,
-                    category: t.csv_category,
-                    name: t.csv_subcategory
+                    category: t.category,
+                    name: t.subcategory
                   })
                 }
               }
@@ -889,11 +889,11 @@ export default {
               return false
             }
             
-            if (filters.value.categoryFilter && t.csv_category !== filters.value.categoryFilter) {
+            if (filters.value.categoryFilter && t.category !== filters.value.categoryFilter) {
               return false
             }
             
-            if (filters.value.subcategoryFilter && t.csv_subcategory !== filters.value.subcategoryFilter) {
+            if (filters.value.subcategoryFilter && t.subcategory !== filters.value.subcategoryFilter) {
               return false
             }
             
@@ -1143,13 +1143,13 @@ export default {
     }
 
     const getCategoryName = (transaction) => {
-      if (!transaction.csv_category) return null
-      return transaction.csv_category
+      if (!transaction.assigned_category) return null
+      return transaction.assigned_category
     }
 
     const getSubcategoryName = (transaction) => {
-      if (!transaction.csv_subcategory) return null
-      return transaction.csv_subcategory
+      if (!transaction.subcategory) return null
+      return transaction.subcategory
     }
 
     const formatDate = (dateString) => {

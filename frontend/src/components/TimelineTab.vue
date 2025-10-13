@@ -677,7 +677,7 @@ const chartOptions = computed(() => {
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
-        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+        const category = t.subcategory || t.category || 'Uncategorized'
         
         if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
@@ -716,7 +716,7 @@ const chartOptions = computed(() => {
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
-        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+        const category = t.subcategory || t.category || 'Uncategorized'
         
         if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
@@ -756,7 +756,7 @@ const chartOptions = computed(() => {
         
         const period = grouped.get(keyStr)
         const amount = Math.abs(parseFloat(t.amount))
-        const category = t.csv_subcategory || t.csv_category || 'Uncategorized'
+        const category = t.subcategory || t.category || 'Uncategorized'
         
         if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
@@ -802,8 +802,8 @@ function buildExpensesByCategory() {
         .forEach(t => {
           if (processedTransactions.has(t.id)) return
           
-          const subcategoryName = t.csv_subcategory
-          const categoryName = t.csv_category || 'Uncategorized'
+          const subcategoryName = t.subcategory
+          const categoryName = t.category || 'Uncategorized'
           const amount = Math.abs(parseFloat(t.amount))
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
@@ -883,8 +883,8 @@ function buildExpensesByCategory() {
         .forEach(t => {
           if (processedTransactions.has(t.id)) return
           
-          const subcategoryName = t.csv_subcategory
-          const categoryName = t.csv_category || 'Income'
+          const subcategoryName = t.subcategory
+          const categoryName = t.category || 'Income'
           const amount = Math.abs(parseFloat(t.amount))
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null
@@ -964,8 +964,8 @@ function buildExpensesByCategory() {
         .forEach(t => {
           if (processedTransactions.has(t.id)) return
           
-          const subcategoryName = t.csv_subcategory
-          const categoryName = t.csv_category || 'Transfer'
+          const subcategoryName = t.subcategory
+          const categoryName = t.category || 'Transfer'
           const amount = parseFloat(t.amount)
           
           const parentCategory = subcategoryName ? findParentCategory(subcategoryName) : null

@@ -3,7 +3,7 @@ import re
 import secrets
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
-from fastapi import HTTPException, Depends, status
+from fastapi import HTTPException, Depends, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
 from jose import JWTError, jwt
@@ -23,6 +23,9 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # HTTP Bearer for token extraction
 security = HTTPBearer()
+
+# FIXED: Optional security that doesn't raise exceptions
+security_optional = HTTPBearer(auto_error=False)
 
 # Pydantic models
 class UserCreate(BaseModel):
@@ -161,7 +164,7 @@ async def get_current_user(
     return user
 
 async def get_current_user_optional(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_optional),
     db: AsyncSession = Depends(get_db)
 ) -> Optional[User]:
     """Get current user from JWT token, but allow None for anonymous access"""
@@ -185,10 +188,12 @@ async def log_auth_event(
     action: str,
     email: str,
     success: bool,
+    user_id: Optional[str] = None,
     details: Optional[Dict[str, Any]] = None
 ):
     """Log authentication events"""
     audit_entry = AuditLog(
+        user_id=user_id,
         entity="auth",
         action=action,
         details={
@@ -220,7 +225,8 @@ class LocalAuthService:
             # Log successful registration
             await log_auth_event(
                 self.db, "register", user.email, True,
-                {"user_id": user.id}
+                user_id=user.id,
+                details={"user_id": user.id}
             )
             
             return {
@@ -236,16 +242,22 @@ class LocalAuthService:
             }
         except HTTPException as e:
             # Log failed registration
+            print(f"❌ Registration HTTPException: {e.detail}")
             await log_auth_event(
                 self.db, "register", user_data.email, False,
-                {"error": str(e.detail)}
+                user_id=None,
+                details={"error": str(e.detail)}
             )
             raise e
         except Exception as e:
             # Log unexpected error
+            print(f"❌ Registration error: {e}")
+            import traceback
+            traceback.print_exc()
             await log_auth_event(
                 self.db, "register", user_data.email, False,
-                {"error": str(e)}
+                user_id=None,
+                details={"error": str(e)}
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -254,13 +266,21 @@ class LocalAuthService:
     
     async def login(self, user_data: UserLogin) -> Dict[str, Any]:
         """Login user"""
+        print(f"🔍 Login attempt for: {user_data.email}")
         try:
+            print(f"   Authenticating...")
             user = await authenticate_user(self.db, user_data.email, user_data.password)
+            print(f"   User found: {user is not None}")
+            
+            if user:
+                print(f"   User ID: {user.id}, Email: {user.email}")
+            
             if not user:
                 # Log failed login
                 await log_auth_event(
                     self.db, "login", user_data.email, False,
-                    {"error": "Invalid credentials"}
+                    user_id=None,
+                    details={"error": "Invalid credentials"}
                 )
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,
@@ -276,7 +296,8 @@ class LocalAuthService:
             # Log successful login
             await log_auth_event(
                 self.db, "login", user.email, True,
-                {"user_id": user.id}
+                user_id=user.id,
+                details={"user_id": user.id}
             )
             
             return {
@@ -294,9 +315,13 @@ class LocalAuthService:
             raise e
         except Exception as e:
             # Log unexpected error
+            print(f"❌ Login error: {e}")
+            import traceback
+            traceback.print_exc()
             await log_auth_event(
                 self.db, "login", user_data.email, False,
-                {"error": str(e)}
+                user_id=None,
+                details={"error": str(e)}
             )
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,

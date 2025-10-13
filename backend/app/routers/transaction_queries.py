@@ -23,7 +23,7 @@ class TransactionQueries:
     
     async def get_transaction_by_id(self, transaction_id: str) -> Optional[Transaction]:
         """Get a single transaction by ID with user verification"""
-        query = select(Transaction).options(selectinload(Transaction.category)).where(
+        query = select(Transaction).options(selectinload(Transaction.assigned_category)).where(
             and_(
                 Transaction.id == uuid.UUID(transaction_id),
                 Transaction.user_id == self.user.id
@@ -67,7 +67,7 @@ class TransactionQueries:
         query = query.offset((filters.page - 1) * filters.limit).limit(filters.limit)
         
         # Include category relationship
-        query = query.options(selectinload(Transaction.category))
+        query = query.options(selectinload(Transaction.assigned_category))
         
         # Execute query
         result = await self.db.execute(query)
@@ -252,7 +252,7 @@ class TransactionQueries:
         # Get transactions with pagination
         query = select(Transaction).where(base_condition).order_by(desc(Transaction.posted_at))
         query = query.offset((page - 1) * limit).limit(limit)
-        query = query.options(selectinload(Transaction.category))
+        query = query.options(selectinload(Transaction.assigned_category))
         
         result = await self.db.execute(query)
         transactions = result.scalars().all()

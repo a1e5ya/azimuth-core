@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Header, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from pydantic import BaseModel
 from typing import Optional
+import traceback
 
 from ..models.database import get_db, User, AuditLog
 from ..auth.local_auth import (
@@ -34,10 +35,20 @@ async def register_user(
 ):
     """Register a new user with email and password"""
     
+    print(f"📝 Registration request for: {user_data.email}")
+    
     try:
         result = await auth_service.register(user_data)
+        print(f"✅ Registration successful for: {user_data.email}")
         
-        await initialize_user_categories(result["user"].id, db)
+        # Initialize categories
+        try:
+            await initialize_user_categories(result["user"].id, db)
+            print(f"✅ Categories initialized for: {user_data.email}")
+        except Exception as cat_error:
+            print(f"⚠️ Category initialization failed (non-fatal): {cat_error}")
+            traceback.print_exc()
+            # Continue anyway - categories can be created later
         
         return AuthResponse(
             message="Registration successful",
@@ -48,9 +59,12 @@ async def register_user(
         )
         
     except HTTPException as e:
+        print(f"❌ Registration failed with HTTPException: {e.detail}")
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Registration failed")
+        print(f"❌ Registration failed with unexpected error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Registration failed: {str(e)}")
 
 @router.post("/login", response_model=AuthResponse)
 async def login_user(
@@ -60,8 +74,11 @@ async def login_user(
 ):
     """Login user with email and password"""
     
+    print(f"🔐 Login request for: {user_data.email}")
+    
     try:
         result = await auth_service.login(user_data)
+        print(f"✅ Login successful for: {user_data.email}")
         
         return AuthResponse(
             message="Login successful",
@@ -72,9 +89,12 @@ async def login_user(
         )
         
     except HTTPException as e:
+        print(f"❌ Login failed with HTTPException: {e.detail}")
         raise e
     except Exception as e:
-        raise HTTPException(status_code=500, detail="Login failed")
+        print(f"❌ Login failed with unexpected error: {e}")
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Login failed: {str(e)}")
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_profile(

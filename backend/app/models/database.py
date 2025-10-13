@@ -93,7 +93,7 @@ class Category(Base):
     # Relationships
     user = relationship("User", back_populates="categories")
     parent = relationship("Category", remote_side=[id], backref="children")
-    transactions = relationship("Transaction", back_populates="category")
+    transactions = relationship("Transaction", back_populates="assigned_category")
     category_mappings = relationship("CategoryMapping", back_populates="category")
 
 class Transaction(Base):
@@ -102,45 +102,57 @@ class Transaction(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     account_id = Column(String, ForeignKey("accounts.id"), nullable=True)
+    
+    # Core transaction data
     posted_at = Column(DateTime, nullable=False, index=True)
     amount = Column(Numeric(12, 2), nullable=False)
     currency = Column(String, default="EUR")
     merchant = Column(String, nullable=True)
     memo = Column(Text, nullable=True)
-    mcc = Column(String, nullable=True)  # Merchant Category Code
-    category_id = Column(String, ForeignKey("categories.id"), nullable=True)
-    source_category = Column(String, default="user")  # user|rule|ml|llm|imported
-    import_batch_id = Column(String, nullable=True, index=True)
-    hash_dedupe = Column(String, nullable=True, index=True)  # For deduplication
     
-    # Enhanced fields from CSV data
-    transaction_type = Column(String, nullable=True)  # income, expense, transfer
-    main_category = Column(String, nullable=True)  # Original main category from CSV
-    csv_category = Column(String, nullable=True)  # Original category from CSV
-    csv_subcategory = Column(String, nullable=True)  # Original subcategory from CSV
-    csv_account = Column(String, nullable=True)  # Original account from CSV
-    owner = Column(String, nullable=True)  # Owner from CSV
-    csv_account_type = Column(String, nullable=True)  # Account type from CSV
-    is_expense = Column(Boolean, default=False)  # From CSV
-    is_income = Column(Boolean, default=False)  # From CSV
-    year = Column(Integer, nullable=True)  # From CSV
-    month = Column(Integer, nullable=True)  # From CSV
-    year_month = Column(String, nullable=True)  # From CSV (YYYY-MM format)
-    weekday = Column(String, nullable=True)  # From CSV
-    transfer_pair_id = Column(String, nullable=True)  # For linked transfers
+    # Categories (from CSV - these are STRING fields, not relationships)
+    main_category = Column(String, nullable=True)  # INCOME, EXPENSES, TRANSFERS
+    category = Column(String, nullable=True)  # Food, Transport, etc.
+    subcategory = Column(String, nullable=True)  # Groceries, Fuel, etc.
+    
+    # Account info (from CSV)
+    bank_account = Column(String, nullable=True)  # Egor_Main, Daria_Savings
+    owner = Column(String, nullable=True)  # Egor, Daria, Alex, Lila
+    bank_account_type = Column(String, nullable=True)  # Main, Savings, Credit
+    
+    # Financial flags
+    is_expense = Column(Boolean, default=False)
+    is_income = Column(Boolean, default=False)
+    
+    # Date components
+    year = Column(Integer, nullable=True)
+    month = Column(Integer, nullable=True)
+    year_month = Column(String, nullable=True)  # YYYY-MM
+    weekday = Column(String, nullable=True)
+    
+    # Transfer linking
+    transfer_pair_id = Column(String, nullable=True)
+    
+    # Categorization metadata (FK to Category table)
+    category_id = Column(String, ForeignKey("categories.id"), nullable=True)
+    source_category = Column(String, default="imported")  # imported|user|rule|ml|llm
+    confidence_score = Column(Numeric(3, 2), nullable=True)
+    review_needed = Column(Boolean, default=False)
+    
+    # Import tracking
+    import_batch_id = Column(String, nullable=True, index=True)
+    hash_dedupe = Column(String, nullable=True, index=True)
     
     # Metadata
-    confidence_score = Column(Numeric(3, 2), nullable=True)  # ML confidence 0.00-1.00
-    review_needed = Column(Boolean, default=False)  # Needs manual review
-    tags = Column(JSON, nullable=True)  # Flexible tagging system
-    notes = Column(Text, nullable=True)  # User notes
+    tags = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow)
     
-    # Relationships
+    # Relationships (rename to avoid conflict with 'category' column)
     user = relationship("User", back_populates="transactions")
     account = relationship("Account", back_populates="transactions")
-    category = relationship("Category", back_populates="transactions")
+    assigned_category = relationship("Category", back_populates="transactions")
 
 class CategoryMapping(Base):
     __tablename__ = "category_mappings"
