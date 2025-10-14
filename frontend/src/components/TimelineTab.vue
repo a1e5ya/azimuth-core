@@ -115,11 +115,11 @@ export default {
     
     const stats = computed(() => {
       const income = transactions.value
-        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS')
+        .filter(t => t.main_category === 'income' && t.main_category !== 'TRANSFERS')
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const expenses = transactions.value
-        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS')
+        .filter(t => t.main_category === 'expense' && t.main_category !== 'TRANSFERS')
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const transfers = transactions.value
@@ -127,10 +127,10 @@ export default {
         .reduce((sum, t) => sum + Math.abs(parseFloat(t.amount)), 0)
       
       const incomeCount = transactions.value
-        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS').length
+        .filter(t => t.main_category === 'income' && t.main_category !== 'TRANSFERS').length
       
       const expenseCount = transactions.value
-        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS').length
+        .filter(t => t.main_category === 'expense' && t.main_category !== 'TRANSFERS').length
       
       const transferCount = transactions.value
         .filter(t => t.main_category === 'TRANSFERS').length
@@ -679,10 +679,10 @@ const chartOptions = computed(() => {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.subcategory || t.category || 'Uncategorized'
         
-        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
+        if (t.main_category === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
+        } else if (t.main_category === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.main_category === 'TRANSFERS') {
@@ -718,10 +718,10 @@ const chartOptions = computed(() => {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.subcategory || t.category || 'Uncategorized'
         
-        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
+        if (t.main_category === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
+        } else if (t.main_category === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.main_category === 'TRANSFERS') {
@@ -758,10 +758,10 @@ const chartOptions = computed(() => {
         const amount = Math.abs(parseFloat(t.amount))
         const category = t.subcategory || t.category || 'Uncategorized'
         
-        if (t.transaction_type === 'income' && t.main_category !== 'TRANSFERS') {
+        if (t.main_category === 'income' && t.main_category !== 'TRANSFERS') {
           period.income += amount
           period.incomeByCategory[category] = (period.incomeByCategory[category] || 0) + amount
-        } else if (t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS') {
+        } else if (t.main_category === 'expense' && t.main_category !== 'TRANSFERS') {
           period.expenses += amount
           period.expensesByCategory[category] = (period.expensesByCategory[category] || 0) + amount
         } else if (t.main_category === 'TRANSFERS') {
@@ -798,7 +798,7 @@ function buildExpensesByCategory() {
       const processedTransactions = new Set()
       
       transactions.value
-        .filter(t => t.transaction_type === 'expense' && t.main_category !== 'TRANSFERS')
+        .filter(t => t.main_category === 'expense' && t.main_category !== 'TRANSFERS')
         .forEach(t => {
           if (processedTransactions.has(t.id)) return
           
@@ -879,7 +879,7 @@ function buildExpensesByCategory() {
       const processedTransactions = new Set()
       
       transactions.value
-        .filter(t => t.transaction_type === 'income' && t.main_category !== 'TRANSFERS')
+        .filter(t => t.main_category === 'income' && t.main_category !== 'TRANSFERS')
         .forEach(t => {
           if (processedTransactions.has(t.id)) return
           

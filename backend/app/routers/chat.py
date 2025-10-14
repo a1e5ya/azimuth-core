@@ -46,7 +46,7 @@ async def get_comprehensive_transaction_context(user: User, db: AsyncSession) ->
         .where(
             Transaction.user_id == user.id,
             Transaction.posted_at >= thirty_days_ago,
-            Transaction.transaction_type == 'expense'
+            Transaction.main_category == 'expense'
         )
     )
     recent_spending = float(result.scalar() or 0)
@@ -57,7 +57,7 @@ async def get_comprehensive_transaction_context(user: User, db: AsyncSession) ->
         .where(
             Transaction.user_id == user.id,
             Transaction.posted_at >= thirty_days_ago,
-            Transaction.transaction_type == 'income'
+            Transaction.main_category == 'income'
         )
     )
     recent_income = float(result.scalar() or 0)
@@ -96,24 +96,24 @@ async def get_comprehensive_transaction_context(user: User, db: AsyncSession) ->
     # CSV subcategories breakdown (top spending)
     result = await db.execute(
         select(
-            Transaction.csv_category,
+            Transaction.category,
             func.count(Transaction.id).label('count'),
             func.sum(func.abs(Transaction.amount)).label('total')
         )
         .where(
             Transaction.user_id == user.id,
-            Transaction.csv_category.isnot(None)
+            Transaction.category.isnot(None)
         )
-        .group_by(Transaction.csv_category)
+        .group_by(Transaction.category)
         .order_by(func.sum(func.abs(Transaction.amount)).desc())
         .limit(10)
     )
     
     subcategories = {}
     for row in result:
-        if row.csv_category:
-            subcategories[row.csv_category.lower()] = {
-                "name": row.csv_category,
+        if row.category:
+            subcategories[row.category.lower()] = {
+                "name": row.category,
                 "count": row.count,
                 "total": float(row.total or 0)
             }
@@ -218,11 +218,11 @@ def detect_intent_and_action(message: str, tx_context: dict) -> tuple[Optional[s
     
     # Transaction type filtering
     if any(word in message_lower for word in ["expense", "expenses", "spending"]):
-        return "filter_transactions", {"transaction_type": "expense"}
+        return "filter_transactions", {"main_category": "expense"}
     elif any(word in message_lower for word in ["income", "earning", "salary"]):
-        return "filter_transactions", {"transaction_type": "income"}
+        return "filter_transactions", {"main_category": "income"}
     elif any(word in message_lower for word in ["transfer", "transfers"]):
-        return "filter_transactions", {"transaction_type": "transfer"}
+        return "filter_transactions", {"main_category": "transfer"}
     
     # If "show" but no match, show transactions tab
     return "show_transactions_tab", None

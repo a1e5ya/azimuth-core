@@ -51,8 +51,8 @@ class DeleteCheckResponse(BaseModel):
 
 class CSVMatchRequest(BaseModel):
     csv_main: str
-    csv_category: str
-    csv_subcategory: Optional[str] = None
+    category: str
+    subcategory: Optional[str] = None
 
 
 class CSVMatchResponse(BaseModel):
@@ -206,16 +206,16 @@ async def initialize_categories(
 
 
 @router.post("/match-csv", response_model=CSVMatchResponse)
-async def match_csv_category(
+async def match_category(
     match_request: CSVMatchRequest,
     category_service: CategoryService = Depends(get_category_service)
 ):
     """Match CSV category to user categories"""
     
-    result = await category_service.match_csv_category(
+    result = await category_service.match_category(
         csv_main=match_request.csv_main,
-        csv_category=match_request.csv_category,
-        csv_subcategory=match_request.csv_subcategory
+        category=match_request.category,
+        subcategory=match_request.subcategory
     )
     
     return CSVMatchResponse(
@@ -286,8 +286,8 @@ async def improve_categorization(
                 memo=transaction.memo or '',
                 amount=float(transaction.amount),
                 csv_main=transaction.main_category or '',
-                csv_category=transaction.csv_category or '',
-                csv_subcategory=transaction.csv_subcategory
+                category=transaction.category or '',
+                subcategory=transaction.subcategory
             )
             
             # Update if we got better confidence or new category
@@ -415,8 +415,8 @@ async def debug_transactions(
                 "id": str(t.id),
                 "merchant": t.merchant,
                 "amount": str(t.amount),
-                "csv_category": t.csv_category,
-                "csv_subcategory": t.csv_subcategory,
+                "category": t.category,
+                "subcategory": t.subcategory,
                 "category_id": str(t.category_id) if t.category_id else None,
                 "source_category": t.source_category
             }

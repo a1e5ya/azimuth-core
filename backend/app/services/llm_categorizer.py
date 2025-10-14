@@ -26,8 +26,8 @@ class LLMCategorizationService:
         memo: str,
         amount: float,
         csv_main: str = None,
-        csv_category: str = None,
-        csv_subcategory: str = None
+        category: str = None,
+        subcategory: str = None
     ) -> Dict[str, any]:
         """Categorize single transaction using LLM + training data"""
         
@@ -48,10 +48,10 @@ class LLMCategorizationService:
                 }
         
         # Quick check: exact CSV match
-        if csv_main and csv_category:
-            csv_key = f"{csv_main}|{csv_category}"
-            if csv_subcategory:
-                csv_key += f"|{csv_subcategory}"
+        if csv_main and category:
+            csv_key = f"{csv_main}|{category}"
+            if subcategory:
+                csv_key += f"|{subcategory}"
             
             if csv_key in training_data['csv_mappings']:
                 category_path = training_data['csv_mappings'][csv_key]
@@ -66,7 +66,7 @@ class LLMCategorizationService:
         
         # Use LLM for complex cases
         llm_result = await self._query_llm_for_category(
-            merchant, memo, amount, csv_main, csv_category, csv_subcategory, training_data
+            merchant, memo, amount, csv_main, category, subcategory, training_data
         )
         
         return llm_result
@@ -77,8 +77,8 @@ class LLMCategorizationService:
         memo: str,
         amount: float,
         csv_main: str,
-        csv_category: str,
-        csv_subcategory: str,
+        category: str,
+        subcategory: str,
         training_data: Dict
     ) -> Dict:
         """Query LLM with transaction details and training context"""
@@ -103,7 +103,7 @@ TRANSACTION TO CATEGORIZE:
 - Merchant: {merchant or 'Unknown'}
 - Description: {memo or 'None'}
 - Amount: €{abs(amount):.2f}
-- CSV Category: {csv_main or ''} > {csv_category or ''} > {csv_subcategory or ''}
+- CSV Category: {csv_main or ''} > {category or ''} > {subcategory or ''}
 
 Respond ONLY with JSON format:
 {{"category": "expense>Food>Groceries", "confidence": 0.85, "reason": "brief reason"}}

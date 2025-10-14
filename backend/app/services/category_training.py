@@ -23,8 +23,8 @@ class CategoryTrainingService:
         for trans in transactions_data:
             # Get CSV categories
             main_cat = trans.get('main_category', '')
-            csv_cat = trans.get('csv_category', '')
-            csv_subcat = trans.get('csv_subcategory', '')
+            csv_cat = trans.get('category', '')
+            csv_subcat = trans.get('subcategory', '')
             
             if not main_cat or not csv_cat:
                 continue

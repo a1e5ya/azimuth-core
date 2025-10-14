@@ -69,8 +69,8 @@ class CategoryMapper:
         memo: str = "", 
         amount: float = 0.0,
         mcc: str = "",
-        csv_category: str = "",
-        csv_subcategory: str = "",
+        category: str = "",
+        subcategory: str = "",
         main_category: str = ""
     ) -> CategorizationResult:
         """
@@ -82,8 +82,8 @@ class CategoryMapper:
         merchant = (merchant or "").strip().lower()
         memo = (memo or "").strip().lower()
         mcc = (mcc or "").strip()
-        csv_category = (csv_category or "").strip().lower()
-        csv_subcategory = (csv_subcategory or "").strip().lower()
+        category = (category or "").strip().lower()
+        subcategory = (subcategory or "").strip().lower()
         main_category = (main_category or "").strip().lower()
         
         # Combined text for keyword searches
@@ -98,7 +98,7 @@ class CategoryMapper:
                 
             result = self._test_mapping(
                 mapping, merchant, memo, amount, mcc, 
-                csv_category, csv_subcategory, main_category, combined_text
+                category, subcategory, main_category, combined_text
             )
             
             # Keep the best result (highest confidence, then priority)
@@ -118,8 +118,8 @@ class CategoryMapper:
         memo: str, 
         amount: float,
         mcc: str,
-        csv_category: str,
-        csv_subcategory: str,
+        category: str,
+        subcategory: str,
         main_category: str,
         combined_text: str
     ) -> CategorizationResult:
@@ -140,13 +140,13 @@ class CategoryMapper:
             return self._test_mcc(mapping, mcc, pattern_value)
             
         elif mapping.pattern_type == PatternType.CSV_MAPPING:
-            return self._test_csv_mapping(mapping, csv_category, csv_subcategory, main_category, pattern_value)
+            return self._test_csv_mapping(mapping, category, subcategory, main_category, pattern_value)
             
         elif mapping.pattern_type == PatternType.AMOUNT_RANGE:
             return self._test_amount_range(mapping, amount, pattern_value)
             
         elif mapping.pattern_type == PatternType.COMPOSITE:
-            return self._test_composite(mapping, merchant, memo, amount, mcc, csv_category, csv_subcategory, main_category)
+            return self._test_composite(mapping, merchant, memo, amount, mcc, category, subcategory, main_category)
         
         return CategorizationResult()
     
@@ -195,8 +195,8 @@ class CategoryMapper:
     def _test_csv_mapping(
         self, 
         mapping: CategoryMapping, 
-        csv_category: str, 
-        csv_subcategory: str, 
+        category: str, 
+        subcategory: str, 
         main_category: str, 
         pattern_value: str
     ) -> CategorizationResult:
@@ -206,17 +206,17 @@ class CategoryMapper:
             field, value = pattern_value.split(":", 1)
             value = value.strip().lower()
             
-            if field == "category" and csv_category == value:
+            if field == "category" and category == value:
                 return CategorizationResult(
                     category_id=mapping.category_id,
                     confidence=mapping.confidence,
-                    matched_text=f"CSV Category: {csv_category}"
+                    matched_text=f"CSV Category: {category}"
                 )
-            elif field == "subcategory" and csv_subcategory == value:
+            elif field == "subcategory" and subcategory == value:
                 return CategorizationResult(
                     category_id=mapping.category_id,
                     confidence=mapping.confidence,
-                    matched_text=f"CSV Subcategory: {csv_subcategory}"
+                    matched_text=f"CSV Subcategory: {subcategory}"
                 )
             elif field == "main_category" and main_category == value:
                 return CategorizationResult(
@@ -256,8 +256,8 @@ class CategoryMapper:
         memo: str,
         amount: float,
         mcc: str,
-        csv_category: str,
-        csv_subcategory: str,
+        category: str,
+        subcategory: str,
         main_category: str
     ) -> CategorizationResult:
         """Test composite pattern (multiple conditions)"""
@@ -454,7 +454,7 @@ DEFAULT_MAPPINGS = [
     }
 ]
 
-def create_csv_category_mappings(csv_data: Dict[str, str], user_categories: Dict[str, str]) -> List[Dict]:
+def create_category_mappings(csv_data: Dict[str, str], user_categories: Dict[str, str]) -> List[Dict]:
     """
     Create category mappings based on CSV data analysis
     

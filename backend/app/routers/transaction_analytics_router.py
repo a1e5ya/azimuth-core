@@ -91,13 +91,13 @@ async def get_category_breakdown(
         func.count(Transaction.id).label('transaction_count'),
         func.sum(func.abs(Transaction.amount)).label('total_amount'),
         func.avg(func.abs(Transaction.amount)).label('avg_amount'),
-        Transaction.transaction_type
+        Transaction.main_category
     ).join(
         Transaction, Transaction.category_id == Category.id
     ).where(
         and_(*conditions)
     ).group_by(
-        Category.id, Category.name, Category.icon, Transaction.transaction_type
+        Category.id, Category.name, Category.icon, Transaction.main_category
     ).order_by(func.sum(func.abs(Transaction.amount)).desc())
     
     result = await db.execute(query)
@@ -108,7 +108,7 @@ async def get_category_breakdown(
     
     for row in result:
         category_name = row.category_name
-        transaction_type = row.transaction_type or 'unknown'
+        main_category = row.main_category or 'unknown'
         amount = float(row.total_amount)
         
         if category_name not in categories:
@@ -123,7 +123,7 @@ async def get_category_breakdown(
         
         categories[category_name]["total_amount"] += amount
         categories[category_name]["transaction_count"] += row.transaction_count
-        categories[category_name]["by_type"][transaction_type] = {
+        categories[category_name]["by_type"][main_category] = {
             "count": row.transaction_count,
             "amount": amount,
             "avg_amount": float(row.avg_amount)
@@ -180,7 +180,7 @@ async def get_monthly_summary(
     # Query for monthly data
     query = select(
         extract('month', Transaction.posted_at).label('month'),
-        Transaction.transaction_type,
+        Transaction.main_category,
         func.count(Transaction.id).label('transaction_count'),
         func.sum(Transaction.amount).label('total_amount'),
         func.avg(Transaction.amount).label('avg_amount')
@@ -188,7 +188,7 @@ async def get_monthly_summary(
         and_(*conditions)
     ).group_by(
         extract('month', Transaction.posted_at),
-        Transaction.transaction_type
+        Transaction.main_category
     ).order_by('month')
     
     result = await db.execute(query)
@@ -209,23 +209,23 @@ async def get_monthly_summary(
     
     for row in result:
         month_num = int(row.month)
-        transaction_type = row.transaction_type or 'unknown'
+        main_category = row.main_category or 'unknown'
         amount = float(row.total_amount)
         count = row.transaction_count
         
         if month_num in months:
-            months[month_num]["by_type"][transaction_type] = {
+            months[month_num]["by_type"][main_category] = {
                 "count": count,
                 "amount": amount,
                 "avg_amount": float(row.avg_amount)
             }
             months[month_num]["transaction_count"] += count
             
-            if transaction_type == 'income':
+            if main_category == 'income':
                 months[month_num]["income"] = amount
-            elif transaction_type == 'expense':
+            elif main_category == 'expense':
                 months[month_num]["expenses"] = abs(amount)  # Make positive
-            elif transaction_type == 'transfer':
+            elif main_category == 'transfer':
                 months[month_num]["transfers"] = amount
     
     # Calculate net flow for each month
@@ -276,13 +276,13 @@ async def get_financial_health_metrics(
     
     # Query for basic metrics
     metrics_query = select(
-        Transaction.transaction_type,
+        Transaction.main_category,
         func.count(Transaction.id).label('count'),
         func.sum(Transaction.amount).label('total'),
         func.avg(Transaction.amount).label('average')
     ).where(
         and_(*conditions)
-    ).group_by(Transaction.transaction_type)
+    ).group_by(Transaction.main_category)
     
     result = await db.execute(metrics_query)
     
@@ -291,14 +291,14 @@ async def get_financial_health_metrics(
     transfer_total = 0
     
     for row in result:
-        transaction_type = row.transaction_type or 'unknown'
+        main_category = row.main_category or 'unknown'
         total = float(row.total or 0)
         
-        if transaction_type == 'income':
+        if main_category == 'income':
             income_total = total
-        elif transaction_type == 'expense':
+        elif main_category == 'expense':
             expense_total = abs(total)
-        elif transaction_type == 'transfer':
+        elif main_category == 'transfer':
             transfer_total = total
     
     # Calculate key metrics
@@ -311,7 +311,7 @@ async def get_financial_health_metrics(
         func.extract('month', Transaction.posted_at).label('month'),
         func.sum(func.abs(Transaction.amount)).label('monthly_expenses')
     ).where(
-        and_(*conditions, Transaction.transaction_type == 'expense')
+        and_(*conditions, Transaction.main_category == 'expense')
     ).group_by(
         func.extract('year', Transaction.posted_at),
         func.extract('month', Transaction.posted_at)
@@ -422,11 +422,11 @@ async def compare_time_periods(
         ]
         
         query = select(
-            Transaction.transaction_type,
+            Transaction.main_category,
             func.count(Transaction.id).label('count'),
             func.sum(Transaction.amount).label('total'),
             func.avg(Transaction.amount).label('average')
-        ).where(and_(*conditions)).group_by(Transaction.transaction_type)
+        ).where(and_(*conditions)).group_by(Transaction.main_category)
         
         result = await db.execute(query)
         
@@ -439,17 +439,17 @@ async def compare_time_periods(
         }
         
         for row in result:
-            transaction_type = row.transaction_type or 'unknown'
+            main_category = row.main_category or 'unknown'
             total = float(row.total or 0)
             count = row.count
             
             metrics['transaction_count'] += count
             
-            if transaction_type == 'income':
+            if main_category == 'income':
                 metrics['income'] = total
-            elif transaction_type == 'expense':
+            elif main_category == 'expense':
                 metrics['expenses'] = abs(total)
-            elif transaction_type == 'transfer':
+            elif main_category == 'transfer':
                 metrics['transfers'] = total
         
         metrics['net_flow'] = metrics['income'] - metrics['expenses']

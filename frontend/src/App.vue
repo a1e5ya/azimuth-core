@@ -366,8 +366,8 @@ const sendMessage = async (message = null) => {
             if (params.merchant) {
               filters.value.merchant = params.merchant
             }
-            if (params.transaction_type) {
-              filters.value.transactionType = params.transaction_type
+            if (params.main_category) {
+              filters.value.transactionType = params.main_category
             }
             // Show filters panel
             showFilters.value = true

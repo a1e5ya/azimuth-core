@@ -39,8 +39,8 @@ async def check_transactions():
             print(f"\n{i}. ID: {t.id}")
             print(f"   Merchant: {t.merchant}")
             print(f"   Amount: {t.amount}")
-            print(f"   CSV Category: {t.csv_category}")
-            print(f"   CSV Subcategory: {t.csv_subcategory}")
+            print(f"   CSV Category: {t.category}")
+            print(f"   CSV Subcategory: {t.subcategory}")
             print(f"   category_id: {t.category_id}")
             print(f"   source_category: {t.source_category}")
         

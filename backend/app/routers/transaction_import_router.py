@@ -198,7 +198,7 @@ async def get_import_batch_details(
     
     # Get transaction type breakdown
     type_query = select(
-        Transaction.transaction_type,
+        Transaction.main_category,
         func.count(Transaction.id).label('count'),
         func.sum(Transaction.amount).label('amount')
     ).where(
@@ -206,13 +206,13 @@ async def get_import_batch_details(
             Transaction.user_id == current_user.id,
             Transaction.import_batch_id == uuid.UUID(batch_id)
         )
-    ).group_by(Transaction.transaction_type)
+    ).group_by(Transaction.main_category)
     
     type_result = await db.execute(type_query)
     type_breakdown = {}
     
     for row in type_result:
-        type_breakdown[row.transaction_type or 'unknown'] = {
+        type_breakdown[row.main_category or 'unknown'] = {
             "count": row.count,
             "amount": float(row.amount or 0)
         }

@@ -239,11 +239,11 @@ class CategoryService:
         
         return SequenceMatcher(None, s1, s2).ratio()
     
-    async def match_csv_category(
+    async def match_category(
         self,
         csv_main: str,
-        csv_category: str,
-        csv_subcategory: Optional[str] = None
+        category: str,
+        subcategory: Optional[str] = None
     ) -> Dict[str, Any]:
         """Match CSV categories to user categories"""
         
@@ -256,9 +256,9 @@ class CategoryService:
         result = await self.db.execute(query)
         user_categories = result.scalars().all()
         
-        csv_full = f"{csv_main} {csv_category}"
-        if csv_subcategory:
-            csv_full = f"{csv_full} {csv_subcategory}"
+        csv_full = f"{csv_main} {category}"
+        if subcategory:
+            csv_full = f"{csv_full} {subcategory}"
         csv_full = csv_full.lower().strip()
         
         best_match = None

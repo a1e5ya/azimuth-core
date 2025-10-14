@@ -1,11 +1,8 @@
 <template>
   <div class="tab-content">
-
-
     <!-- Transactions Header with Stats and Pagination -->
     <div class="container">
       <div class="transactions-header">
-
         <!-- Left: Stats -->
         <div class="header-stats">
           <div class="stat-item">
@@ -31,43 +28,43 @@
           </div>
         </div>
 
-                    <!-- Action Buttons - Compact Top Left -->
-    <div class="action-buttons-compact">
-      <button 
-        class="btn btn-icon" 
-        @click="triggerFileUpload"
-        title="Import Transactions"
-      >
-        <AppIcon name="file-add" size="medium" />
-      </button>
-      
-      <button 
-        class="btn btn-icon" 
-        @click="$emit('update:showFilters', !showFilters)"
-        :class="{ 'btn-active': showFilters }"
-        title="Filter Transactions"
-      >
-        <AppIcon name="filter" size="medium" />
-      </button>
-      
-      <button 
-        class="btn btn-icon" 
-        @click="refreshTransactions" 
-        :disabled="loading"
-        title="Refresh"
-      >
-        <AppIcon name="refresh" size="medium" />
-      </button>
-      
-      <input 
-        ref="fileInput" 
-        type="file" 
-        accept=".csv,.xlsx" 
-        multiple 
-        @change="handleFileSelect" 
-        style="display: none;"
-      >
-    </div>
+        <!-- Action Buttons - Compact Top Left -->
+        <div class="action-buttons-compact">
+          <button 
+            class="btn btn-icon" 
+            @click="triggerFileUpload"
+            title="Import Transactions"
+          >
+            <AppIcon name="file-add" size="medium" />
+          </button>
+          
+          <button 
+            class="btn btn-icon" 
+            @click="showFilters = !showFilters"
+            :class="{ 'btn-active': showFilters }"
+            title="Filter Transactions"
+          >
+            <AppIcon name="filter" size="medium" />
+          </button>
+          
+          <button 
+            class="btn btn-icon" 
+            @click="refreshTransactions" 
+            :disabled="loading"
+            title="Refresh"
+          >
+            <AppIcon name="refresh" size="medium" />
+          </button>
+          
+          <input 
+            ref="fileInput" 
+            type="file" 
+            accept=".csv,.xlsx" 
+            multiple 
+            @change="handleFileSelect" 
+            style="display: none;"
+          >
+        </div>
         
         <!-- Right: Pagination -->
         <div class="pagination-controls">
@@ -100,362 +97,36 @@
         </div>
       </div>
       
-      <!-- Compact Filters Panel -->
-      <div class="filters-panel-compact" v-if="showFilters">
-        <!-- First Row: Date Range & Amounts -->
-        <div class="filters-row">
-          <div class="filter-group-compact">
-            <label>From Date</label>
-            <input 
-              type="date" 
-              v-model="filters.startDate"
-              class="filter-input-compact"
-            >
-          </div>
-          
-          <div class="filter-group-compact">
-            <label>To Date</label>
-            <input 
-              type="date" 
-              v-model="filters.endDate"
-              class="filter-input-compact"
-            >
-          </div>
-          
-          <div class="filter-group-compact">
-            <label>Min Amount</label>
-            <input 
-              type="number" 
-              v-model.number="filters.minAmount"
-              class="filter-input-compact"
-              placeholder="0.00"
-              step="0.01"
-            >
-          </div>
-          
-          <div class="filter-group-compact">
-            <label>Max Amount</label>
-            <input 
-              type="number" 
-              v-model.number="filters.maxAmount"
-              class="filter-input-compact"
-              placeholder="1000.00"
-              step="0.01"
-            >
-          </div>
-        </div>
-        
-        <!-- Second Row: Type & Categories -->
-        <div class="filters-row filters-row-3col">
-          <div class="filter-group-compact">
-            <label>Type</label>
-            <select v-model="filters.typeFilter" class="filter-input-compact">
-              <option value="">All Types</option>
-              <option v-for="type in availableTypes" :key="type.id" :value="type.id">
-                {{ type.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="filter-group-compact">
-            <label>Category</label>
-            <select v-model="filters.categoryFilter" class="filter-input-compact" :disabled="!filters.typeFilter">
-              <option value="">All Categories</option>
-              <option v-for="category in availableCategories" :key="category.id" :value="category.id">
-                {{ category.name }}
-              </option>
-            </select>
-          </div>
-          
-          <div class="filter-group-compact">
-            <label>Subcategory</label>
-            <select v-model="filters.subcategoryFilter" class="filter-input-compact" :disabled="!filters.categoryFilter">
-              <option value="">All Subcategories</option>
-              <option v-for="subcategory in availableSubcategories" :key="subcategory.id" :value="subcategory.id">
-                {{ subcategory.name }}
-              </option>
-            </select>
-          </div>
-        </div>
-        
-        <!-- Third Row: Search & Actions -->
-        <div class="filters-row filters-row-actions">
-          <div class="filter-group-compact filter-search-compact">
-            <label>Search</label>
-            <input 
-              type="text" 
-              v-model="filters.merchant"
-              class="filter-input-compact"
-              placeholder="Search merchant, message..."
-            >
-          </div>
-          
-          <div class="filter-actions-compact">
-            <button class="btn btn-small" @click="clearFilters">Clear</button>
-            <button class="btn btn-small" @click="$emit('update:showFilters', false)">Hide</button>
-          </div>
-        </div>
-      </div>
+      <!-- Filters Component -->
+      <TransactionsFilters
+        v-model="filters"
+        v-model:show="showFilters"
+        :filter-options="filterOptions"
+      />
 
-      <!-- Bulk Selection -->
-      <div class="bulk-actions" v-if="selectedTransactions.length > 0">
-        <span class="bulk-selection">{{ selectedTransactions.length }} selected</span>
-        <select v-model="bulkCategoryId" class="bulk-category-select">
-          <option value="">Select category for bulk assignment...</option>
-          <optgroup 
-            v-for="group in groupedCategories" 
-            :key="group.name" 
-            :label="group.name"
-          >
-            <option 
-              v-for="category in group.categories" 
-              :key="category.id" 
-              :value="category.id"
-            >
-              {{ category.name }}
-            </option>
-          </optgroup>
-        </select>
-        <button class="btn btn-small" @click="bulkCategorize" :disabled="!bulkCategoryId">
-          Apply Category
-        </button>
-        <button class="btn btn-link" @click="clearSelection">
-          Clear Selection
-        </button>
-      </div>
-
-      <!-- Loading and Empty States -->
-      <div v-if="loading" class="loading-state">
-        <div class="loading-spinner">⟳</div>
-        <div>Loading transactions...</div>
-      </div>
-      
-      <div v-else-if="transactions.length === 0" class="empty-state">
-        <div class="empty-title">No transactions found</div>
-        <div class="empty-subtitle">
-          {{ hasActiveFilters ? 'Try adjusting your filters' : 'Upload CSV files to get started' }}
-        </div>
-      </div>
-      
-      <!-- Transactions Table -->
-      <div v-else class="transactions-table-container">
-        <table class="transactions-table">
-          <thead>
-            <tr>
-              <th class="col-select">
-                <input 
-                  type="checkbox" 
-                  :checked="allVisibleTransactionsSelected"
-                  @change="toggleAllTransactions"
-                >
-              </th>
-              <th class="col-date clickable" @click="toggleSort('posted_at')">
-                Date
-                <span v-if="sortBy === 'posted_at'">
-                  {{ sortOrder === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-amount clickable" @click="toggleSort('amount')">
-                Amount
-                <span v-if="sortBy === 'amount'">
-                  {{ sortOrder === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-merchant clickable" @click="toggleSort('merchant')">
-                Merchant
-                <span v-if="sortBy === 'merchant'">
-                  {{ sortOrder === 'desc' ? '↓' : '↑' }}
-                </span>
-              </th>
-              <th class="col-type">Type</th>
-              <th class="col-category">Category</th>
-              <th class="col-subcategory">Subcategory</th>
-              <th class="col-actions"></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr 
-              v-for="transaction in transactions" 
-              :key="transaction.id"
-              class="transaction-row"
-              :class="{ 
-                'selected': selectedTransactions.includes(transaction.id)
-              }"
-              :style="getTransactionRowStyle(transaction)"
-            >
-              <td class="col-select">
-                <input 
-                  type="checkbox" 
-                  :checked="selectedTransactions.includes(transaction.id)"
-                  @change="toggleTransactionSelection(transaction.id)"
-                >
-              </td>
-              
-              <td class="col-date">
-                <div class="date-primary">{{ formatDate(transaction.posted_at) }}</div>
-                <div class="date-secondary">{{ transaction.weekday }}</div>
-              </td>
-              
-              <td class="col-amount" :class="getAmountClass(transaction)">
-                <div class="amount-primary">{{ formatAmount(transaction.amount) }}</div>
-              </td>
-              
-              <td class="col-merchant">
-                <div class="merchant-primary">{{ transaction.merchant || 'Unknown Merchant' }}</div>
-                <div class="merchant-secondary" v-if="transaction.memo">
-                  {{ truncateText(transaction.memo, 50) }}
-                </div>
-              </td>
-              
-              <td class="col-type">
-                <div class="category-text" v-if="getCategoryType(transaction)">
-                  {{ getCategoryType(transaction) }}
-                </div>
-                <div v-else class="text-muted">-</div>
-              </td>
-              
-              <td class="col-category">
-                <div class="category-text" v-if="getCategoryName(transaction)">
-                  {{ getCategoryName(transaction) }}
-                </div>
-                <div v-else class="text-muted">-</div>
-              </td>
-              
-              <td class="col-subcategory">
-                <div class="category-text" v-if="getSubcategoryName(transaction)">
-                  {{ getSubcategoryName(transaction) }}
-                </div>
-                <div v-else class="text-muted">-</div>
-              </td>
-              
-              <td class="col-actions">
-                <ActionsMenu
-                  :show-edit="true"
-                  :show-add="false"
-                  :show-check="false"
-                  :show-delete="true"
-                  @edit="editTransaction(transaction)"
-                  @delete="deleteTransaction(transaction)"
-                />
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      <!-- Transactions Table Component -->
+      <TransactionsTable
+        :transactions="transactions"
+        :loading="loading"
+        :has-active-filters="hasActiveFilters"
+        :sort-by="sortBy"
+        :sort-order="sortOrder"
+        :grouped-categories="groupedCategories"
+        :category-tree="categoryTree"
+        @edit="handleEdit"
+        @delete="handleDelete"
+        @sort="toggleSort"
+        @bulk-categorize="handleBulkCategorize"
+      />
     </div>
 
-    <!-- Edit Transaction Modal -->
-    <div v-if="editingTransaction" class="modal-overlay" @click="closeEditModal">
-      <div class="modal-content transaction-edit-modal" @click.stop>
-        <div class="modal-header">
-          <h3>Edit Transaction</h3>
-          <button class="close-btn" @click="closeEditModal">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="edit-form">
-            <div class="form-group">
-              <label>Merchant</label>
-              <input 
-                type="text" 
-                v-model="editForm.merchant"
-                class="form-input"
-              >
-            </div>
-            
-            <div class="form-group">
-              <label>Amount</label>
-              <input 
-                type="number" 
-                v-model.number="editForm.amount"
-                class="form-input"
-                step="0.01"
-              >
-            </div>
-            
-            <div class="form-group">
-              <label>Memo</label>
-              <textarea 
-                v-model="editForm.memo"
-                class="form-input"
-                rows="3"
-              ></textarea>
-            </div>
-            
-            <div class="form-group">
-              <label>Category</label>
-              <select v-model="editForm.category_id" class="form-input">
-                <option value="">Select category...</option>
-                <optgroup 
-                  v-for="group in groupedCategories" 
-                  :key="group.name" 
-                  :label="group.name"
-                >
-                  <option 
-                    v-for="category in group.categories" 
-                    :key="category.id" 
-                    :value="category.id"
-                  >
-                    {{ category.name }}
-                  </option>
-                </optgroup>
-              </select>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn" 
-            @click="saveTransactionEdit"
-            :disabled="saving"
-          >
-            {{ saving ? 'Saving...' : 'Save Changes' }}
-          </button>
-          <button class="btn btn-link" @click="closeEditModal" :disabled="saving">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <!-- Delete Confirmation Modal -->
-    <div v-if="deletingTransaction" class="modal-overlay" @click="closeDeleteModal">
-      <div class="modal-content delete-modal" @click.stop>
-        <div class="modal-header">
-          <h3>Delete Transaction</h3>
-          <button class="close-btn" @click="closeDeleteModal">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="delete-warning">
-            <div class="warning-icon">⚠️</div>
-            <div class="warning-text">
-              <p><strong>Are you sure you want to delete this transaction?</strong></p>
-              <p class="transaction-details">
-                <strong>{{ deletingTransaction.merchant || 'Unknown Merchant' }}</strong><br>
-                {{ formatAmount(deletingTransaction.amount) }}<br>
-                {{ formatDate(deletingTransaction.posted_at) }}
-              </p>
-              <p>This action cannot be undone.</p>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-danger" 
-            @click="confirmDelete"
-            :disabled="deleting"
-          >
-            {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
-          </button>
-          <button class="btn btn-link" @click="closeDeleteModal" :disabled="deleting">
-            Cancel
-          </button>
-        </div>
-      </div>
-    </div>
+    <!-- CRUD Modals Component -->
+    <TransactionsCRUD
+      ref="crudComponent"
+      @transaction-updated="handleTransactionUpdated"
+      @transaction-deleted="handleTransactionDeleted"
+      @add-chat-message="addChatMessage"
+    />
   </div>
 </template>
 
@@ -464,40 +135,33 @@ import { ref, computed, watch, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/categories'
-import ActionsMenu from './ActionsMenu.vue'
 import AppIcon from './AppIcon.vue'
+import TransactionsFilters from './TransactionsFilters.vue'
+import TransactionsTable from './TransactionsTable.vue'
+import TransactionsCRUD from './TransactionsCRUD.vue'
 
 export default {
   name: 'TransactionsTab',
   components: {
-    ActionsMenu,
-    AppIcon
+    AppIcon,
+    TransactionsFilters,
+    TransactionsTable,
+    TransactionsCRUD
   },
   props: {
     user: {
       type: Object,
       required: true
-    },
-    allCategories: {
-      type: Array,
-      default: () => []
-    },
-    showFilters: {
-      type: Boolean,
-      default: false
     }
   },
-  emits: [
-    'add-chat-message',
-    'update:showFilters'
-  ],
+  emits: ['add-chat-message'],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
     
     const fileInput = ref(null)
-    const isDragging = ref(false)
+    const crudComponent = ref(null)
     const localUploads = ref([])
     
     const loading = ref(false)
@@ -508,6 +172,7 @@ export default {
     const pageSize = ref(50)
     const sortBy = ref('posted_at')
     const sortOrder = ref('desc')
+    const showFilters = ref(false)
     
     const filters = ref({
       startDate: '',
@@ -515,58 +180,21 @@ export default {
       minAmount: null,
       maxAmount: null,
       merchant: '',
-      typeFilter: '',
-      categoryFilter: '',
-      subcategoryFilter: ''
+      owners: [],
+      accountTypes: [],
+      types: [],
+      categories: [],
+      subcategories: []
     })
     
-    const csvMainCategories = ref([])
-    const csvCategories = ref([])
-    const csvSubcategories = ref([])
-    
-    const selectedTransactions = ref([])
-    const bulkCategoryId = ref('')
-    
-    const editingTransaction = ref(null)
-    const deletingTransaction = ref(null)
-    const saving = ref(false)
-    const deleting = ref(false)
-    
-    const editForm = ref({
-      merchant: '',
-      amount: 0,
-      memo: '',
-      category_id: ''
+    const filterOptions = ref({
+      ownerAccountMap: {},
+      mainCategories: [],
+      categoryMap: {},
+      subcategoryMap: {}
     })
 
     const categoryTree = computed(() => categoryStore.categories || [])
-    
-    const availableTypes = computed(() => {
-      return csvMainCategories.value.map(name => ({ id: name, name }))
-    })
-
-    const availableCategories = computed(() => {
-      if (!filters.value.typeFilter) return []
-      
-      return csvCategories.value
-        .filter(cat => cat.main === filters.value.typeFilter)
-        .map(cat => ({ id: cat.name, name: cat.name }))
-    })
-
-    const availableSubcategories = computed(() => {
-      if (!filters.value.categoryFilter) return []
-      
-      return csvSubcategories.value
-        .filter(sub => 
-          sub.main === filters.value.typeFilter && 
-          sub.category === filters.value.categoryFilter
-        )
-        .map(sub => ({ id: sub.name, name: sub.name }))
-    })
-
-    const hasActiveFilters = computed(() => {
-      return Object.values(filters.value).some(value => value !== '' && value !== null)
-    })
     
     const groupedCategories = computed(() => {
       const groups = {}
@@ -599,55 +227,22 @@ export default {
       
       return Object.values(groups)
     })
-    
-    const allVisibleTransactionsSelected = computed(() => {
-      return transactions.value.length > 0 && 
-             transactions.value.every(t => selectedTransactions.value.includes(t.id))
+
+    const hasActiveFilters = computed(() => {
+      return filters.value.startDate || 
+             filters.value.endDate || 
+             filters.value.minAmount || 
+             filters.value.maxAmount || 
+             filters.value.merchant ||
+             filters.value.owners.length > 0 ||
+             filters.value.accountTypes.length > 0 ||
+             filters.value.types.length > 0 ||
+             filters.value.categories.length > 0 ||
+             filters.value.subcategories.length > 0
     })
 
-    watch(filters, () => {
-      currentPage.value = 1
-      loadTransactions()
-    }, { deep: true })
-    
-    watch(() => filters.value.typeFilter, (newVal, oldVal) => {
-      if (newVal !== oldVal) {
-        filters.value.categoryFilter = ''
-        filters.value.subcategoryFilter = ''
-      }
-    })
-    
-    watch(() => filters.value.categoryFilter, (newVal, oldVal) => {
-      if (newVal !== oldVal) {
-        filters.value.subcategoryFilter = ''
-      }
-    })
-    
-    watch(() => [currentPage.value, pageSize.value, sortBy.value, sortOrder.value], () => {
-      loadTransactions()
-    })
-
-    const hexToRgba = (hex, alpha) => {
-      if (!hex) return 'transparent'
-      const r = parseInt(hex.slice(1, 3), 16)
-      const g = parseInt(hex.slice(3, 5), 16)
-      const b = parseInt(hex.slice(5, 7), 16)
-      return `rgba(${r}, ${g}, ${b}, ${alpha})`
-    }
-
-    const getTransactionRowStyle = (transaction) => {
-      if (!transaction.category_id) {
-        return {}
-      }
-      
-      const category = findCategoryById(transaction.category_id)
-      if (!category || !category.color) {
-        return {}
-      }
-      
-      return {
-        backgroundColor: hexToRgba(category.color, 0.1)
-      }
+    const addChatMessage = (messageData) => {
+      emit('add-chat-message', messageData)
     }
 
     const triggerFileUpload = () => {
@@ -664,7 +259,7 @@ export default {
       if (!files || files.length === 0) return
       
       if (!props.user) {
-        emit('add-chat-message', {
+        addChatMessage({
           response: 'Please sign in to upload files.'
         })
         return
@@ -674,7 +269,7 @@ export default {
         console.log('Processing file:', file.name)
         
         if (!file.name.toLowerCase().endsWith('.csv') && !file.name.toLowerCase().endsWith('.xlsx')) {
-          emit('add-chat-message', {
+          addChatMessage({
             message: `File upload: ${file.name}`,
             response: 'Please upload only CSV or XLSX files.'
           })
@@ -682,7 +277,7 @@ export default {
         }
 
         if (file.size > 10 * 1024 * 1024) {
-          emit('add-chat-message', {
+          addChatMessage({
             message: `File upload: ${file.name}`,
             response: 'File too large. Please upload files smaller than 10MB.'
           })
@@ -694,14 +289,12 @@ export default {
           filename: file.name,
           status: 'processing',
           rows: 0,
-          timestamp: new Date().toLocaleTimeString(),
-          summary: null,
-          batch_id: null
+          timestamp: new Date().toLocaleTimeString()
         }
         
         localUploads.value.unshift(upload)
         
-        emit('add-chat-message', {
+        addChatMessage({
           message: `Uploading: ${file.name}`,
           response: `Processing ${file.name}...`
         })
@@ -725,10 +318,8 @@ export default {
           
           upload.status = 'success'
           upload.rows = response.data.summary.rows_inserted || 0
-          upload.summary = response.data.summary
-          upload.batch_id = response.data.batch_id
           
-          emit('add-chat-message', {
+          addChatMessage({
             message: `File uploaded: ${file.name}`,
             response: `Successfully imported ${upload.rows} transactions!`
           })
@@ -748,7 +339,7 @@ export default {
             errorMessage = error.response.data.detail
           }
           
-          emit('add-chat-message', {
+          addChatMessage({
             message: `File upload: ${file.name}`,
             response: errorMessage
           })
@@ -762,9 +353,10 @@ export default {
       try {
         const token = authStore.token
         
+        const ownerAccountMap = {}
         const mainCats = new Set()
-        const cats = new Map()
-        const subCats = new Map()
+        const categoryMap = {}
+        const subcategoryMap = {}
         
         let page = 1
         let hasMore = true
@@ -772,10 +364,7 @@ export default {
         
         while (hasMore && page <= 10) {
           const response = await axios.get(`${API_BASE}/transactions/list`, {
-            params: {
-              page: page,
-              limit: batchSize
-            },
+            params: { page: page, limit: batchSize },
             headers: { 'Authorization': `Bearer ${token}` }
           })
           
@@ -787,23 +376,32 @@ export default {
           }
           
           pageTransactions.forEach(t => {
+            // Owner and account type mapping
+            if (t.owner && t.bank_account_type) {
+              if (!ownerAccountMap[t.owner]) {
+                ownerAccountMap[t.owner] = new Set()
+              }
+              ownerAccountMap[t.owner].add(t.bank_account_type)
+            }
+            
+            // Main categories
             if (t.main_category) {
               mainCats.add(t.main_category)
               
+              // Categories
               if (t.category) {
-                const key = `${t.main_category}|${t.category}`
-                cats.set(key, {
-                  main: t.main_category,
-                  name: t.category
-                })
+                if (!categoryMap[t.main_category]) {
+                  categoryMap[t.main_category] = new Set()
+                }
+                categoryMap[t.main_category].add(t.category)
                 
+                // Subcategories
                 if (t.subcategory) {
-                  const subKey = `${t.main_category}|${t.category}|${t.subcategory}`
-                  subCats.set(subKey, {
-                    main: t.main_category,
-                    category: t.category,
-                    name: t.subcategory
-                  })
+                  const key = `${t.main_category}|${t.category}`
+                  if (!subcategoryMap[key]) {
+                    subcategoryMap[key] = new Set()
+                  }
+                  subcategoryMap[key].add(t.subcategory)
                 }
               }
             }
@@ -816,9 +414,28 @@ export default {
           page++
         }
         
-        csvMainCategories.value = Array.from(mainCats).sort()
-        csvCategories.value = Array.from(cats.values())
-        csvSubcategories.value = Array.from(subCats.values())
+        // Convert Sets to Arrays
+        const ownerAccountMapArray = {}
+        Object.keys(ownerAccountMap).forEach(owner => {
+          ownerAccountMapArray[owner] = Array.from(ownerAccountMap[owner]).sort()
+        })
+        
+        const categoryMapArray = {}
+        Object.keys(categoryMap).forEach(main => {
+          categoryMapArray[main] = Array.from(categoryMap[main]).sort()
+        })
+        
+        const subcategoryMapArray = {}
+        Object.keys(subcategoryMap).forEach(key => {
+          subcategoryMapArray[key] = Array.from(subcategoryMap[key]).sort()
+        })
+        
+        filterOptions.value = {
+          ownerAccountMap: ownerAccountMapArray,
+          mainCategories: Array.from(mainCats).sort(),
+          categoryMap: categoryMapArray,
+          subcategoryMap: subcategoryMapArray
+        }
         
       } catch (error) {
         console.error('Failed to load filter options:', error)
@@ -847,7 +464,11 @@ export default {
       try {
         const token = authStore.token
         
-        const hasCSVFilter = filters.value.typeFilter || filters.value.categoryFilter || filters.value.subcategoryFilter
+        const hasCSVFilter = filters.value.types.length > 0 || 
+                            filters.value.categories.length > 0 || 
+                            filters.value.subcategories.length > 0 ||
+                            filters.value.owners.length > 0 ||
+                            filters.value.accountTypes.length > 0
         
         if (hasCSVFilter) {
           let allTransactions = []
@@ -885,15 +506,23 @@ export default {
           }
           
           let filtered = allTransactions.filter(t => {
-            if (filters.value.typeFilter && t.main_category !== filters.value.typeFilter) {
+            if (filters.value.owners.length > 0 && !filters.value.owners.includes(t.owner)) {
               return false
             }
             
-            if (filters.value.categoryFilter && t.category !== filters.value.categoryFilter) {
+            if (filters.value.accountTypes.length > 0 && !filters.value.accountTypes.includes(t.bank_account_type)) {
               return false
             }
             
-            if (filters.value.subcategoryFilter && t.subcategory !== filters.value.subcategoryFilter) {
+            if (filters.value.types.length > 0 && !filters.value.types.includes(t.main_category)) {
+              return false
+            }
+            
+            if (filters.value.categories.length > 0 && !filters.value.categories.includes(t.category)) {
+              return false
+            }
+            
+            if (filters.value.subcategories.length > 0 && !filters.value.subcategories.includes(t.subcategory)) {
               return false
             }
             
@@ -937,180 +566,6 @@ export default {
       await loadTransactions()
     }
 
-    const editTransaction = (transaction) => {
-      editingTransaction.value = transaction
-      editForm.value = {
-        merchant: transaction.merchant || '',
-        amount: parseFloat(transaction.amount),
-        memo: transaction.memo || '',
-        category_id: transaction.category_id || ''
-      }
-    }
-
-    const closeEditModal = () => {
-      editingTransaction.value = null
-      editForm.value = {
-        merchant: '',
-        amount: 0,
-        memo: '',
-        category_id: ''
-      }
-    }
-
-    const saveTransactionEdit = async () => {
-      if (!editingTransaction.value || saving.value) return
-      
-      saving.value = true
-      
-      try {
-        const token = authStore.token
-        
-        await axios.put(
-          `${API_BASE}/transactions/${editingTransaction.value.id}`,
-          editForm.value,
-          {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        )
-        
-        emit('add-chat-message', {
-          message: 'Transaction updated',
-          response: 'Transaction has been successfully updated!'
-        })
-        
-        await loadTransactions()
-        await loadSummary()
-        closeEditModal()
-        
-      } catch (error) {
-        console.error('Failed to update transaction:', error)
-        emit('add-chat-message', {
-          response: 'Failed to update transaction. Please try again.'
-        })
-      } finally {
-        saving.value = false
-      }
-    }
-
-    const deleteTransaction = (transaction) => {
-      deletingTransaction.value = transaction
-    }
-
-    const closeDeleteModal = () => {
-      deletingTransaction.value = null
-    }
-
-    const confirmDelete = async () => {
-      if (!deletingTransaction.value || deleting.value) return
-      
-      deleting.value = true
-      
-      try {
-        const token = authStore.token
-        
-        await axios.delete(
-          `${API_BASE}/transactions/${deletingTransaction.value.id}`,
-          {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        )
-        
-        emit('add-chat-message', {
-          message: 'Transaction deleted',
-          response: 'Transaction has been permanently deleted.'
-        })
-        
-        await loadTransactions()
-        await loadSummary()
-        closeDeleteModal()
-        
-      } catch (error) {
-        console.error('Failed to delete transaction:', error)
-        emit('add-chat-message', {
-          response: 'Failed to delete transaction. Please try again.'
-        })
-      } finally {
-        deleting.value = false
-      }
-    }
-
-    const bulkCategorize = async () => {
-      if (!bulkCategoryId.value || selectedTransactions.value.length === 0) return
-      
-      try {
-        const token = authStore.token
-        
-        await axios.post(`${API_BASE}/transactions/bulk-categorize`, {
-          transaction_ids: selectedTransactions.value,
-          category_id: bulkCategoryId.value,
-          confidence: 1.0
-        }, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        const category = props.allCategories.find(c => c.id === bulkCategoryId.value)
-        emit('add-chat-message', {
-          message: `Bulk categorization: ${selectedTransactions.value.length} transactions`,
-          response: `Successfully applied category ${category?.name || 'selected category'} to ${selectedTransactions.value.length} transactions!`
-        })
-        
-        selectedTransactions.value = []
-        bulkCategoryId.value = ''
-        await loadTransactions()
-        await loadSummary()
-        
-      } catch (error) {
-        console.error('Bulk categorization failed:', error)
-        emit('add-chat-message', {
-          response: 'Bulk categorization failed. Please try again.'
-        })
-      }
-    }
-
-    const clearFilters = () => {
-      filters.value = {
-        startDate: '',
-        endDate: '',
-        minAmount: null,
-        maxAmount: null,
-        merchant: '',
-        typeFilter: '',
-        categoryFilter: '',
-        subcategoryFilter: ''
-      }
-    }
-
-    const toggleSort = (column) => {
-      if (sortBy.value === column) {
-        sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
-      } else {
-        sortBy.value = column
-        sortOrder.value = 'desc'
-      }
-    }
-
-    const toggleTransactionSelection = (transactionId) => {
-      const index = selectedTransactions.value.indexOf(transactionId)
-      if (index > -1) {
-        selectedTransactions.value.splice(index, 1)
-      } else {
-        selectedTransactions.value.push(transactionId)
-      }
-    }
-
-    const toggleAllTransactions = () => {
-      if (allVisibleTransactionsSelected.value) {
-        selectedTransactions.value = []
-      } else {
-        selectedTransactions.value = transactions.value.map(t => t.id)
-      }
-    }
-
-    const clearSelection = () => {
-      selectedTransactions.value = []
-      bulkCategoryId.value = ''
-    }
-
     const changePage = (newPage) => {
       if (newPage >= 1) {
         currentPage.value = newPage
@@ -1122,73 +577,73 @@ export default {
       loadTransactions()
     }
 
-    const findCategoryById = (categoryId) => {
-      const searchInTree = (categories) => {
-        for (const cat of categories) {
-          if (cat.id === categoryId) return cat
-          if (cat.children) {
-            const found = searchInTree(cat.children)
-            if (found) return found
-          }
-        }
-        return null
+    const toggleSort = (column) => {
+      if (sortBy.value === column) {
+        sortOrder.value = sortOrder.value === 'desc' ? 'asc' : 'desc'
+      } else {
+        sortBy.value = column
+        sortOrder.value = 'desc'
       }
-      
-      return searchInTree(categoryTree.value)
     }
 
-    const getCategoryType = (transaction) => {
-      if (!transaction.main_category) return null
-      return transaction.main_category
+    const handleEdit = (transaction) => {
+      crudComponent.value.editTransaction(transaction)
     }
 
-    const getCategoryName = (transaction) => {
-      if (!transaction.assigned_category) return null
-      return transaction.assigned_category
+    const handleDelete = (transaction) => {
+      crudComponent.value.deleteTransaction(transaction)
     }
 
-    const getSubcategoryName = (transaction) => {
-      if (!transaction.subcategory) return null
-      return transaction.subcategory
+    const handleTransactionUpdated = async () => {
+      await loadTransactions()
+      await loadSummary()
     }
 
-    const formatDate = (dateString) => {
-      return new Date(dateString).toLocaleDateString('en-EU', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric'
-      })
+    const handleTransactionDeleted = async () => {
+      await loadTransactions()
+      await loadSummary()
     }
 
-const formatAmount = (amount) => {
-  const num = parseFloat(amount)
-  const formattedValue = new Intl.NumberFormat('en-EU', {
-    style: 'currency',
-    currency: 'EUR'
-  }).format(Math.abs(num))
-  
-  if (num > 0) {
-    return `+ ${formattedValue}`
-  } else if (num < 0) {
-    return `- ${formattedValue}`
-  }
-  return formattedValue
-}
-
-    const getAmountClass = (transaction) => {
-      const amount = parseFloat(transaction.amount)
-      if (transaction.transaction_type === 'income' || amount > 0) {
-        return 'amount-positive'
-      } else if (transaction.transaction_type === 'expense' || amount < 0) {
-        return 'amount-negative'
+    const handleBulkCategorize = async (data) => {
+      try {
+        const token = authStore.token
+        
+        await axios.post(`${API_BASE}/transactions/bulk-categorize`, {
+          transaction_ids: data.transactionIds,
+          category_id: data.categoryId,
+          confidence: 1.0
+        }, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        const category = groupedCategories.value
+          .flatMap(g => g.categories)
+          .find(c => c.id === data.categoryId)
+        
+        addChatMessage({
+          message: `Bulk categorization: ${data.transactionIds.length} transactions`,
+          response: `Successfully applied category ${category?.name || 'selected category'} to ${data.transactionIds.length} transactions!`
+        })
+        
+        await loadTransactions()
+        await loadSummary()
+        
+      } catch (error) {
+        console.error('Bulk categorization failed:', error)
+        addChatMessage({
+          response: 'Bulk categorization failed. Please try again.'
+        })
       }
-      return 'amount-neutral'
     }
 
-    const truncateText = (text, maxLength) => {
-      if (!text || text.length <= maxLength) return text
-      return text.substring(0, maxLength) + '...'
-    }
+    watch(filters, () => {
+      currentPage.value = 1
+      loadTransactions()
+    }, { deep: true })
+    
+    watch(() => [currentPage.value, pageSize.value, sortBy.value, sortOrder.value], () => {
+      loadTransactions()
+    })
 
     onMounted(async () => {
       if (props.user) {
@@ -1201,7 +656,7 @@ const formatAmount = (amount) => {
 
     return {
       fileInput,
-      isDragging,
+      crudComponent,
       localUploads,
       loading,
       summary,
@@ -1210,65 +665,36 @@ const formatAmount = (amount) => {
       pageSize,
       sortBy,
       sortOrder,
+      showFilters,
       filters,
-      hasActiveFilters,
-      availableTypes,
-      availableCategories,
-      availableSubcategories,
-      selectedTransactions,
-      bulkCategoryId,
-      allVisibleTransactionsSelected,
-      editingTransaction,
-      deletingTransaction,
-      saving,
-      deleting,
-      editForm,
+      filterOptions,
+      categoryTree,
       groupedCategories,
-      hexToRgba,
-      getTransactionRowStyle,
+      hasActiveFilters,
+      addChatMessage,
       triggerFileUpload,
       handleFileSelect,
       loadFilterOptions,
       loadSummary,
       loadTransactions,
       refreshTransactions,
-      editTransaction,
-      closeEditModal,
-      saveTransactionEdit,
-      deleteTransaction,
-      closeDeleteModal,
-      confirmDelete,
-      bulkCategorize,
-      clearFilters,
-      toggleSort,
-      toggleTransactionSelection,
-      toggleAllTransactions,
-      clearSelection,
       changePage,
       changePageSize,
-      findCategoryById,
-      getCategoryType,
-      getCategoryName,
-      getSubcategoryName,
-      formatDate,
-      formatAmount,
-      getAmountClass,
-      truncateText
+      toggleSort,
+      handleEdit,
+      handleDelete,
+      handleTransactionUpdated,
+      handleTransactionDeleted,
+      handleBulkCategorize
     }
   }
 }
 </script>
 
 <style scoped>
-/* ==============================================
-   ACTION BUTTONS COMPACT - TOP LEFT
-   ============================================== */
-
 .action-buttons-compact {
-
   display: flex;
   gap: var(--gap-large);
-
 }
 
 .action-buttons-compact .btn-icon {
@@ -1285,10 +711,6 @@ const formatAmount = (amount) => {
   box-shadow: var(--shadow-hover);
 }
 
-/* ==============================================
-   TRANSACTIONS HEADER - REDESIGNED
-   ============================================== */
-
 .transactions-header {
   display: flex;
   justify-content: space-between;
@@ -1300,7 +722,6 @@ const formatAmount = (amount) => {
   border-radius: var(--radius);
 }
 
-/* Header Stats - Left Side */
 .header-stats {
   display: flex;
   align-items: center;
@@ -1325,7 +746,6 @@ const formatAmount = (amount) => {
   color: var(--color-text);
 }
 
-/* Upload Progress Inline */
 .upload-inline {
   display: flex;
   gap: var(--gap-small);
@@ -1346,6 +766,11 @@ const formatAmount = (amount) => {
   display: inline-block;
 }
 
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .upload-mini-text {
   max-width: 10rem;
   overflow: hidden;
@@ -1358,7 +783,6 @@ const formatAmount = (amount) => {
   font-size: 0.75rem;
 }
 
-/* Pagination Controls - Right Side */
 .pagination-controls {
   display: flex;
   align-items: center;
@@ -1395,576 +819,5 @@ const formatAmount = (amount) => {
   margin: 0;
   background-color: transparent;
   box-shadow: none;
-
-}
-
-/* ==============================================
-   COMPACT FILTERS PANEL
-   ============================================== */
-
-.filters-panel-compact {
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  padding: var(--gap-standard);
-  margin-bottom: var(--gap-standard);
-  animation: slideDown 0.3s ease;
-}
-
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 20rem;
-    padding-top: var(--gap-standard);
-    padding-bottom: var(--gap-standard);
-  }
-}
-
-.filters-row {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: var(--gap-small);
-  margin-bottom: var(--gap-small);
-}
-
-.filters-row:last-child {
-  margin-bottom: 0;
-}
-
-.filters-row-3col {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.filters-row-actions {
-  grid-template-columns: 1fr 1fr;
-}
-
-.filter-group-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.filter-group-compact label {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--color-text-light);
-}
-
-.filter-input-compact {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  font-size: var(--text-small);
-  transition: border-color 0.2s ease;
-}
-
-.filter-input-compact:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-}
-
-.filter-search-compact {
-  flex: 1;
-}
-
-.filter-actions-compact {
-  display: flex;
-  gap: var(--gap-small);
-  align-items: flex-end;
-  justify-content: flex-end;
-}
-
-/* ==============================================
-   BULK ACTIONS
-   ============================================== */
-
-.bulk-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-standard);
-  padding: var(--gap-standard);
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  margin-bottom: var(--gap-standard);
-  flex-wrap: wrap;
-}
-
-.bulk-selection {
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.bulk-category-select {
-  padding: 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  min-width: 12rem;
-}
-
-/* ==============================================
-   LOADING AND EMPTY STATES
-   ============================================== */
-
-.loading-state,
-.empty-state {
-  text-align: center;
-  padding: var(--gap-large);
-  color: var(--color-text-light);
-}
-
-.loading-spinner {
-  font-size: var(--text-large);
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--gap-standard);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.empty-icon {
-  font-size: 3rem;
-  margin-bottom: var(--gap-standard);
-}
-
-.empty-title {
-  font-size: var(--text-large);
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.empty-subtitle {
-  color: var(--color-text-muted);
-}
-
-/* ==============================================
-   TRANSACTIONS TABLE
-   ============================================== */
-
-.transactions-table-container {
-  overflow-x: auto;
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-}
-
-.transactions-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: var(--color-background);
-  font-size: var(--text-small);
-}
-
-.transactions-table thead {
-  background: var(--color-background-dark);
-  position: sticky;
-  top: 0;
-  z-index: 10;
-}
-
-.transactions-table th {
-  padding: var(--gap-standard);
-  text-align: left;
-  font-weight: 600;
-  color: var(--color-text);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-  user-select: none;
-}
-
-.transactions-table th.clickable {
-  cursor: pointer;
-  transition: background-color 0.2s ease;
-}
-
-.transactions-table th.clickable:hover {
-  background: var(--color-background);
-}
-
-.transactions-table td {
-  padding: var(--gap-standard);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  vertical-align: top;
-}
-
-.transaction-row {
-  transition: background-color 0.2s ease;
-}
-
-.transaction-row:hover {
-  filter: brightness(0.95);
-}
-
-.transaction-row.selected {
-  outline: 2px solid var(--color-button-active);
-  outline-offset: -2px;
-}
-
-
-
-
-/* ==============================================
-   TABLE COLUMN WIDTHS
-   ============================================== */
-
-.col-select {
-  width: 3rem;
-  text-align: center;
-}
-
-.col-date {
-  width: 7rem;
-}
-
-.col-merchant {
-  min-width: 12rem;
-  max-width: 20rem;
-}
-
-.col-amount {
-  width: 8rem;
-  text-align: right;
-}
-
-.col-type {
-  width: 6rem;
-}
-
-.col-category {
-  width: 10rem;
-}
-
-.col-subcategory {
-  width: 10rem;
-}
-
-.col-actions {
-  width: 3rem;
-  text-align: center;
-}
-
-
-/* ==============================================
-   TABLE CELL CONTENT
-   ============================================== */
-
-.date-primary {
-  font-weight: 600;
-  margin-bottom: 0.125rem;
-}
-
-.date-secondary {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-}
-
-.merchant-primary {
-  font-weight: 600;
-  margin-bottom: 0.125rem;
-  word-break: break-word;
-}
-
-.merchant-secondary {
-  color: var(--color-text-light);
-  margin-bottom: 0.125rem;
-  line-height: 1.3;
-}
-
-.amount-primary {
-  font-weight: 600;
-  margin-bottom: 0.125rem;
-}
-
-.amount-positive {
-  color: none;
-}
-
-.amount-negative {
-  color: none;
-}
-
-.amount-neutral {
-  color: var(--color-text-light);
-}
-
-.category-text {
-  font-size: var(--text-small);
-  color: var(--color-text);
-}
-
-/* ==============================================
-   MODALS
-   ============================================== */
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal-content {
-  background: var(--color-background-light);
-  backdrop-filter: blur(1.25rem);
-  border-radius: var(--radius-large);
-  padding: 0;
-  width: 90%;
-  max-width: 40rem;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow);
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(2rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--gap-standard);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0.25rem;
-}
-
-.close-btn:hover {
-  color: var(--color-text);
-}
-
-.modal-body {
-  padding: var(--gap-standard);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--gap-small);
-  padding: var(--gap-standard);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-/* ==============================================
-   TRANSACTION EDIT MODAL
-   ============================================== */
-
-.transaction-edit-modal {
-  max-width: 35rem;
-}
-
-.edit-form {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-standard);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  font-weight: 600;
-  color: var(--color-text-light);
-  font-size: var(--text-small);
-}
-
-.form-input {
-  padding: 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  font-size: var(--text-medium);
-  font-family: inherit;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-}
-
-textarea.form-input {
-  resize: vertical;
-  min-height: 4rem;
-}
-
-/* ==============================================
-   DELETE MODAL
-   ============================================== */
-
-.delete-modal {
-  max-width: 30rem;
-}
-
-.delete-warning {
-  display: flex;
-  gap: var(--gap-standard);
-  padding: var(--gap-standard);
-  background: rgba(239, 68, 68, 0.05);
-  border-radius: var(--radius);
-}
-
-.warning-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.warning-text p {
-  margin-bottom: var(--gap-small);
-}
-
-.transaction-details {
-  padding: var(--gap-small);
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  margin: var(--gap-small) 0;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
-.btn-danger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-/* ==============================================
-   RESPONSIVE DESIGN
-   ============================================== */
-
-@media (max-width: 64rem) {
-  .action-buttons-compact {
-    position: static;
-    margin-bottom: var(--gap-standard);
-  }
-
-  .transactions-header {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .header-stats {
-    justify-content: center;
-  }
-
-  .pagination-controls {
-    justify-content: center;
-  }
-  
-  .bulk-actions {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .filters-row {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .filters-row-3col {
-    grid-template-columns: repeat(2, 1fr);
-  }
-  
-  .filters-row-actions {
-    grid-template-columns: 1fr;
-  }
-  
-  .filter-actions-compact {
-    justify-content: stretch;
-  }
-  
-  .filter-actions-compact button {
-    flex: 1;
-  }
-}
-
-@media (max-width: 48rem) {
-  .filters-row {
-    grid-template-columns: 1fr;
-  }
-  
-  .transactions-table {
-    font-size: 0.75rem;
-  }
-  
-  .transactions-table th,
-  .transactions-table td {
-    padding: 0.5rem;
-  }
-  
-  .col-type,
-  .col-category,
-  .col-subcategory {
-    display: none;
-  }
-
-  .pagination-controls {
-    flex-wrap: wrap;
-    justify-content: center;
-  }
-  
-  .modal-content {
-    width: 95%;
-    margin: 1rem;
-  }
-}
-
-@media (max-width: 30rem) {
-  .transactions-table-container {
-    font-size: 0.6875rem;
-  }
-  
-  .col-merchant {
-    min-width: 8rem;
-  }
-  
-  .action-buttons-compact {
-    flex-wrap: wrap;
-  }
 }
 </style>

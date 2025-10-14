@@ -98,10 +98,10 @@ class TransactionQueries:
         
         # Get amounts by type
         amounts_query = select(
-            Transaction.transaction_type,
+            Transaction.main_category,
             func.sum(Transaction.amount).label('total_amount'),
             func.count(Transaction.id).label('count')
-        ).where(base_condition).group_by(Transaction.transaction_type)
+        ).where(base_condition).group_by(Transaction.main_category)
         
         amounts_result = await self.db.execute(amounts_query)
         
@@ -112,7 +112,7 @@ class TransactionQueries:
         transfer_amount = 0
         
         for row in amounts_result:
-            trans_type = row.transaction_type or 'unknown'
+            trans_type = row.main_category or 'unknown'
             amount = float(row.total_amount or 0)
             count = row.count
             
@@ -147,7 +147,7 @@ class TransactionQueries:
             Transaction.year_month,
             func.sum(Transaction.amount).label('amount')
         ).where(
-            and_(base_condition, Transaction.transaction_type == 'expense')
+            and_(base_condition, Transaction.main_category == 'expense')
         ).group_by(Transaction.year_month).order_by(Transaction.year_month)
         
         monthly_result = await self.db.execute(monthly_query)
@@ -268,7 +268,7 @@ class TransactionQueries:
         
         conditions = [
             Transaction.user_id == self.user.id,
-            Transaction.transaction_type == 'expense'
+            Transaction.main_category == 'expense'
         ]
         
         if category_id:
@@ -360,8 +360,8 @@ class TransactionQueries:
             conditions.append(Transaction.category_id == uuid.UUID(filters.category_id))
         if filters.account_id:
             conditions.append(Transaction.account_id == uuid.UUID(filters.account_id))
-        if filters.transaction_type:
-            conditions.append(Transaction.transaction_type == filters.transaction_type)
+        if filters.main_category:
+            conditions.append(Transaction.main_category == filters.main_category)
         if filters.review_needed is not None:
             conditions.append(Transaction.review_needed == filters.review_needed)
         

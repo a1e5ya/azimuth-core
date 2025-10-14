@@ -22,10 +22,10 @@ class TransactionResponse(BaseModel):
     import_batch_id: Optional[str]
     
     # Enhanced fields
-    transaction_type: Optional[str]
     main_category: Optional[str]
-    csv_category: Optional[str] 
-    csv_subcategory: Optional[str]
+    main_category: Optional[str]
+    category: Optional[str] 
+    subcategory: Optional[str]
     owner: Optional[str]
     is_expense: bool
     is_income: bool
@@ -116,7 +116,7 @@ class TransactionFilters(BaseModel):
     merchant: Optional[str] = None
     category_id: Optional[str] = None
     account_id: Optional[str] = None
-    transaction_type: Optional[str] = None
+    main_category: Optional[str] = None
     review_needed: Optional[bool] = None
     sort_by: str = "posted_at"
     sort_order: str = "desc"

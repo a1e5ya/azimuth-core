@@ -138,10 +138,10 @@ async def rebuild_entire_database():
                 hash_dedupe VARCHAR,
                 
                 -- Enhanced fields from CSV
-                transaction_type VARCHAR,
                 main_category VARCHAR,
-                csv_category VARCHAR,
-                csv_subcategory VARCHAR,
+                main_category VARCHAR,
+                category VARCHAR,
+                subcategory VARCHAR,
                 csv_account VARCHAR,
                 owner VARCHAR,
                 csv_account_type VARCHAR,
@@ -304,7 +304,7 @@ async def rebuild_entire_database():
         indexes = [
             "CREATE INDEX idx_transactions_user_date ON transactions(user_id, posted_at);",
             "CREATE INDEX idx_transactions_user_category_date ON transactions(user_id, category_id, posted_at);",
-            "CREATE INDEX idx_transactions_user_type_date ON transactions(user_id, transaction_type, posted_at);", 
+            "CREATE INDEX idx_transactions_user_type_date ON transactions(user_id, main_category, posted_at);", 
             "CREATE INDEX idx_transactions_year_month ON transactions(user_id, year_month);",
             "CREATE INDEX idx_transactions_hash ON transactions(hash_dedupe);",
             "CREATE INDEX idx_transactions_batch ON transactions(import_batch_id);",
@@ -327,7 +327,7 @@ async def rebuild_entire_database():
         test_queries = [
             ("users", "SELECT id, firebase_uid, email, display_name, locale, currency, created_at FROM users LIMIT 1"),
             ("categories", "SELECT id, user_id, parent_id, name, code, icon, color, category_type, version, active, created_at FROM categories LIMIT 1"),
-            ("transactions", "SELECT id, user_id, account_id, posted_at, amount, currency, merchant, memo, mcc, category_id, source_category, import_batch_id, hash_dedupe, transaction_type, main_category, csv_category, csv_subcategory, csv_account, owner, csv_account_type, is_expense, is_income, year, month, year_month, weekday, transfer_pair_id, confidence_score, review_needed, tags, notes, created_at, updated_at FROM transactions LIMIT 1"),
+            ("transactions", "SELECT id, user_id, account_id, posted_at, amount, currency, merchant, memo, mcc, category_id, source_category, import_batch_id, hash_dedupe, main_category, main_category, category, subcategory, csv_account, owner, csv_account_type, is_expense, is_income, year, month, year_month, weekday, transfer_pair_id, confidence_score, review_needed, tags, notes, created_at, updated_at FROM transactions LIMIT 1"),
             ("import_batches", "SELECT id, user_id, filename, file_size, file_hash, rows_total, rows_imported, rows_duplicated, rows_errors, status, error_message, summary_data, created_at, completed_at FROM import_batches LIMIT 1"),
             ("accounts", "SELECT id, user_id, name, account_type, institution, created_at FROM accounts LIMIT 1"),
             ("goals", "SELECT id, user_id, name, goal_type, target_amount, current_amount, target_date, category_scope, status, created_at, updated_at FROM goals LIMIT 1"),

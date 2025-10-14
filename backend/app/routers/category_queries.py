@@ -272,7 +272,7 @@ class CategoryQueries:
                     'amount': str(t.amount),
                     'merchant': t.merchant,
                     'memo': t.memo,
-                    'transaction_type': t.transaction_type
+                    'main_category': t.main_category
                 }
                 for t in transactions
             ],
