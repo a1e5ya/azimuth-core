@@ -47,8 +47,77 @@
       </div>
     </div>
     
-    <!-- Second Row: Owner & Account Type -->
-    <div class="filters-row">
+
+    
+    <!-- Second Row: Subcategories & Search -->
+    <div class="filters-row filters-row-actions">
+
+      <div class="filter-group-compact">
+        <label>Type</label>
+        <select 
+          v-model="localFilters.types" 
+          class="filter-input-compact"
+          multiple
+          size="3"
+          @change="handleTypeChange"
+        >
+          <option 
+            v-for="type in availableTypes" 
+            :key="type" 
+            :value="type"
+          >
+            {{ type }}
+          </option>
+        </select>
+      </div>
+
+              <div class="filter-group-compact">
+        <label>Category</label>
+        <select 
+          v-model="localFilters.categories" 
+          class="filter-input-compact"
+          multiple
+          size="3"
+          :disabled="localFilters.types.length === 0"
+          @change="handleCategoryChange"
+        >
+          <option 
+            v-for="category in availableCategories" 
+            :key="category" 
+            :value="category"
+          >
+            {{ category }}
+          </option>
+        </select>
+      </div>
+
+      <div class="filter-group-compact">
+        <label>Subcategory</label>
+        <select 
+          v-model="localFilters.subcategories" 
+          class="filter-input-compact"
+          multiple
+          size="3"
+          :disabled="localFilters.categories.length === 0"
+          @change="emitFilters"
+        >
+          <option 
+            v-for="subcategory in availableSubcategories" 
+            :key="subcategory" 
+            :value="subcategory"
+          >
+            {{ subcategory }}
+          </option>
+        </select>
+      </div>
+      
+
+      
+
+    </div>
+
+    <!-- Third Row: Owner & Account Type -->
+    <div class="filters-row third-row">
       <div class="filter-group-compact">
         <label>Owner</label>
         <select 
@@ -86,70 +155,8 @@
           </option>
         </select>
       </div>
-      
-      <div class="filter-group-compact">
-        <label>Type</label>
-        <select 
-          v-model="localFilters.types" 
-          class="filter-input-compact"
-          multiple
-          size="3"
-          @change="handleTypeChange"
-        >
-          <option 
-            v-for="type in availableTypes" 
-            :key="type" 
-            :value="type"
-          >
-            {{ type }}
-          </option>
-        </select>
-      </div>
-      
-      <div class="filter-group-compact">
-        <label>Category</label>
-        <select 
-          v-model="localFilters.categories" 
-          class="filter-input-compact"
-          multiple
-          size="3"
-          :disabled="localFilters.types.length === 0"
-          @change="handleCategoryChange"
-        >
-          <option 
-            v-for="category in availableCategories" 
-            :key="category" 
-            :value="category"
-          >
-            {{ category }}
-          </option>
-        </select>
-      </div>
-    </div>
-    
-    <!-- Third Row: Subcategories & Search -->
-    <div class="filters-row filters-row-actions">
-      <div class="filter-group-compact">
-        <label>Subcategory</label>
-        <select 
-          v-model="localFilters.subcategories" 
-          class="filter-input-compact"
-          multiple
-          size="3"
-          :disabled="localFilters.categories.length === 0"
-          @change="emitFilters"
-        >
-          <option 
-            v-for="subcategory in availableSubcategories" 
-            :key="subcategory" 
-            :value="subcategory"
-          >
-            {{ subcategory }}
-          </option>
-        </select>
-      </div>
-      
-      <div class="filter-group-compact filter-search-compact">
+
+            <div class="filter-group-compact filter-search-compact">
         <label>Search</label>
         <input 
           type="text" 
@@ -159,12 +166,13 @@
           @input="emitFilters"
         >
       </div>
-      
-      <div class="filter-actions-compact">
+
+            <div class="filter-actions-compact">
         <button class="btn btn-small" @click="clearAllFilters">Clear</button>
         <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
       </div>
     </div>
+
   </div>
 </template>
 
@@ -386,7 +394,11 @@ export default {
 }
 
 .filters-row-actions {
-  grid-template-columns: 1fr 1fr auto;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.third-row {
+  grid-template-columns: 1fr 1fr 2fr auto;
 }
 
 .filter-group-compact {
@@ -408,6 +420,7 @@ export default {
   background: var(--color-button);
   font-size: var(--text-small);
   transition: border-color 0.2s ease;
+min-height: 33px;
 }
 
 .filter-input-compact:focus {
@@ -417,6 +430,7 @@ export default {
 
 .filter-input-compact[multiple] {
   padding: 0.25rem;
+  min-height: 90px;
 }
 
 .filter-input-compact[multiple] option {
@@ -430,7 +444,6 @@ export default {
 
 .filter-input-compact:disabled {
   opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .filter-search-compact {
@@ -440,7 +453,7 @@ export default {
 .filter-actions-compact {
   display: flex;
   gap: var(--gap-small);
-  align-items: flex-end;
-  justify-content: flex-end;
+align-items: flex-start;
+    justify-content: center;
 }
 </style>

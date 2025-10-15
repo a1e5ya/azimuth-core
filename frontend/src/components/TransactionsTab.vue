@@ -755,10 +755,10 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--color-background);
+padding: 0;
   border-radius: var(--radius);
   font-size: var(--text-small);
+  margin-bottom: 0.5rem;
 }
 
 .loading-spinner-mini {

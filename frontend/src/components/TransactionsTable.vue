@@ -420,7 +420,6 @@ export default {
 }
 
 .transaction-row.selected {
-  outline: 2px solid var(--color-button-active);
   outline-offset: -2px;
 }
 
