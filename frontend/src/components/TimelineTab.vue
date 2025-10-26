@@ -32,31 +32,7 @@
       />
     </div>
 
-    <!-- Statistics Summary -->
-    <div v-if="hasData" class="timeline-stats">
-      <div class="stat-card">
-        <div class="stat-label">Total Income</div>
-        <div class="stat-value positive">{{ formatCurrency(stats.totalIncome) }}</div>
-        <div class="stat-detail">{{ stats.incomeCount }} transactions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Expenses</div>
-        <div class="stat-value negative">{{ formatCurrency(stats.totalExpenses) }}</div>
-        <div class="stat-detail">{{ stats.expenseCount }} transactions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Total Transfers</div>
-        <div class="stat-value neutral">{{ formatCurrency(stats.totalTransfers) }}</div>
-        <div class="stat-detail">{{ stats.transferCount }} transactions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Net Savings</div>
-        <div class="stat-value" :class="stats.netSavings >= 0 ? 'positive' : 'negative'">
-          {{ formatCurrency(stats.netSavings) }}
-        </div>
-        <div class="stat-detail">Income minus Expenses</div>
-      </div>
-    </div>
+
   </div>
 </template>
 
@@ -1280,47 +1256,6 @@ function buildExpensesByCategory() {
   margin-bottom: var(--gap-standard);
 }
 
-.timeline-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: var(--gap-standard);
-}
-
-.stat-card {
-  background: var(--color-background);
-  border-radius: var(--radius);
-  padding: var(--gap-standard);
-  text-align: center;
-}
-
-.stat-label {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
-}
-
-.stat-value {
-  font-size: var(--text-large);
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-}
-
-.stat-value.positive {
-  color: #22c55e;
-}
-
-.stat-value.negative {
-  color: #ef4444;
-}
-
-.stat-value.neutral {
-  color: #3b82f6;
-}
-
-.stat-detail {
-  font-size: var(--text-small);
-  color: var(--color-text-light);
-}
 
 @media (max-width: 64rem) {
   .timeline-main-content {
@@ -1337,8 +1272,6 @@ function buildExpensesByCategory() {
     padding: var(--gap-small);
   }
   
-  .timeline-stats {
-    grid-template-columns: 1fr;
-  }
+
 }
 </style>

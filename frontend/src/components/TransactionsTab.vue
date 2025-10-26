@@ -1,34 +1,9 @@
 <template>
   <div class="tab-content">
-    <!-- Transactions Header with Stats and Pagination -->
     <div class="container">
+      <!-- Transactions Header with Actions and Pagination -->
       <div class="transactions-header">
-        <!-- Left: Stats -->
-        <div class="header-stats">
-          <div class="stat-item">
-            <span class="stat-label">Total:</span>
-            <span class="stat-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</span>
-          </div>
-          <div class="stat-item">
-            <span class="stat-label">Categorized:</span>
-            <span class="stat-value">{{ summary?.categorized_count?.toLocaleString() || 0 }}</span>
-          </div>
-          
-          <!-- Upload Progress Inline -->
-          <div v-if="localUploads.length > 0" class="upload-inline">
-            <div v-for="upload in localUploads.slice(0, 1)" :key="upload.id" class="upload-mini">
-              <span v-if="upload.status === 'success'">✓</span>
-              <span v-else-if="upload.status === 'error'">✗</span>
-              <span v-else class="loading-spinner-mini">⟳</span>
-              <span class="upload-mini-text">{{ upload.filename }}</span>
-              <span v-if="upload.status === 'success'" class="upload-mini-count">
-                {{ upload.rows }} rows
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Action Buttons - Compact Top Left -->
+        <!-- Left: Action Buttons -->
         <div class="action-buttons-compact">
           <button 
             class="btn btn-icon" 
@@ -96,6 +71,14 @@
           </button>
         </div>
       </div>
+
+      <!-- Transactions Info Component -->
+      <TransactionsInfo
+        :summary="summary"
+        :filtered-count="filteredCount"
+        :has-active-filters="hasActiveFilters"
+        :uploads="localUploads"
+      />
       
       <!-- Filters Component -->
       <TransactionsFilters
@@ -136,6 +119,7 @@ import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
+import TransactionsInfo from './TransactionsInfo.vue'
 import TransactionsFilters from './TransactionsFilters.vue'
 import TransactionsTable from './TransactionsTable.vue'
 import TransactionsCRUD from './TransactionsCRUD.vue'
@@ -144,6 +128,7 @@ export default {
   name: 'TransactionsTab',
   components: {
     AppIcon,
+    TransactionsInfo,
     TransactionsFilters,
     TransactionsTable,
     TransactionsCRUD
@@ -160,6 +145,7 @@ export default {
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
     
+    const filteredCount = ref(0)
     const fileInput = ref(null)
     const crudComponent = ref(null)
     const localUploads = ref([])
@@ -532,6 +518,8 @@ export default {
           const start = (currentPage.value - 1) * pageSize.value
           const end = start + pageSize.value
           transactions.value = filtered.slice(start, end)
+
+          filteredCount.value = filtered.length
           
         } else {
           const params = {
@@ -553,6 +541,7 @@ export default {
           })
           
           transactions.value = response.data
+          filteredCount.value = summary.value?.total_transactions || 0
         }
       } catch (error) {
         console.error('Failed to load transactions:', error)
@@ -660,6 +649,7 @@ export default {
       localUploads,
       loading,
       summary,
+      filteredCount,
       transactions,
       currentPage,
       pageSize,
