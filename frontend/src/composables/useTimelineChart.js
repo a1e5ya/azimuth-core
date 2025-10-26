@@ -1,6 +1,6 @@
 // frontend/src/composables/useTimelineChart.js
 
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { 
   calculateVisibleDateRange, 
   getCategoryColor, 
@@ -17,7 +17,8 @@ export function useTimelineChart(
   dateRange,
   currentZoomLevel,
   categoryStore,
-  visibilityState
+  visibilityState,
+  customVisibleRange = null
 ) {
   const hoveredData = ref(null)
   const isPinned = ref(false)
@@ -49,8 +50,15 @@ export function useTimelineChart(
     return transferType?.children || []
   })
   
-  // Calculate visible date range
+  // Calculate visible date range - use custom if provided, otherwise calculate from zoom
   const visibleDateRange = computed(() => {
+    if (customVisibleRange && customVisibleRange.value) {
+      return {
+        start: customVisibleRange.value.start,
+        end: customVisibleRange.value.end
+      }
+    }
+    
     return calculateVisibleDateRange(
       dateRange.value.start,
       dateRange.value.end,
@@ -442,7 +450,7 @@ export function useTimelineChart(
   }
   
   /**
-   * Build chart options
+   * Build chart options - NOW WITH PROPER XAXIS RANGE
    */
   const chartOptions = computed(() => {
     const range = visibleDateRange.value
@@ -462,7 +470,7 @@ export function useTimelineChart(
         animations: {
           enabled: true,
           easing: 'easeinout',
-          speed: 800
+          speed: 400
         },
         events: {
           mouseMove: (event, chartContext, config) => {
@@ -579,6 +587,11 @@ export function useTimelineChart(
     }
   })
   
+  // Watch for visible range changes
+  watch(() => visibleDateRange.value, (newRange) => {
+    console.log('📊 Chart visible range updated:', newRange)
+  }, { deep: true })
+  
   return {
     // State
     hoveredData,
@@ -590,6 +603,7 @@ export function useTimelineChart(
     expenseCategories,
     incomeCategories,
     transferCategories,
+    visibleDateRange,
     
     // Actions
     handleChartHover,
