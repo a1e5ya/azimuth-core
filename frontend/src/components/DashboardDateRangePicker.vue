@@ -1,51 +1,87 @@
 <template>
-  <div class="date-range-picker">
-    <!-- Preset Buttons -->
-    <div class="preset-buttons">
+  <div class="time-range-picker">
+    <!-- Mode Toggle Buttons -->
+    <div class="mode-buttons">
       <button
-        v-for="preset in presets"
-        :key="preset.id"
-        class="btn btn-small"
-        :class="{ 'btn-active': isPresetActive(preset.id) }"
-        @click="applyPreset(preset.id)"
+        v-for="mode in modes"
+        :key="mode.id"
+        class="mode-btn"
+        :class="{ active: currentMode === mode.id }"
+        @click="switchMode(mode.id)"
       >
-        {{ preset.label }}
+        {{ mode.label }}
       </button>
     </div>
 
-    <!-- Custom Month Inputs -->
-    <div class="custom-date-inputs">
-      <div class="date-input-group">
-        <label for="start-month">From</label>
-        <input
-          id="start-month"
-          type="month"
-          :value="localStartMonth"
-          :max="localEndMonth"
-          @input="updateStartMonth"
-          class="filter-input"
-        />
+
+
+    <!-- Navigation Controls -->
+    <div class="navigation-container two-column">
+      <!-- Single Column (Monthly/Yearly) or Left Column (Range/All Time) -->
+      <div class="date-column">
+        <!-- Year Navigation -->
+        <div class="nav-row">
+          <button class="nav-btn" @click="adjustYear('start', -1)" :disabled="isStartYearMin">
+            <span>←</span>
+          </button>
+          <div class="date-display">{{ startYear }}</div>
+          <button class="nav-btn" @click="adjustYear('start', 1)" :disabled="isStartYearMax">
+            <span>→</span>
+          </button>
+        </div>
+
+        <!-- Month Navigation (only for Monthly, Range, and All Time) -->
+        <div class="nav-row" :class="{ invisible: currentMode === 'yearly' }">
+          <button class="nav-btn" @click="adjustMonth('start', -1)" :disabled="isStartMonthMin">
+            <span>←</span>
+          </button>
+          <div class="date-display">{{ getMonthName(startMonth) }}</div>
+          <button class="nav-btn" @click="adjustMonth('start', 1)" :disabled="isStartMonthMax">
+            <span>→</span>
+          </button>
+        </div>
       </div>
 
-      <div class="date-separator">→</div>
+      <!-- Right Column (Range and All Time modes only, invisible otherwise) -->
+      <div class="date-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
+        <!-- Year Navigation -->
+        <div class="nav-row">
+          <button class="nav-btn" @click="adjustYear('end', -1)" :disabled="isEndYearMin">
+            <span>←</span>
+          </button>
+          <div class="date-display">{{ endYear }}</div>
+          <button class="nav-btn" @click="adjustYear('end', 1)" :disabled="isEndYearMax">
+            <span>→</span>
+          </button>
+        </div>
 
-      <div class="date-input-group">
-        <label for="end-month">To</label>
-        <input
-          id="end-month"
-          type="month"
-          :value="localEndMonth"
-          :min="localStartMonth"
-          @input="updateEndMonth"
-          class="filter-input"
-        />
+        <!-- Month Navigation -->
+        <div class="nav-row">
+          <button class="nav-btn" @click="adjustMonth('end', -1)" :disabled="isEndMonthMin">
+            <span>←</span>
+          </button>
+          <div class="date-display">{{ getMonthName(endMonth) }}</div>
+          <button class="nav-btn" @click="adjustMonth('end', 1)" :disabled="isEndMonthMax">
+            <span>→</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+        <!-- Labels Row (always present for consistent sizing) -->
+    <div class="labels-row">
+      <div class="label-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
+        FROM
+      </div>
+      <div class="label-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
+        TO
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export default {
   name: 'DashboardDateRangePicker',
@@ -56,182 +92,459 @@ export default {
       validator: (value) => {
         return value.startDate instanceof Date && value.endDate instanceof Date
       }
+    },
+    minAvailableDate: {
+      type: [Date, String],
+      default: null
+    },
+    maxAvailableDate: {
+      type: [Date, String],
+      default: null
     }
   },
   emits: ['update:dateRange'],
   setup(props, { emit }) {
-    const localStartMonth = ref(formatMonthForInput(props.dateRange.startDate))
-    const localEndMonth = ref(formatMonthForInput(props.dateRange.endDate))
-    const activePreset = ref('all-time')
+    const currentMode = ref('all-time')
+    
+    const startYear = ref(props.dateRange.startDate.getFullYear())
+    const startMonth = ref(props.dateRange.startDate.getMonth())
+    const endYear = ref(props.dateRange.endDate.getFullYear())
+    const endMonth = ref(props.dateRange.endDate.getMonth())
 
-    // Only 3 presets
-    const presets = [
-      { id: 'all-time', label: 'All Time' },
-      { id: 'this-year', label: 'This Year' },
-      { id: 'this-month', label: 'This Month' }
+    const modes = [
+      { id: 'monthly', label: 'Monthly' },
+      { id: 'yearly', label: 'Yearly' },
+      { id: 'range', label: 'Range' },
+      { id: 'all-time', label: 'All Time' }
+    ]
+
+    const monthNames = [
+      'January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'
     ]
 
     // Watch for external changes to dateRange prop
     watch(() => props.dateRange, (newRange) => {
-      localStartMonth.value = formatMonthForInput(newRange.startDate)
-      localEndMonth.value = formatMonthForInput(newRange.endDate)
+      startYear.value = newRange.startDate.getFullYear()
+      startMonth.value = newRange.startDate.getMonth()
+      endYear.value = newRange.endDate.getFullYear()
+      endMonth.value = newRange.endDate.getMonth()
     }, { deep: true })
 
-    function formatMonthForInput(date) {
-      if (!date) return ''
-      const d = new Date(date)
-      const year = d.getFullYear()
-      const month = String(d.getMonth() + 1).padStart(2, '0')
-      return `${year}-${month}`
+    // Computed properties for navigation limits
+    const minYear = computed(() => {
+      if (!props.minAvailableDate) return 2000
+      const date = props.minAvailableDate instanceof Date 
+        ? props.minAvailableDate 
+        : new Date(props.minAvailableDate)
+      return date.getFullYear()
+    })
+    
+    const maxYear = computed(() => {
+      if (!props.maxAvailableDate) return new Date().getFullYear()
+      const date = props.maxAvailableDate instanceof Date 
+        ? props.maxAvailableDate 
+        : new Date(props.maxAvailableDate)
+      return date.getFullYear()
+    })
+    
+    const minMonth = computed(() => {
+      if (!props.minAvailableDate) return 0
+      const date = props.minAvailableDate instanceof Date 
+        ? props.minAvailableDate 
+        : new Date(props.minAvailableDate)
+      return date.getMonth()
+    })
+    
+    const maxMonth = computed(() => {
+      if (!props.maxAvailableDate) return 11
+      const date = props.maxAvailableDate instanceof Date 
+        ? props.maxAvailableDate 
+        : new Date(props.maxAvailableDate)
+      return date.getMonth()
+    })
+
+    const isStartYearMin = computed(() => {
+      return startYear.value <= minYear.value
+    })
+
+    const isStartYearMax = computed(() => {
+      if (currentMode.value === 'monthly' || currentMode.value === 'yearly') {
+        return startYear.value >= maxYear.value
+      }
+      return startYear.value >= endYear.value
+    })
+
+    const isEndYearMin = computed(() => {
+      return endYear.value <= startYear.value
+    })
+
+    const isEndYearMax = computed(() => {
+      return endYear.value >= maxYear.value
+    })
+
+    const isStartMonthMin = computed(() => {
+      if (startYear.value === minYear.value) {
+        return startMonth.value <= minMonth.value
+      }
+      return startMonth.value <= 0
+    })
+
+    const isStartMonthMax = computed(() => {
+      if (currentMode.value === 'monthly') {
+        if (startYear.value === maxYear.value) {
+          return startMonth.value >= maxMonth.value
+        }
+        return startMonth.value >= 11
+      }
+      // In range mode
+      if (startYear.value === endYear.value) {
+        return startMonth.value >= endMonth.value
+      }
+      return startMonth.value >= 11
+    })
+
+    const isEndMonthMin = computed(() => {
+      if (startYear.value === endYear.value) {
+        return endMonth.value <= startMonth.value
+      }
+      return endMonth.value <= 0
+    })
+
+    const isEndMonthMax = computed(() => {
+      if (endYear.value === maxYear.value) {
+        return endMonth.value >= maxMonth.value
+      }
+      return endMonth.value >= 11
+    })
+
+    function getMonthName(monthIndex) {
+      return monthNames[monthIndex]
     }
 
-    function updateStartMonth(event) {
-      localStartMonth.value = event.target.value
-      activePreset.value = 'custom'
-      emitDateRange()
+    function switchMode(modeId) {
+      currentMode.value = modeId
+
+      switch (modeId) {
+        case 'monthly':
+          // Set to current month only
+          { const currentDate = new Date()
+          startYear.value = currentDate.getFullYear()
+          startMonth.value = currentDate.getMonth()
+          endYear.value = currentDate.getFullYear()
+          endMonth.value = currentDate.getMonth()
+          emitDateRange()
+          break }
+
+        case 'yearly':
+          // Set to current year
+          { const currentYear = new Date().getFullYear()
+          startYear.value = currentYear
+          startMonth.value = 0
+          endYear.value = currentYear
+          endMonth.value = 11
+          emitDateRange()
+          break }
+
+        case 'range':
+          // Keep current selections
+          emitDateRange()
+          break
+
+        case 'all-time':
+          // Set to full available range
+          if (props.minAvailableDate && props.maxAvailableDate) {
+            const minDate = props.minAvailableDate instanceof Date 
+              ? props.minAvailableDate 
+              : new Date(props.minAvailableDate)
+            const maxDate = props.maxAvailableDate instanceof Date 
+              ? props.maxAvailableDate 
+              : new Date(props.maxAvailableDate)
+            
+            startYear.value = minDate.getFullYear()
+            startMonth.value = minDate.getMonth()
+            endYear.value = maxDate.getFullYear()
+            endMonth.value = maxDate.getMonth()
+            emitDateRange()
+          }
+          break
+      }
     }
 
-    function updateEndMonth(event) {
-      localEndMonth.value = event.target.value
-      activePreset.value = 'custom'
-      emitDateRange()
+    function adjustYear(target, delta) {
+      if (target === 'start') {
+        const newYear = startYear.value + delta
+        if (newYear >= minYear.value && newYear <= maxYear.value) {
+          startYear.value = newYear
+          
+          // In single column modes, sync end with start
+          if (currentMode.value === 'monthly') {
+            endYear.value = newYear
+          } else if (currentMode.value === 'yearly') {
+            endYear.value = newYear
+          }
+          
+          emitDateRange()
+        }
+      } else {
+        const newYear = endYear.value + delta
+        if (newYear >= startYear.value && newYear <= maxYear.value) {
+          endYear.value = newYear
+          emitDateRange()
+        }
+      }
+    }
+
+    function adjustMonth(target, delta) {
+      if (target === 'start') {
+        let newMonth = startMonth.value + delta
+        let newYear = startYear.value
+
+        if (newMonth < 0) {
+          newMonth = 11
+          newYear -= 1
+        } else if (newMonth > 11) {
+          newMonth = 0
+          newYear += 1
+        }
+
+        // Validate bounds
+        if (newYear >= minYear.value && newYear <= maxYear.value) {
+          startYear.value = newYear
+          startMonth.value = newMonth
+
+          // In monthly mode, sync end with start
+          if (currentMode.value === 'monthly') {
+            endYear.value = newYear
+            endMonth.value = newMonth
+          }
+
+          emitDateRange()
+        }
+      } else {
+        let newMonth = endMonth.value + delta
+        let newYear = endYear.value
+
+        if (newMonth < 0) {
+          newMonth = 11
+          newYear -= 1
+        } else if (newMonth > 11) {
+          newMonth = 0
+          newYear += 1
+        }
+
+        // Validate bounds
+        if (newYear >= startYear.value && newYear <= maxYear.value) {
+          endYear.value = newYear
+          endMonth.value = newMonth
+          emitDateRange()
+        }
+      }
     }
 
     function emitDateRange() {
-      const [startYear, startMonth] = localStartMonth.value.split('-').map(Number)
-      const [endYear, endMonth] = localEndMonth.value.split('-').map(Number)
-      
-      const startDate = new Date(startYear, startMonth - 1, 1)
-      const endDate = new Date(endYear, endMonth, 0) // Last day of month
-      
-      // Validate dates
-      if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) return
-      if (startDate > endDate) return
+      const startDate = new Date(startYear.value, startMonth.value, 1)
+      const endDate = new Date(endYear.value, endMonth.value + 1, 0) // Last day of month
       
       emit('update:dateRange', {
         startDate,
         endDate
       })
-    }
-
-    function applyPreset(presetId) {
-      activePreset.value = presetId
-      const today = new Date()
-      let startDate, endDate
-
-      switch (presetId) {
-        case 'all-time':
-          emit('update:dateRange', { preset: 'all-time' })
-          return
-
-        case 'this-year':
-          startDate = new Date(today.getFullYear(), 0, 1)
-          endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0) // Last day of current month
-          break
-
-        case 'this-month':
-          startDate = new Date(today.getFullYear(), today.getMonth(), 1)
-          endDate = new Date(today.getFullYear(), today.getMonth() + 1, 0) // Last day of current month
-          break
-
-        default:
-          return
-      }
-
-      localStartMonth.value = formatMonthForInput(startDate)
-      localEndMonth.value = formatMonthForInput(endDate)
-      
-      emit('update:dateRange', {
-        startDate,
-        endDate
-      })
-    }
-
-    function isPresetActive(presetId) {
-      return activePreset.value === presetId
     }
 
     return {
-      localStartMonth,
-      localEndMonth,
-      presets,
-      updateStartMonth,
-      updateEndMonth,
-      applyPreset,
-      isPresetActive
+      currentMode,
+      modes,
+      startYear,
+      startMonth,
+      endYear,
+      endMonth,
+      isStartYearMin,
+      isStartYearMax,
+      isEndYearMin,
+      isEndYearMax,
+      isStartMonthMin,
+      isStartMonthMax,
+      isEndMonthMin,
+      isEndMonthMax,
+      getMonthName,
+      switchMode,
+      adjustYear,
+      adjustMonth
     }
   }
 }
 </script>
 
 <style scoped>
-.date-range-picker {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-standard);
-  flex-wrap: wrap;
-}
-
-.preset-buttons {
-  display: flex;
-  gap: 0.5rem;
-}
-
-.preset-buttons .btn {
-  margin: 0;
-}
-
-.custom-date-inputs {
-  display: flex;
-  gap: var(--gap-small);
-  align-items: end;
-}
-
-.date-input-group {
+.time-range-picker {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  width: 450px;
+  gap: 1rem;
+  padding: 1.25rem;
 }
 
-.date-input-group label {
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--color-text-light);
+/* Mode Toggle Buttons */
+.mode-buttons {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  justify-content: space-between;
 }
 
-.date-separator {
-  font-size: var(--text-large);
-  color: var(--color-text-muted);
-  padding-bottom: 0.25rem;
-}
-
-.filter-input {
-  padding: 0.5rem;
+.mode-btn {
+  padding: 0.5rem 1rem;
   border: 0.0625rem solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
   background: var(--color-button);
+  color: var(--color-text);
   font-size: var(--text-small);
-  transition: border-color 0.2s ease;
   font-family: "Livvic", sans-serif;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.filter-input:focus {
-  outline: none;
+.mode-btn:hover {
+  background: var(--color-button-hover);
+}
+
+.mode-btn.active {
+  background: var(--color-button-active);
+  color: white;
   border-color: var(--color-button-active);
 }
 
+/* Labels Row */
+.labels-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+  margin-top: 0.5rem;
+}
+
+.label-column {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  color: var(--color-text-light);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: center;
+}
+
+.label-column.invisible {
+  visibility: hidden;
+}
+
+/* Navigation Container */
+.navigation-container {
+  display: flex;
+  gap: 1rem;
+}
+
+.navigation-container.two-column {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.date-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.date-column.invisible {
+  visibility: hidden;
+}
+
+/* Navigation Row */
+.nav-row {
+  display: grid;
+  grid-template-columns: 2.5rem 1fr 2.5rem;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.nav-row.invisible {
+  visibility: hidden;
+}
+
+.nav-btn {
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 0.0625rem solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: var(--color-button);
+  color: var(--color-text);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.nav-btn:hover:not(:disabled) {
+  background: var(--color-button-hover);
+}
+
+.nav-btn:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
+
+.date-display {
+  text-align: center;
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text);
+  padding: 0.5rem;
+  background: white;
+  border: 0.0625rem solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius);
+}
+
+/* Responsive Design */
 @media (max-width: 48rem) {
-  .date-range-picker {
-    flex-direction: column;
-    align-items: stretch;
+  .time-range-picker {
+    padding: 1rem;
   }
 
-  .custom-date-inputs {
-    flex-direction: column;
+  .navigation-container.two-column {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
   }
 
-  .date-separator {
-    display: none;
+  .labels-row {
+    grid-template-columns: 1fr;
+    gap: 1.5rem;
+  }
+
+  .label-column {
+    text-align: left;
+  }
+}
+
+@media (max-width: 30rem) {
+  .mode-buttons {
+    gap: 0.375rem;
+  }
+
+  .mode-btn {
+    padding: 0.4rem 0.75rem;
+    font-size: 0.6875rem;
+  }
+
+  .nav-btn {
+    width: 2rem;
+    height: 2rem;
+    font-size: 0.875rem;
+  }
+
+  .date-display {
+    font-size: 0.6875rem;
+    padding: 0.375rem;
   }
 }
 </style>

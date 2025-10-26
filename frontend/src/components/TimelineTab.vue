@@ -1182,7 +1182,7 @@ function buildExpensesByCategory() {
       console.log('Visibility changed, chart will rebuild')
     }, { deep: true })
     
-    watch(() => currentZoomLevel.value, (newLevel) => {
+    watch(() => currentZoomLevel.value, () => {
       console.log('Zoom level changed to:', zoomLevelName.value)
       isPinned.value = false
       hoveredData.value = null

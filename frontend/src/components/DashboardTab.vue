@@ -25,13 +25,15 @@
         <!-- Date Range Picker -->
         <DashboardDateRangePicker
           :date-range="dateRange"
+          :min-available-date="minAvailableDate"
+          :max-available-date="maxAvailableDate"
           @update:date-range="handleDateRangeChange"
         />
       </div>
 
       <!-- Income vs Expenses Chart -->
       <DashboardIncomeExpensesChart
-        :filtered-transactions="filteredTransactions"
+        :filtered-transactions="filteredTransactionsWithContext"
         :get-type-color="getTypeColor"
       />
 
@@ -86,15 +88,13 @@ export default {
     const minAvailableDate = computed(() => {
       if (transactions.value.length === 0) return null
       const dates = transactions.value.map(t => new Date(t.posted_at))
-      const min = new Date(Math.min(...dates))
-      return formatDateForInput(min)
+      return new Date(Math.min(...dates))
     })
 
     const maxAvailableDate = computed(() => {
       if (transactions.value.length === 0) return null
       const dates = transactions.value.map(t => new Date(t.posted_at))
-      const max = new Date(Math.max(...dates))
-      return formatDateForInput(max)
+      return new Date(Math.max(...dates))
     })
 
     // Filter transactions by date range
@@ -114,28 +114,30 @@ export default {
       })
     })
 
-    function formatDateForInput(date) {
-      if (!date) return ''
-      const d = new Date(date)
-      const year = d.getFullYear()
-      const month = String(d.getMonth() + 1).padStart(2, '0')
-      const day = String(d.getDate()).padStart(2, '0')
-      return `${year}-${month}-${day}`
-    }
+    // Filtered transactions with adjacent months for chart continuity
+    const filteredTransactionsWithContext = computed(() => {
+      if (transactions.value.length === 0) return []
+
+      const start = new Date(dateRange.value.startDate)
+      const end = new Date(dateRange.value.endDate)
+      
+      // Include previous and next month for chart line continuity
+      const expandedStart = new Date(start)
+      expandedStart.setMonth(expandedStart.getMonth() - 1)
+      expandedStart.setHours(0, 0, 0, 0)
+      
+      const expandedEnd = new Date(end)
+      expandedEnd.setMonth(expandedEnd.getMonth() + 1)
+      expandedEnd.setHours(23, 59, 59, 999)
+
+      return transactions.value.filter(tx => {
+        const txDate = new Date(tx.posted_at)
+        return txDate >= expandedStart && txDate <= expandedEnd
+      })
+    })
 
     function handleDateRangeChange(newRange) {
-      if (newRange.preset === 'all-time') {
-        // Set to full available range
-        if (transactions.value.length > 0) {
-          const dates = transactions.value.map(t => new Date(t.posted_at))
-          dateRange.value = {
-            startDate: new Date(Math.min(...dates)),
-            endDate: new Date(Math.max(...dates))
-          }
-        }
-      } else {
-        dateRange.value = newRange
-      }
+      dateRange.value = newRange
     }
 
     async function loadTransactions() {
@@ -232,6 +234,7 @@ export default {
       minAvailableDate,
       maxAvailableDate,
       filteredTransactions,
+      filteredTransactionsWithContext,
       handleDateRangeChange,
       getTypeColor
     }

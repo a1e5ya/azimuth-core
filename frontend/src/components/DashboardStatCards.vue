@@ -161,6 +161,8 @@ export default {
   text-align: center;
   padding: var(--gap-large);
   border-radius: var(--radius);
+  height: 145px;
+  width: 160px;
 }
 
 .stat-label {
