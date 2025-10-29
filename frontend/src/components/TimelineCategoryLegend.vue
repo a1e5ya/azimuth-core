@@ -191,6 +191,41 @@
         </div>
       </div>
     </div>
+<!-- TARGETS Section -->
+<div class="legend-section">
+  <div 
+    class="legend-type-header" 
+    @click="$emit('toggle-type', 'targets')"
+  >
+    <span 
+      class="legend-indicator" 
+      :style="{ backgroundColor: isTypeVisible('targets') ? '#FFD700' : '#fff' }"
+    ></span>
+    <span class="legend-type-name">TARGETS</span>
+  </div>
+  
+  <div class="legend-categories-list">
+    <div 
+      class="legend-category-item" 
+      v-for="category in targetCategories" 
+      :key="category.id"
+    >
+      <div class="legend-category-row">
+        <div 
+          class="legend-category-header"
+          @click="$emit('toggle-category', category.id)"
+        >
+          <span 
+            class="legend-indicator legend-indicator-small" 
+            :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+          ></span>
+          <span class="legend-item-name">{{ category.name }}</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
   </div>
 </template>
 

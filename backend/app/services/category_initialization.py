@@ -1,6 +1,6 @@
 """
 Category initialization service for Azimuth Core
-Creates default categories for new users
+Creates default categories for new users - INCLUDING TARGETS
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -227,6 +227,38 @@ DEFAULT_CATEGORIES = {
                 ]
             }
         ]
+    },
+    'targets': {
+        'id': 'targets',
+        'name': 'TARGETS',
+        'icon': 'bullseye',
+        'color': '#b54a4a',
+        'categories': [
+            {
+                'id': 'savings-targets',
+                'name': 'Savings Targets',
+                'icon': 'piggy-bank',
+                'color': '#AE2C4C',
+                'subcolors': ['#D88FA3', '#C97586', '#BA5B6A', '#EAB5C0', '#F2D5DC', '#F8E8EC'],
+                'subcategories': []
+            },
+            {
+                'id': 'expense-limits',
+                'name': 'Expense Limits',
+                'icon': 'hand-holding-usd',
+                'color': '#FF6B6B',
+                'subcolors': ['#FFB5B5', '#FF9F9F', '#FF8989', '#FFD6D6', '#FFE5E5', '#FFF0F0'],
+                'subcategories': []
+            },
+            {
+                'id': 'income-goals',
+                'name': 'Income Goals',
+                'icon': 'chart-line-up',
+                'color': '#a33333',
+                'subcolors': ['#D19999', '#C18080', '#B16666', '#E5CCCC', '#EEDEDE', '#F5EBEB'],
+                'subcategories': []
+            }
+        ]
     }
 }
 
@@ -234,11 +266,13 @@ DEFAULT_CATEGORIES = {
 async def initialize_user_categories(user_id: str, db: AsyncSession) -> int:
     """
     Create default category tree for a new user with colors
+    NOW INCLUDES TARGETS AS 4TH MAIN CATEGORY
     Returns number of categories created
     """
     created_count = 0
     
     for type_key, type_data in DEFAULT_CATEGORIES.items():
+        # Create main type category
         type_category = Category(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -253,6 +287,7 @@ async def initialize_user_categories(user_id: str, db: AsyncSession) -> int:
         db.add(type_category)
         created_count += 1
         
+        # Create child categories
         for cat_data in type_data['categories']:
             subcolors = cat_data.get('subcolors', [])
             random.shuffle(subcolors)
@@ -271,7 +306,8 @@ async def initialize_user_categories(user_id: str, db: AsyncSession) -> int:
             db.add(category)
             created_count += 1
             
-            for idx, subcat_data in enumerate(cat_data['subcategories']):
+            # Create subcategories if they exist
+            for idx, subcat_data in enumerate(cat_data.get('subcategories', [])):
                 subcolor = subcolors[idx % len(subcolors)] if subcolors else cat_data['color']
                 
                 subcategory = Category(
@@ -289,7 +325,7 @@ async def initialize_user_categories(user_id: str, db: AsyncSession) -> int:
                 created_count += 1
     
     await db.commit()
-    print(f"✅ Created {created_count} default categories for user {user_id}")
+    print(f"✅ Created {created_count} default categories for user {user_id} (including TARGETS)")
     return created_count
 
 
