@@ -34,7 +34,7 @@ export function useTimelineChart(
     isCategoryExpanded
   } = visibilityState
   
-  // Get category arrays
+  // Get category arrays - NOW INCLUDES targetCategories
   const expenseCategories = computed(() => {
     const expenseType = categoryStore.categories?.find(t => t.code === 'expenses')
     return expenseType?.children || []
@@ -48,6 +48,11 @@ export function useTimelineChart(
   const transferCategories = computed(() => {
     const transferType = categoryStore.categories?.find(t => t.code === 'transfers')
     return transferType?.children || []
+  })
+  
+  const targetCategories = computed(() => {
+    const targetType = categoryStore.categories?.find(t => t.code === 'targets')
+    return targetType?.children || []
   })
   
   // Calculate visible date range - use custom if provided, otherwise calculate from zoom
@@ -88,7 +93,8 @@ export function useTimelineChart(
         const allCategories = [
           ...expenseCategories.value,
           ...incomeCategories.value,
-          ...transferCategories.value
+          ...transferCategories.value,
+          ...targetCategories.value
         ]
         
         const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
@@ -175,7 +181,8 @@ export function useTimelineChart(
         const allCategories = [
           ...expenseCategories.value,
           ...incomeCategories.value,
-          ...transferCategories.value
+          ...transferCategories.value,
+          ...targetCategories.value
         ]
         
         const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
@@ -262,7 +269,8 @@ export function useTimelineChart(
         const allCategories = [
           ...expenseCategories.value,
           ...incomeCategories.value,
-          ...transferCategories.value
+          ...transferCategories.value,
+          ...targetCategories.value
         ]
         
         const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
@@ -394,6 +402,13 @@ export function useTimelineChart(
           color: color
         })
       })
+    }
+    
+    // TODO: Add targets visualization here when target data becomes available
+    // Targets would be displayed differently (e.g., as horizontal lines or markers)
+    if (isTypeVisible('targets')) {
+      // Future implementation for targets visualization
+      // This will display saved/planned targets as reference lines on the chart
     }
     
     return series
@@ -597,12 +612,13 @@ export function useTimelineChart(
     hoveredData,
     isPinned,
     
-    // Computed
+    // Computed - NOW INCLUDES targetCategories
     chartSeries,
     chartOptions,
     expenseCategories,
     incomeCategories,
     transferCategories,
+    targetCategories,
     visibleDateRange,
     
     // Actions

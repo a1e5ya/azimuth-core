@@ -6,9 +6,14 @@ import { ref, computed } from 'vue'
  * Composable for managing timeline visibility state
  * Handles toggling of types, categories, and subcategories
  */
-export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesGetter, transferCategoriesGetter) {
-  // Visibility state
-  const visibleTypes = ref(['income', 'expenses', 'transfers'])
+export function useTimelineVisibility(
+  expenseCategoriesGetter, 
+  incomeCategoriesGetter, 
+  transferCategoriesGetter,
+  targetCategoriesGetter
+) {
+  // Visibility state - NOW INCLUDES 'targets'
+  const visibleTypes = ref(['income', 'expenses', 'transfers', 'targets'])
   const visibleCategories = ref([])
   const visibleSubcategories = ref([])
   const expandedCategories = ref([])
@@ -17,6 +22,7 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
   const expenseCategories = computed(() => expenseCategoriesGetter())
   const incomeCategories = computed(() => incomeCategoriesGetter())
   const transferCategories = computed(() => transferCategoriesGetter())
+  const targetCategories = computed(() => targetCategoriesGetter())
   
   // Check visibility
   const isTypeVisible = (typeId) => visibleTypes.value.includes(typeId)
@@ -37,7 +43,7 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
   }
   
   /**
-   * Toggle type visibility (income, expenses, transfers)
+   * Toggle type visibility (income, expenses, transfers, targets)
    */
   function toggleType(typeId) {
     const index = visibleTypes.value.indexOf(typeId)
@@ -54,6 +60,8 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
         categories = incomeCategories.value
       } else if (typeId === 'transfers') {
         categories = transferCategories.value
+      } else if (typeId === 'targets') {
+        categories = targetCategories.value
       }
       
       // Hide all categories and subcategories
@@ -84,6 +92,8 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
         categories = incomeCategories.value
       } else if (typeId === 'transfers') {
         categories = transferCategories.value
+      } else if (typeId === 'targets') {
+        categories = targetCategories.value
       }
       
       // Show all categories and subcategories
@@ -109,9 +119,14 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
   function toggleCategory(categoryId) {
     const index = visibleCategories.value.indexOf(categoryId)
     
-    // Find the category
+    // Find the category - NOW INCLUDES targetCategories
     let category = null
-    for (const categories of [expenseCategories.value, incomeCategories.value, transferCategories.value]) {
+    for (const categories of [
+      expenseCategories.value, 
+      incomeCategories.value, 
+      transferCategories.value,
+      targetCategories.value
+    ]) {
       category = categories.find(c => c.id === categoryId)
       if (category) break
     }
@@ -161,6 +176,7 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
   
   /**
    * Initialize visibility - show all categories and subcategories
+   * NOW INCLUDES targetCategories
    */
   function initializeVisibility() {
     visibleCategories.value = []
@@ -169,7 +185,8 @@ export function useTimelineVisibility(expenseCategoriesGetter, incomeCategoriesG
     const allCategories = [
       ...expenseCategories.value,
       ...incomeCategories.value,
-      ...transferCategories.value
+      ...transferCategories.value,
+      ...targetCategories.value
     ]
     
     allCategories.forEach(cat => {

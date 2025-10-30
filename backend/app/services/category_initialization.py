@@ -231,13 +231,13 @@ DEFAULT_CATEGORIES = {
     'targets': {
         'id': 'targets',
         'name': 'TARGETS',
-        'icon': 'bullseye',
+        'icon': 'target',
         'color': '#b54a4a',
         'categories': [
             {
                 'id': 'savings-targets',
                 'name': 'Savings Targets',
-                'icon': 'piggy-bank',
+                'icon': 'earnings',
                 'color': '#AE2C4C',
                 'subcolors': ['#D88FA3', '#C97586', '#BA5B6A', '#EAB5C0', '#F2D5DC', '#F8E8EC'],
                 'subcategories': []
@@ -245,7 +245,7 @@ DEFAULT_CATEGORIES = {
             {
                 'id': 'expense-limits',
                 'name': 'Expense Limits',
-                'icon': 'hand-holding-usd',
+                'icon': 'euro',
                 'color': '#FF6B6B',
                 'subcolors': ['#FFB5B5', '#FF9F9F', '#FF8989', '#FFD6D6', '#FFE5E5', '#FFF0F0'],
                 'subcategories': []
@@ -253,7 +253,7 @@ DEFAULT_CATEGORIES = {
             {
                 'id': 'income-goals',
                 'name': 'Income Goals',
-                'icon': 'chart-line-up',
+                'icon': 'chart-histogram',
                 'color': '#a33333',
                 'subcolors': ['#D19999', '#C18080', '#B16666', '#E5CCCC', '#EEDEDE', '#F5EBEB'],
                 'subcategories': []

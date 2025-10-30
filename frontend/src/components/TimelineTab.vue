@@ -7,6 +7,7 @@
         :expense-categories="expenseCategories"
         :income-categories="incomeCategories"
         :transfer-categories="transferCategories"
+        :target-categories="targetCategories"
         :visible-types="visibleTypes"
         :visible-categories="visibleCategories"
         :visible-subcategories="visibleSubcategories"
@@ -165,6 +166,10 @@ export default {
       () => {
         const transferType = categoryStore.categories?.find(t => t.code === 'transfers')
         return transferType?.children || []
+      },
+      () => {
+        const targetType = categoryStore.categories?.find(t => t.code === 'targets')
+        return targetType?.children || []
       }
     )
     
@@ -177,6 +182,7 @@ export default {
       expenseCategories,
       incomeCategories,
       transferCategories,
+      targetCategories,
       unpinHoverData
     } = useTimelineChart(
       timelineData,
@@ -284,6 +290,7 @@ export default {
       expenseCategories,
       incomeCategories,
       transferCategories,
+      targetCategories,
       
       // Visibility
       visibleTypes,

@@ -1,10 +1,6 @@
 <template>
   <div class="tab-content">
-    <div 
-      class="container"
-      :style="{ backgroundColor: hexToRgba(currentType?.color, 0.07) }"
-    >
-      <!-- Type Tabs -->
+        <!-- Type Tabs -->
       <div class="type-tabs">
         <div class="tabs-left">
           <button
@@ -32,6 +28,8 @@
           />
         </div>
       </div>
+    <div       class="container"    >
+
 
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
@@ -144,7 +142,18 @@ export default {
     const categoryStore = useCategoryStore()
     const selectedTypeId = ref(null)
 
-    const categories = computed(() => categoryStore.categories)
+    // Sort categories in the correct order: INCOME, EXPENSES, TRANSFERS, TARGETS
+    const categories = computed(() => {
+      const cats = categoryStore.categories || []
+      const order = ['income', 'expenses', 'transfers', 'targets']
+      
+      return [...cats].sort((a, b) => {
+        const aIndex = order.indexOf(a.code)
+        const bIndex = order.indexOf(b.code)
+        return aIndex - bIndex
+      })
+    })
+    
     const loading = computed(() => categoryStore.loading)
 
     const currentType = computed(() => {
@@ -163,35 +172,43 @@ export default {
     async function refreshCategories() {
       await categoryStore.loadCategories()
       if (categories.value && categories.value.length > 0 && !selectedTypeId.value) {
+        // Default to first tab (INCOME)
         selectedTypeId.value = categories.value[0].id
       }
     }
 
     function editCategory(category) {
       console.log('Edit:', category.name)
+      // TODO: Open edit modal/form
     }
 
     function deleteCategory(category) {
       console.log('Delete:', category.name)
+      // TODO: Confirm and delete category
     }
 
     function addSubcategory(parent) {
       console.log('Add subcategory to:', parent.name)
+      // TODO: Open add subcategory modal/form
     }
 
     function addNewCategory() {
-      console.log('Add new main category')
+      console.log('Add new main category to:', currentType.value?.name)
+      // TODO: Open add category modal/form
     }
 
     function getKeywords(categoryId) {
+      // TODO: Fetch keywords for category from backend
       return ''
     }
 
     function updateKeywords(categoryId, keywords) {
       console.log('Update keywords:', categoryId, keywords)
+      // TODO: Save keywords to backend
     }
 
     function getMerchants(categoryId) {
+      // TODO: Fetch merchants for category from backend
       return []
     }
 
@@ -409,6 +426,25 @@ export default {
 .no-subcats-compact {
   text-align: center;
   padding: 0.5rem;
+}
+
+.btn {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.btn-small {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+.btn:hover {
+  background: var(--color-background-dark);
 }
 
 /* Responsive */
