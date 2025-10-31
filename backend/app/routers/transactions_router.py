@@ -35,6 +35,9 @@ async def list_transactions(
     account_id: Optional[str] = Query(None),
     main_category: Optional[str] = Query(None),
     review_needed: Optional[bool] = Query(None),
+    owners: Optional[List[str]] = Query(None),
+    account_types: Optional[List[str]] = Query(None),
+    main_categories: Optional[List[str]] = Query(None),
     sort_by: str = Query("posted_at", regex="^(posted_at|amount|merchant|created_at)$"),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
     current_user: User = Depends(get_current_user),
@@ -56,6 +59,9 @@ async def list_transactions(
         account_id=account_id,
         main_category=main_category,
         review_needed=review_needed,
+        owners=owners if owners else [],
+        account_types=account_types if account_types else [],
+        main_categories=main_categories if main_categories else [],
         sort_by=sort_by,
         sort_order=sort_order
     )

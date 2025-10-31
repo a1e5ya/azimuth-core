@@ -135,6 +135,36 @@ class TransactionQueries:
         date_result = await self.db.execute(date_query)
         min_date, max_date = date_result.first()
         
+        # Calculate transaction statistics
+        stats_query = select(
+            func.max(Transaction.amount).label('largest_pos'),
+            func.min(Transaction.amount).label('smallest_neg'),
+            func.avg(Transaction.amount).label('average_raw')
+        ).where(base_condition)
+
+        stats_result = await self.db.execute(stats_query)
+        stats_row = stats_result.first()
+
+        # Calculate transaction statistics - Get ALL amounts for accurate calculations
+        all_amounts_query = select(Transaction.amount).where(base_condition)
+        all_amounts_result = await self.db.execute(all_amounts_query)
+        all_amounts = [abs(float(row[0])) for row in all_amounts_result]
+
+        # Calculate stats from the list
+        largest_transaction = max(all_amounts) if all_amounts else 0
+        smallest_transaction = min(all_amounts) if all_amounts else 0
+        average_transaction = sum(all_amounts) / len(all_amounts) if all_amounts else 0
+
+        # Calculate median
+        median_transaction = 0
+        if all_amounts:
+            sorted_amounts = sorted(all_amounts)
+            n = len(sorted_amounts)
+            if n % 2 == 0:
+                median_transaction = (sorted_amounts[n//2 - 1] + sorted_amounts[n//2]) / 2
+            else:
+                median_transaction = sorted_amounts[n//2]
+
         # Get categorization stats
         categorized_query = select(func.count(Transaction.id)).where(
             and_(base_condition, Transaction.category_id.isnot(None))
@@ -211,6 +241,11 @@ class TransactionQueries:
             "transfer_amount": transfer_amount,
             "categorized_count": categorized_count,
             "categorization_rate": categorized_count / total_transactions if total_transactions > 0 else 0,
+            "largest_transaction": float(largest_transaction),
+            "smallest_transaction": float(smallest_transaction),
+            "average_transaction": float(average_transaction),
+            "median_transaction": float(median_transaction),
+            
             "date_range": {
                 "earliest": min_date.isoformat() if min_date else None,
                 "latest": max_date.isoformat() if max_date else None
@@ -364,7 +399,12 @@ class TransactionQueries:
             conditions.append(Transaction.main_category == filters.main_category)
         if filters.review_needed is not None:
             conditions.append(Transaction.review_needed == filters.review_needed)
-        
+        if filters.owners and len(filters.owners) > 0:
+            conditions.append(Transaction.owner.in_(filters.owners))
+        if filters.account_types and len(filters.account_types) > 0:
+            conditions.append(Transaction.bank_account_type.in_(filters.account_types))
+        if filters.main_categories and len(filters.main_categories) > 0:
+            conditions.append(Transaction.main_category.in_(filters.main_categories))        
         return conditions
 
 # Helper function to create queries instance

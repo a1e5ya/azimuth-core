@@ -3,7 +3,7 @@ Pydantic models for transaction-related API requests and responses
 """
 
 from pydantic import BaseModel
-from typing import Optional, List, Dict, Any
+from typing import List, Optional, Dict, Any
 from datetime import date
 
 # Response Models
@@ -118,6 +118,9 @@ class TransactionFilters(BaseModel):
     account_id: Optional[str] = None
     main_category: Optional[str] = None
     review_needed: Optional[bool] = None
+    owners: Optional[List[str]] = None
+    account_types: Optional[List[str]] = None
+    main_categories: Optional[List[str]] = None
     sort_by: str = "posted_at"
     sort_order: str = "desc"
 

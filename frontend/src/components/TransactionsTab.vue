@@ -450,99 +450,51 @@ export default {
       try {
         const token = authStore.token
         
-        const hasCSVFilter = filters.value.types.length > 0 || 
-                            filters.value.categories.length > 0 || 
-                            filters.value.subcategories.length > 0 ||
-                            filters.value.owners.length > 0 ||
-                            filters.value.accountTypes.length > 0
+        // Build params object - send ALL filters to backend
+        const params = {
+          page: currentPage.value,
+          limit: pageSize.value,
+          sort_by: sortBy.value,
+          sort_order: sortOrder.value
+        }
         
-        if (hasCSVFilter) {
-          let allTransactions = []
-          let page = 1
-          const batchSize = 1000
-          
-          while (page <= 10) {
-            const params = {
-              page: page,
-              limit: batchSize,
-              sort_by: sortBy.value,
-              sort_order: sortOrder.value
-            }
-            
-            if (filters.value.startDate) params.start_date = filters.value.startDate
-            if (filters.value.endDate) params.end_date = filters.value.endDate
-            if (filters.value.merchant) params.merchant = filters.value.merchant
-            if (filters.value.minAmount) params.min_amount = filters.value.minAmount
-            if (filters.value.maxAmount) params.max_amount = filters.value.maxAmount
-            
-            const response = await axios.get(`${API_BASE}/transactions/list`, {
-              params,
-              headers: { 'Authorization': `Bearer ${token}` }
-            })
-            
-            const batch = response.data
-            
-            if (batch.length === 0) break
-            
-            allTransactions = allTransactions.concat(batch)
-            
-            if (batch.length < batchSize) break
-            
-            page++
+        // Add simple filters
+        if (filters.value.startDate) params.start_date = filters.value.startDate
+        if (filters.value.endDate) params.end_date = filters.value.endDate
+        if (filters.value.merchant) params.merchant = filters.value.merchant
+        if (filters.value.minAmount !== null) params.min_amount = filters.value.minAmount
+        if (filters.value.maxAmount !== null) params.max_amount = filters.value.maxAmount
+        
+        // Array filters - backend now handles multiple values!
+        if (filters.value.owners.length > 0) {
+          params.owners = filters.value.owners
+        }
+        if (filters.value.accountTypes.length > 0) {
+          params.account_types = filters.value.accountTypes
+        }
+        if (filters.value.types.length > 0) {
+          params.main_categories = filters.value.types
+        }
+        
+        // Make single API call with all filters
+        const response = await axios.get(`${API_BASE}/transactions/list`, {
+          params,
+          headers: { 'Authorization': `Bearer ${token}` },
+          paramsSerializer: {
+            indexes: null // This sends arrays as: ?owners=Egor&owners=Alex instead of owners[0]=Egor
           }
-          
-          let filtered = allTransactions.filter(t => {
-            if (filters.value.owners.length > 0 && !filters.value.owners.includes(t.owner)) {
-              return false
-            }
-            
-            if (filters.value.accountTypes.length > 0 && !filters.value.accountTypes.includes(t.bank_account_type)) {
-              return false
-            }
-            
-            if (filters.value.types.length > 0 && !filters.value.types.includes(t.main_category)) {
-              return false
-            }
-            
-            if (filters.value.categories.length > 0 && !filters.value.categories.includes(t.category)) {
-              return false
-            }
-            
-            if (filters.value.subcategories.length > 0 && !filters.value.subcategories.includes(t.subcategory)) {
-              return false
-            }
-            
-            return true
-          })
-          
-          const start = (currentPage.value - 1) * pageSize.value
-          const end = start + pageSize.value
-          transactions.value = filtered.slice(start, end)
-
-          filteredCount.value = filtered.length
-          
+        })
+        
+        transactions.value = response.data
+        
+        // Update filtered count
+        if (hasActiveFilters.value) {
+          // When filters are active, the returned count is the filtered count
+          filteredCount.value = response.data.length
         } else {
-          const params = {
-            page: currentPage.value,
-            limit: pageSize.value,
-            sort_by: sortBy.value,
-            sort_order: sortOrder.value
-          }
-          
-          if (filters.value.startDate) params.start_date = filters.value.startDate
-          if (filters.value.endDate) params.end_date = filters.value.endDate
-          if (filters.value.merchant) params.merchant = filters.value.merchant
-          if (filters.value.minAmount) params.min_amount = filters.value.minAmount
-          if (filters.value.maxAmount) params.max_amount = filters.value.maxAmount
-          
-          const response = await axios.get(`${API_BASE}/transactions/list`, {
-            params,
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          
-          transactions.value = response.data
           filteredCount.value = summary.value?.total_transactions || 0
         }
+        
       } catch (error) {
         console.error('Failed to load transactions:', error)
       } finally {
