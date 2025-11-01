@@ -3,6 +3,8 @@
         <!-- Type Tabs -->
       <div class="type-tabs">
         <div class="tabs-left">
+        </div>
+        <div class="tabs-left">
           <button
             v-for="type in categories"
             :key="type.id"
@@ -16,7 +18,7 @@
           </button>
         </div>
         
-        <div class="tabs-right">
+              <div class="tabs-right">
           <ActionsMenu
             class="always-visible"
             :show-add="true"
@@ -27,8 +29,10 @@
             @add="addNewCategory"
           />
         </div>
+
       </div>
     <div       class="container"    >
+
 
 
       <!-- Loading State -->
@@ -261,7 +265,7 @@ export default {
   display: flex;
   align-items: center;
   gap: var(--gap-small);
-  padding: 0.5rem var(--gap-standard);
+  padding: 0.5rem var(--gap-large);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;

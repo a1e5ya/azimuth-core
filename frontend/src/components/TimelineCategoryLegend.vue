@@ -354,7 +354,6 @@ export default {
   background: var(--color-background);
   border-radius: var(--radius);
   padding: var(--gap-small);
-  max-height: 80vh;
   overflow-y: auto;
   display: flex;
   flex-direction: column;

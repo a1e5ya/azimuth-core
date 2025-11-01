@@ -151,7 +151,7 @@ export default {
   display: flex;
   flex-direction: column;
   gap: var(--gap-small);
-  background-color: var(--color-background-light);
+
   padding: var(--gap-large);
   border-radius: var(--radius);
 }
