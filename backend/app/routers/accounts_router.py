@@ -109,6 +109,83 @@ async def list_accounts(
     
     return response
 
+@router.get("/list")
+async def list_accounts_for_import(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all accounts for user with owner information - for import modal"""
+    
+    query = select(Account, Owner).join(
+        Owner, Account.owner_id == Owner.id
+    ).where(
+        and_(
+            Account.user_id == current_user.id,
+            Account.active == True
+        )
+    ).order_by(Owner.name, Account.name)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    accounts = []
+    for account, owner in rows:
+        accounts.append({
+            "id": str(account.id),
+            "name": account.name,
+            "account_type": account.account_type,
+            "institution": account.institution,
+            "current_balance": float(account.current_balance or 0),
+            "owner": {
+                "id": str(owner.id),
+                "name": owner.name,
+                "color": owner.color
+            }
+        })
+    
+    return {
+        "accounts": accounts,
+        "total": len(accounts)
+    }
+
+@router.get("/list-simple")
+async def list_accounts_simple(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get all accounts for import modal - simplified"""
+    
+    query = select(Account, Owner).join(
+        Owner, Account.owner_id == Owner.id
+    ).where(
+        and_(
+            Account.user_id == current_user.id,
+            Account.active == True
+        )
+    ).order_by(Owner.name, Account.name)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    accounts = []
+    for account, owner in rows:
+        accounts.append({
+            "id": str(account.id),
+            "name": account.name,
+            "account_type": account.account_type,
+            "institution": account.institution,
+            "current_balance": float(account.current_balance or 0),
+            "owner": {
+                "id": str(owner.id),
+                "name": owner.name,
+                "color": owner.color
+            }
+        })
+    
+    return {
+        "accounts": accounts,
+        "total": len(accounts)
+    }
 
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(

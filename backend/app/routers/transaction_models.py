@@ -20,6 +20,8 @@ class TransactionResponse(BaseModel):
     category_icon: Optional[str]
     source_category: str
     import_batch_id: Optional[str]
+    bank_account: Optional[str]
+    bank_account_type: Optional[str]
     
     # Enhanced fields
     main_category: Optional[str]
@@ -125,8 +127,6 @@ class TransactionFilters(BaseModel):
     sort_order: str = "desc"
 
 class ImportFilters(BaseModel):
-    account_name: Optional[str] = "Default Account"
-    account_type: Optional[str] = "checking"
     auto_categorize: bool = True
 
 class AnalyticsFilters(BaseModel):

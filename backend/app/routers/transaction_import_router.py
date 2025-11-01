@@ -16,8 +16,8 @@ router = APIRouter()
 @router.post("/import")
 async def import_transactions(
     file: UploadFile = File(...),
-    account_name: Optional[str] = Form("Default Account"),
-    account_type: Optional[str] = Form("checking"),
+    import_mode: str = Form("training"),  
+    account_id: Optional[str] = Form(None), 
     auto_categorize: bool = Form(True),
     current_user: User = Depends(get_current_user),
     import_service: TransactionImportService = Depends(get_import_service)
@@ -45,8 +45,8 @@ async def import_transactions(
     result = await import_service.import_from_csv(
         file_content=file_content,
         filename=file.filename,
-        account_name=account_name,
-        account_type=account_type,
+        import_mode=import_mode,  
+        account_id=account_id,
         auto_categorize=auto_categorize
     )
     

@@ -101,7 +101,9 @@ async def list_transactions(
             review_needed=transaction.review_needed,
             tags=transaction.tags if transaction.tags else [],
             notes=transaction.notes,
-            created_at=transaction.created_at.isoformat()
+            created_at=transaction.created_at.isoformat(),
+            bank_account=transaction.bank_account,
+            bank_account_type=transaction.bank_account_type,
         ))
     
     return response_data

@@ -1,5 +1,5 @@
 """
-Transaction import service - DEBUG CATEGORY MATCHING
+Transaction import service - FIXED ACCOUNT SELECTION
 """
 from fastapi import Depends
 from ..models.database import get_db
@@ -11,7 +11,7 @@ import hashlib
 from datetime import datetime
 
 from ..models.database import (
-    Transaction, Account, Category, ImportBatch, User, AuditLog, CategoryMapping
+    Transaction, Account, Category, ImportBatch, User, AuditLog, CategoryMapping, Owner
 )
 from ..services.csv_processor import process_csv_upload
 from ..services.category_training import CategoryTrainingService
@@ -28,14 +28,16 @@ class TransactionImportService:
         self,
         file_content: bytes,
         filename: str,
-        account_name: str = "Default Account",
-        account_type: str = "checking",
-        auto_categorize: bool = True,
-        account_id: str = None
+        import_mode: str = "training",  # NEW: "training" or "account"
+        account_id: str = None,  # NEW: for direct account import
+        auto_categorize: bool = True
     ) -> Dict[str, Any]:
-        """Import transactions - LEARN from CSV categories first"""
+        """Import transactions with mode selection"""
         
         print(f"📤 Starting import: {filename} ({len(file_content)} bytes)")
+        print(f"📋 Import mode: {import_mode}")
+        if account_id:
+            print(f"🎯 Target account: {account_id}")
         
         try:
             file_hash = hashlib.md5(file_content).hexdigest()
@@ -53,7 +55,30 @@ class TransactionImportService:
             await self.db.refresh(import_batch)
             print(f"✅ Created batch: {import_batch.id}")
 
-            account = await self._get_or_create_account(account_name, account_type)
+            # Handle account based on import mode
+            account = None
+            if import_mode == "account" and account_id:
+                # Use existing account for direct import
+                account_query = select(Account).where(
+                    and_(
+                        Account.id == account_id,
+                        Account.user_id == self.user.id
+                    )
+                )
+                account_result = await self.db.execute(account_query)
+                account = account_result.scalar_one_or_none()
+                
+                if not account:
+                    raise Exception(f"Account {account_id} not found")
+                
+                print(f"✅ Using account: {account.name} ({account.account_type})")
+            
+            elif import_mode == "training":
+                # Training mode - no account needed
+                print(f"✅ Training mode - no account assignment")
+            
+            else:
+                raise Exception(f"Invalid import mode: {import_mode}")
 
             print("🔄 Processing CSV...")
             transactions_data, summary = process_csv_upload(
@@ -67,18 +92,6 @@ class TransactionImportService:
             # Get user's categories
             user_categories = await self._get_user_categories()
             print(f"📋 Available user categories: {len(user_categories)}")
-            for cat in user_categories[:10]:
-                parent_name = ""
-                if cat.parent_id:
-                    parent = next((c for c in user_categories if c.id == cat.parent_id), None)
-                    if parent:
-                        parent_name = f" (parent: {parent.name})"
-                print(f"   - {cat.name}{parent_name} [type: {cat.category_type}]")
-            
-            # Debug first few transactions
-            print(f"🔍 Sample CSV categories from first 5 transactions:")
-            for i, trans in enumerate(transactions_data[:5]):
-                print(f"   {i+1}. Main: '{trans.get('main_category')}' | Cat: '{trans.get('category')}' | Sub: '{trans.get('subcategory')}'")
             
             categorization_stats = {
                 'csv_exact': 0,
@@ -109,25 +122,13 @@ class TransactionImportService:
                         confidence_score = 0.95
                         source_category = 'csv_mapped'
                         categorization_stats['csv_exact'] += 1
-                        
-                        # DEBUG: Print first 5 successful matches
-                        if idx < 5:
-                            print(f"   ✅ Matched: '{csv_cat}' / '{csv_subcat}' → {category.name} (ID: {category.id})")
                     else:
                         categorization_stats['none'] += 1
-                        if idx < 5:
-                            print(f"   ❌ No match: '{csv_cat}' / '{csv_subcat}'")
-                
-                # CRITICAL DEBUG: Check what we're about to save
-                if idx < 3:
-                    print(f"\n   🔍 Transaction {idx} before save:")
-                    print(f"      category_id type: {type(category_id)}, value: {category_id}")
-                    print(f"      Will save as: {str(category_id) if category_id else None}")
                 
                 transaction = Transaction(
                     id=str(uuid.uuid4()),
                     user_id=str(self.user.id),
-                    account_id=trans_data.get('account_id'),
+                    account_id=str(account.id) if account else None,  # FIXED: Only set if account exists
                     posted_at=trans_data['posted_at'],
                     amount=trans_data['amount'],
                     currency=trans_data.get('currency', 'EUR'),
@@ -167,7 +168,9 @@ class TransactionImportService:
             import_batch.completed_at = datetime.utcnow()
             import_batch.summary_data = {
                 **summary,
-                "categorization": categorization_stats
+                "categorization": categorization_stats,
+                "import_mode": import_mode,
+                "account_id": str(account.id) if account else None
             }
             
             await self.db.commit()
@@ -187,6 +190,8 @@ class TransactionImportService:
                     "batch_id": str(import_batch.id),
                     "rows_imported": inserted_count,
                     "categorization": categorization_stats,
+                    "import_mode": import_mode,
+                    "account_id": str(account.id) if account else None,
                     "summary": summary
                 }
             )
@@ -202,7 +207,9 @@ class TransactionImportService:
                     "batch_id": str(import_batch.id),
                     "categorization": categorization_stats,
                     "auto_categorized": total_categorized,
-                    "categorization_rate": (total_categorized / inserted_count * 100) if inserted_count > 0 else 0
+                    "categorization_rate": (total_categorized / inserted_count * 100) if inserted_count > 0 else 0,
+                    "import_mode": import_mode,
+                    "account_name": account.name if account else "Training Data"
                 },
                 "message": f"Imported {inserted_count} transactions. {total_categorized} matched ({total_categorized/inserted_count*100:.1f}%)."
             }
@@ -280,67 +287,6 @@ class TransactionImportService:
                     return cat
         
         return None
-    
-    async def _get_or_create_account(
-        self, 
-        account_name: str, 
-        account_type: str
-    ) -> Optional[Account]:
-        """Get existing account or create new one"""
-        
-        if not account_name:
-            return None
-        
-        result = await self.db.execute(
-            select(Account).where(
-                and_(Account.user_id == str(self.user.id), Account.name == account_name)
-            )
-        )
-        account = result.scalar_one_or_none()
-        
-        if not account:
-            # Import Owner model
-            from ..models.database import Owner
-            
-            # Get or create default owner first
-            owner_result = await self.db.execute(
-                select(Owner).where(
-                    and_(
-                        Owner.user_id == str(self.user.id),
-                        Owner.name == "Default"
-                    )
-                )
-            )
-            owner = owner_result.scalar_one_or_none()
-            
-            if not owner:
-                owner = Owner(
-                    id=str(uuid.uuid4()),
-                    user_id=str(self.user.id),
-                    name="Default",
-                    color="#94a3b8",
-                    active=True
-                )
-                self.db.add(owner)
-                await self.db.flush()
-                print(f"✅ Created default owner")
-            
-            # Now create account with owner_id
-            account = Account(
-                id=str(uuid.uuid4()),
-                user_id=str(self.user.id),
-                owner_id=str(owner.id),  # ← THIS IS THE KEY FIX!
-                name=account_name,
-                account_type=account_type,
-                current_balance=0.0,
-                active=True
-            )
-            self.db.add(account)
-            await self.db.commit()
-            await self.db.refresh(account)
-            print(f"✅ Created account: {account.name}")
-        
-        return account  
     
     async def create_default_category_mappings(self):
         """Create default category mappings"""

@@ -14,13 +14,13 @@
 
         <!-- left: Action Buttons -->
         <div class="action-buttons-compact">
-          <button 
-            class="btn btn-icon" 
-            @click="triggerFileUpload"
-            title="Import Transactions"
-          >
-            <AppIcon name="file-add" size="medium" />
-          </button>
+<button 
+  class="btn btn-icon" 
+  @click="showImportModal = true"
+  title="Import Transactions"
+>
+  <AppIcon name="file-add" size="medium" />
+</button>
           
           <button 
             class="btn btn-icon" 
@@ -40,14 +40,7 @@
             <AppIcon name="refresh" size="medium" />
           </button>
           
-          <input 
-            ref="fileInput" 
-            type="file" 
-            accept=".csv,.xlsx" 
-            multiple 
-            @change="handleFileSelect" 
-            style="display: none;"
-          >
+
         </div>
         
         <!-- right: Pagination -->
@@ -115,6 +108,13 @@
       @transaction-deleted="handleTransactionDeleted"
       @add-chat-message="addChatMessage"
     />
+
+    <TransactionImportModal
+  :show="showImportModal"
+  @close="showImportModal = false"
+  @import-started="handleImportStarted"
+  @import-complete="handleImportComplete"
+/>
   </div>
 </template>
 
@@ -128,6 +128,7 @@ import TransactionsInfo from './TransactionsInfo.vue'
 import TransactionsFilters from './TransactionsFilters.vue'
 import TransactionsTable from './TransactionsTable.vue'
 import TransactionsCRUD from './TransactionsCRUD.vue'
+import TransactionImportModal from './TransactionImportModal.vue'
 
 export default {
   name: 'TransactionsTab',
@@ -136,7 +137,8 @@ export default {
     TransactionsInfo,
     TransactionsFilters,
     TransactionsTable,
-    TransactionsCRUD
+    TransactionsCRUD,
+    TransactionImportModal
   },
   props: {
     user: {
@@ -164,7 +166,20 @@ export default {
     const sortBy = ref('posted_at')
     const sortOrder = ref('desc')
     const showFilters = ref(false)
+    const showImportModal = ref(false)
     
+const handleImportStarted = () => {
+  addChatMessage({ response: 'Starting import...' })
+}
+
+const handleImportComplete = async (result) => {
+  if (result.success) {
+    addChatMessage({ response: `Imported ${result.fileCount} files!` })
+    await loadTransactions()
+    await loadSummary()
+  }
+}
+
     const filters = ref({
       startDate: '',
       endDate: '',
@@ -662,7 +677,10 @@ const loadTransactions = async () => {
       handleDelete,
       handleTransactionUpdated,
       handleTransactionDeleted,
-      handleBulkCategorize
+      handleBulkCategorize,
+        showImportModal,
+  handleImportStarted,
+  handleImportComplete
     }
   }
 }

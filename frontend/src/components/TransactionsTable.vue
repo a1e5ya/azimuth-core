@@ -296,6 +296,14 @@ export default {
       return text.substring(0, maxLength) + '...'
     }
 
+    const getAccountInfo = (transaction) => {
+  // Show bank_account and bank_account_type from CSV
+  if (transaction.bank_account && transaction.bank_account_type) {
+    return `${transaction.bank_account} (${transaction.bank_account_type})`
+  }
+  return transaction.bank_account || transaction.bank_account_type || '-'
+}
+
     return {
       selectedIds,
       bulkCategoryId,
@@ -308,7 +316,8 @@ export default {
       formatDate,
       formatAmount,
       getAmountClass,
-      truncateText
+      truncateText,
+      getAccountInfo
     }
   }
 }
