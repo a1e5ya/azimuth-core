@@ -1,43 +1,44 @@
 <template>
-  <div class="container">
+  <div class="accounts-management">
+    <!-- Header with Add Owner Button -->
     <div class="header-with-action">
-      <h3>Accounts Overview</h3>
-      <button class="btn btn-small" @click="showAddOwnerModal = true">
+      <h3>Account Owners & Accounts</h3>
+      <button class="btn btn-primary" @click="showAddOwnerModal = true">
         <AppIcon name="plus" size="small" />
         Add Owner
       </button>
     </div>
-    
+
     <!-- Loading State -->
-    <div v-if="loading" class="loading-state-small">
+    <div v-if="loading" class="loading-state">
       <div class="loading-spinner">⟳</div>
-      <div>Loading...</div>
+      <div>Loading accounts...</div>
     </div>
-    
+
     <!-- Empty State -->
-    <div v-else-if="owners.length === 0" class="empty-state-small">
+    <div v-else-if="owners.length === 0" class="empty-state">
       <AppIcon name="credit-card" size="large" />
       <div>No account owners yet</div>
       <div class="text-small">Create an owner to start managing accounts</div>
     </div>
-    
-    <!-- Owners & Accounts List -->
-    <div v-else class="accounts-list">
+
+    <!-- Owners List -->
+    <div v-else class="owners-list">
       <div 
-        v-for="owner in ownersWithStats" 
+        v-for="owner in owners" 
         :key="owner.id" 
-        class="account-card-compact"
+        class="owner-card"
       >
-        <!-- Owner Header with Actions -->
-        <div class="account-header-compact">
-          <div class="account-title-compact">
+        <!-- Owner Header -->
+        <div class="owner-header">
+          <div class="owner-info">
             <div 
-              class="owner-badge" 
+              class="owner-color-badge" 
               :style="{ backgroundColor: owner.color || '#94a3b8' }"
             ></div>
             <div>
-              <div class="account-owner-compact">{{ owner.name }}</div>
-              <div class="account-type-compact">
+              <div class="owner-name">{{ owner.name }}</div>
+              <div class="owner-meta">
                 {{ owner.accounts.length }} account{{ owner.accounts.length !== 1 ? 's' : '' }}
               </div>
             </div>
@@ -56,21 +57,24 @@
           />
         </div>
 
-        <!-- Accounts with Stats -->
-        <div v-if="owner.accounts.length > 0" class="account-stats-compact">
+        <!-- Accounts List -->
+        <div v-if="owner.accounts.length > 0" class="accounts-list">
           <div 
             v-for="account in owner.accounts" 
             :key="account.id"
-            class="account-item-with-stats"
+            class="account-item"
           >
-            <!-- Account Info Row -->
             <div class="account-info-row">
-              <div class="account-name-section">
+              <div class="account-details">
                 <AppIcon name="credit-card" size="small" />
                 <div>
                   <div class="account-name">{{ account.name }}</div>
                   <div class="account-type">{{ account.account_type }}</div>
                 </div>
+              </div>
+              
+              <div class="account-balance">
+                {{ formatCurrency(account.current_balance) }}
               </div>
 
               <div class="account-actions">
@@ -87,42 +91,22 @@
                   :show-edit="true"
                   :show-delete="true"
                   :show-check="false"
+                  menu-title="Account Actions"
                   @edit="editAccount(account, owner)"
                   @delete="confirmDeleteAccount(account, owner)"
                 />
               </div>
             </div>
 
-            <!-- Financial Stats -->
-            <div class="account-financial-stats">
-              <div class="stat-item">
-                <span class="stat-label">Income:</span>
-                <span class="stat-value positive">{{ formatCurrency(account.stats.income) }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Expenses:</span>
-                <span class="stat-value negative">{{ formatCurrency(account.stats.expenses) }}</span>
-              </div>
-              <div class="stat-item">
-                <span class="stat-label">Transfers:</span>
-                <span class="stat-value neutral">{{ formatCurrency(account.stats.transfers) }}</span>
-              </div>
-              <div class="stat-item stat-total">
-                <span class="stat-label">Balance:</span>
-                <span 
-                  class="stat-value" 
-                  :class="account.stats.balance >= 0 ? 'positive' : 'negative'"
-                >
-                  {{ formatCurrency(account.stats.balance) }}
-                </span>
-              </div>
+            <div v-if="account.institution" class="account-institution">
+              {{ account.institution }}
             </div>
           </div>
         </div>
 
-        <!-- Empty Accounts for Owner -->
+        <!-- Empty Accounts State -->
         <div v-else class="empty-accounts">
-          <div class="text-small">No accounts for {{ owner.name }}</div>
+          <div class="text-small">No accounts yet</div>
           <button 
             class="btn btn-small" 
             @click="showAddAccountModal(owner)"
@@ -266,10 +250,10 @@
           <div class="delete-warning">
             <div class="warning-icon">⚠️</div>
             <div class="warning-text">
-              <p><strong>Delete {{ deletingOwner.name }}?</strong></p>
+              <p><strong>Are you sure you want to delete {{ deletingOwner.name }}?</strong></p>
               <p v-if="deletingOwner.accounts.length > 0">
-                This will delete <strong>{{ deletingOwner.accounts.length }} account(s)</strong> 
-                and all transactions.
+                This will also delete <strong>{{ deletingOwner.accounts.length }} account(s)</strong> 
+                and all associated transactions.
               </p>
               <p>This action cannot be undone.</p>
             </div>
@@ -305,6 +289,9 @@
             <div class="warning-text">
               <p><strong>Delete {{ deletingAccount.account.name }}?</strong></p>
               <p>Owner: {{ deletingAccount.owner.name }}</p>
+              <p v-if="deletingAccount.account.transaction_count > 0">
+                This account has <strong>{{ deletingAccount.account.transaction_count }} transaction(s)</strong>.
+              </p>
               <p>This action cannot be undone.</p>
             </div>
           </div>
@@ -337,23 +324,17 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, onMounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
 
 export default {
-  name: 'DashboardAccountsOverview',
+  name: 'AccountsManagement',
   components: {
     AppIcon,
     ActionsMenu
-  },
-  props: {
-    filteredTransactions: {
-      type: Array,
-      required: true
-    }
   },
   emits: ['import-success'],
   setup(props, { emit }) {
@@ -392,51 +373,6 @@ export default {
     const fileInput = ref(null)
     const importingAccount = ref(null)
     const importingOwner = ref(null)
-
-    // Owners with calculated stats from filtered transactions
-    const ownersWithStats = computed(() => {
-      return owners.value.map(owner => {
-        const accountsWithStats = owner.accounts.map(account => {
-          // Filter transactions for this account
-          const accountTransactions = props.filteredTransactions.filter(
-            tx => tx.account_id === account.id
-          )
-
-          let income = 0
-          let expenses = 0
-          let transfers = 0
-
-          accountTransactions.forEach(tx => {
-            const amount = Math.abs(parseFloat(tx.amount))
-            const mainCategory = (tx.main_category || '').toUpperCase().trim()
-
-            if (mainCategory === 'INCOME') {
-              income += amount
-            } else if (mainCategory === 'EXPENSES') {
-              expenses += amount
-            } else if (mainCategory === 'TRANSFERS') {
-              transfers += amount
-            }
-          })
-
-          return {
-            ...account,
-            stats: {
-              income,
-              expenses,
-              transfers,
-              balance: account.current_balance || (income - expenses),
-              transactionCount: accountTransactions.length
-            }
-          }
-        })
-
-        return {
-          ...owner,
-          accounts: accountsWithStats
-        }
-      })
-    })
 
     async function loadOwners() {
       if (!authStore.token) return
@@ -495,12 +431,14 @@ export default {
       
       try {
         if (editingOwner.value) {
+          // Update
           await axios.put(
             `${API_BASE}/owners/${editingOwner.value.id}`,
             ownerForm.value,
             { headers: { 'Authorization': `Bearer ${authStore.token}` } }
           )
         } else {
+          // Create
           await axios.post(
             `${API_BASE}/owners/`,
             ownerForm.value,
@@ -584,12 +522,14 @@ export default {
       
       try {
         if (editingAccount.value) {
+          // Update
           await axios.put(
             `${API_BASE}/accounts/${editingAccount.value.id}`,
             accountForm.value,
             { headers: { 'Authorization': `Bearer ${authStore.token}` } }
           )
         } else {
+          // Create
           await axios.post(
             `${API_BASE}/accounts/`,
             accountForm.value,
@@ -625,7 +565,7 @@ export default {
       deleting.value = true
       
       try {
-        const force = true // Always force delete for now
+        const force = deletingAccount.value.account.transaction_count > 0
         
         await axios.delete(
           `${API_BASE}/accounts/${deletingAccount.value.account.id}?force=${force}`,
@@ -693,19 +633,11 @@ export default {
         currency: 'EUR',
         minimumFractionDigits: 0,
         maximumFractionDigits: 0
-      }).format(Math.abs(amount))
+      }).format(amount)
     }
 
-    watch(() => authStore.user, (newUser) => {
-      if (newUser) {
-        loadOwners()
-      }
-    })
-
     onMounted(() => {
-      if (authStore.user) {
-        loadOwners()
-      }
+      loadOwners()
     })
 
     return {
@@ -713,7 +645,6 @@ export default {
       saving,
       deleting,
       owners,
-      ownersWithStats,
       showAddOwnerModal,
       showAccountModal,
       editingOwner,
@@ -745,6 +676,10 @@ export default {
 </script>
 
 <style scoped>
+.accounts-management {
+  width: 100%;
+}
+
 .header-with-action {
   display: flex;
   justify-content: space-between;
@@ -756,26 +691,67 @@ export default {
   margin: 0;
 }
 
-.loading-state-small,
-.empty-state-small {
+.loading-state,
+.empty-state {
   text-align: center;
-  padding: var(--gap-standard);
-  color: var(--color-text-muted);
-  font-size: var(--text-small);
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-small);
-  align-items: center;
+  padding: var(--gap-large);
+  color: var(--color-text-light);
 }
 
 .loading-spinner {
   font-size: var(--text-large);
   animation: spin 1s linear infinite;
+  margin-bottom: var(--gap-small);
 }
 
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.owners-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-standard);
+}
+
+.owner-card {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-standard);
+}
+
+.owner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--gap-standard);
+  padding-bottom: var(--gap-standard);
+  border-bottom: 1px solid var(--color-background-dark);
+}
+
+.owner-info {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+
+.owner-color-badge {
+  width: 1.5rem;
+  height: 1.5rem;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.owner-name {
+  font-size: var(--text-medium);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.owner-meta {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
 }
 
 .accounts-list {
@@ -784,52 +760,7 @@ export default {
   gap: var(--gap-small);
 }
 
-.account-card-compact {
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  padding: var(--gap-small);
-}
-
-.account-header-compact {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--gap-small);
-  padding-bottom: var(--gap-small);
-  border-bottom: 1px solid var(--color-background-dark);
-}
-
-.account-title-compact {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.owner-badge {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.account-owner-compact {
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.account-type-compact {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-}
-
-.account-stats-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.account-item-with-stats {
+.account-item {
   background: var(--color-background-dark);
   border-radius: var(--radius);
   padding: var(--gap-small);
@@ -839,12 +770,10 @@ export default {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-background-light);
+  gap: var(--gap-small);
 }
 
-.account-name-section {
+.account-details {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -860,6 +789,12 @@ export default {
 .account-type {
   font-size: 0.6875rem;
   color: var(--color-text-muted);
+}
+
+.account-balance {
+  font-size: var(--text-small);
+  font-weight: 600;
+  color: var(--color-text);
 }
 
 .account-actions {
@@ -886,46 +821,12 @@ export default {
   color: var(--color-text);
 }
 
-.account-financial-stats {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.stat-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0.25rem 0;
-  font-size: 0.75rem;
-}
-
-.stat-total {
-  padding-top: 0.375rem;
-  border-top: 1px solid var(--color-background-light);
-  font-weight: 600;
+.account-institution {
   margin-top: 0.25rem;
-}
-
-.stat-label {
-  color: var(--color-text-light);
-}
-
-.stat-value {
-  font-weight: 600;
-  font-size: 0.75rem;
-}
-
-.stat-value.positive {
-  color: #22c55e;
-}
-
-.stat-value.negative {
-  color: #ef4444;
-}
-
-.stat-value.neutral {
-  color: #3b82f6;
+  padding-top: 0.25rem;
+  border-top: 1px solid var(--color-background-light);
+  font-size: 0.6875rem;
+  color: var(--color-text-muted);
 }
 
 .empty-accounts {
@@ -949,6 +850,12 @@ export default {
   align-items: center;
   justify-content: center;
   z-index: 1000;
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 
 .modal-content {
@@ -961,6 +868,18 @@ export default {
   max-height: 80vh;
   overflow-y: auto;
   box-shadow: var(--shadow);
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .modal-header {
@@ -1082,19 +1001,5 @@ export default {
 .btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-@media (max-width: 30rem) {
-  .account-owner-compact {
-    font-size: 0.6875rem;
-  }
-  
-  .account-type-compact {
-    font-size: 0.625rem;
-  }
-  
-  .stat-item {
-    font-size: 0.6875rem;
-  }
 }
 </style>

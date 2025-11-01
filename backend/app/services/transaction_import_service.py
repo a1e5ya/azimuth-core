@@ -30,7 +30,8 @@ class TransactionImportService:
         filename: str,
         account_name: str = "Default Account",
         account_type: str = "checking",
-        auto_categorize: bool = True
+        auto_categorize: bool = True,
+        account_id: str = None
     ) -> Dict[str, Any]:
         """Import transactions - LEARN from CSV categories first"""
         
@@ -298,17 +299,48 @@ class TransactionImportService:
         account = result.scalar_one_or_none()
         
         if not account:
+            # Import Owner model
+            from ..models.database import Owner
+            
+            # Get or create default owner first
+            owner_result = await self.db.execute(
+                select(Owner).where(
+                    and_(
+                        Owner.user_id == str(self.user.id),
+                        Owner.name == "Default"
+                    )
+                )
+            )
+            owner = owner_result.scalar_one_or_none()
+            
+            if not owner:
+                owner = Owner(
+                    id=str(uuid.uuid4()),
+                    user_id=str(self.user.id),
+                    name="Default",
+                    color="#94a3b8",
+                    active=True
+                )
+                self.db.add(owner)
+                await self.db.flush()
+                print(f"✅ Created default owner")
+            
+            # Now create account with owner_id
             account = Account(
+                id=str(uuid.uuid4()),
                 user_id=str(self.user.id),
+                owner_id=str(owner.id),  # ← THIS IS THE KEY FIX!
                 name=account_name,
-                account_type=account_type
+                account_type=account_type,
+                current_balance=0.0,
+                active=True
             )
             self.db.add(account)
             await self.db.commit()
             await self.db.refresh(account)
             print(f"✅ Created account: {account.name}")
         
-        return account
+        return account  
     
     async def create_default_category_mappings(self):
         """Create default category mappings"""

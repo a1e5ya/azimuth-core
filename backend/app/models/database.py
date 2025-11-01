@@ -60,19 +60,45 @@ class User(Base):
     goals = relationship("Goal", back_populates="user", cascade="all, delete-orphan")
     budgets = relationship("Budget", back_populates="user", cascade="all, delete-orphan")
     category_mappings = relationship("CategoryMapping", back_populates="user", cascade="all, delete-orphan")
+    owners = relationship("Owner", back_populates="user", cascade="all, delete-orphan")
+
+class Owner(Base):
+    __tablename__ = "owners"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    name = Column(String, nullable=False)
+    color = Column(String, nullable=True)
+    active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    user = relationship("User", back_populates="owners")
+    accounts = relationship("Account", back_populates="owner", cascade="all, delete-orphan")
 
 class Account(Base):
+    """Enhanced Account model with proper Owner relationship"""
     __tablename__ = "accounts"
     
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
-    user_id = Column(String, ForeignKey("users.id"), nullable=False)
-    name = Column(String, nullable=False)
-    account_type = Column(String, nullable=True)  # checking, savings, credit
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    owner_id = Column(String, ForeignKey("owners.id"), nullable=False, index=True)  # NEW
+    
+    name = Column(String, nullable=False)  # Display name
+    account_type = Column(String, nullable=False)  # Main, Kopio, Reserv, BSP
     institution = Column(String, nullable=True)
+    
+    # Financial tracking
+    current_balance = Column(Numeric(12, 2), default=0.0)  # NEW
+    
+    # Metadata
+    active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relationships
     user = relationship("User", back_populates="accounts")
+    owner = relationship("Owner", back_populates="accounts")  # NEW
     transactions = relationship("Transaction", back_populates="account", cascade="all, delete-orphan")
 
 class Category(Base):
@@ -116,8 +142,8 @@ class Transaction(Base):
     subcategory = Column(String, nullable=True)  # Groceries, Fuel, etc.
     
     # Account info (from CSV)
-    bank_account = Column(String, nullable=True)  # Egor_Main, Daria_Savings
-    owner = Column(String, nullable=True)  # Egor, Daria, Alex, Lila
+    bank_account = Column(String, nullable=True)  # Egor_Main, 
+    owner = Column(String, nullable=True)  # Egor, Alex, Lila
     bank_account_type = Column(String, nullable=True)  # Main, Savings, Credit
     
     # Financial flags

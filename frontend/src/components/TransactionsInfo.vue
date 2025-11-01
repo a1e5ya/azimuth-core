@@ -32,6 +32,7 @@
 
     </div>
 
+      </div>
     <!-- Upload Progress -->
     <div class="upload-progress" v-if="uploads.length > 0">
       <div v-for="upload in uploads.slice(0, 1)" :key="upload.id" class="upload-item">
@@ -44,7 +45,7 @@
         </span>
       </div>
     </div>
-  </div>
+
 </template>
 
 <script>

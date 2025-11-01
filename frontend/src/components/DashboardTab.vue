@@ -6,23 +6,17 @@
       <div>Loading data...</div>
     </div>
 
-    <!-- Empty State -->
-    <div v-else-if="transactions.length === 0" class="empty-state">
-      <div>No transaction data available</div>
-      <div class="text-small">Import transactions to see your dashboard</div>
-    </div>
-
     <!-- Dashboard Content -->
     <template v-else>
+
+
       <!-- Stats Overview with Date Picker -->
       <div class="stats-with-controls">
-        <!-- Stat Cards -->
         <DashboardStatCards
           :filtered-transactions="filteredTransactions"
           :get-type-color="getTypeColor"
         />
         
-        <!-- Date Range Picker -->
         <DashboardDateRangePicker
           :date-range="dateRange"
           :min-available-date="minAvailableDate"
@@ -39,12 +33,10 @@
 
       <!-- Two Column Layout -->
       <div class="grid grid-2">
-        <!-- Top Categories -->
         <DashboardTopCategories
           :filtered-transactions="filteredTransactions"
         />
 
-        <!-- Accounts Overview -->
         <DashboardAccountsOverview
           :filtered-transactions="filteredTransactions"
         />
@@ -52,6 +44,7 @@
     </template>
   </div>
 </template>
+
 
 <script>
 import { ref, computed, watch, onMounted } from 'vue'
