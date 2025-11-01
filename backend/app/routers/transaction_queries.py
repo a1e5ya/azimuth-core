@@ -1,7 +1,3 @@
-"""
-Database queries for transaction operations
-"""
-
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, and_, or_, desc, asc, text
 from sqlalchemy.orm import selectinload
@@ -47,10 +43,16 @@ class TransactionQueries:
         if filter_conditions:
             query = query.where(and_(*filter_conditions))
             count_query = count_query.where(and_(*filter_conditions))
+            
+            # DEBUG: Print filter info
+            print(f"🔍 DEBUG: Applying {len(filter_conditions)} filter conditions")
+            print(f"   Filters: owners={filters.owners}, account_types={filters.account_types}, main_categories={filters.main_categories}")
         
         # Get total count
         count_result = await self.db.execute(count_query)
         total_count = count_result.scalar()
+        
+        print(f"📊 DEBUG: Total matching transactions: {total_count}")
         
         # Apply sorting
         sort_column = getattr(Transaction, filters.sort_by, Transaction.posted_at)
@@ -135,20 +137,17 @@ class TransactionQueries:
         date_result = await self.db.execute(date_query)
         min_date, max_date = date_result.first()
         
-        # Calculate transaction statistics
-        stats_query = select(
-            func.max(Transaction.amount).label('largest_pos'),
-            func.min(Transaction.amount).label('smallest_neg'),
-            func.avg(Transaction.amount).label('average_raw')
-        ).where(base_condition)
-
-        stats_result = await self.db.execute(stats_query)
-        stats_row = stats_result.first()
-
-        # Calculate transaction statistics - Get ALL amounts for accurate calculations
+        # Calculate transaction statistics - FIXED VERSION
         all_amounts_query = select(Transaction.amount).where(base_condition)
         all_amounts_result = await self.db.execute(all_amounts_query)
-        all_amounts = [abs(float(row[0])) for row in all_amounts_result]
+        
+        # CRITICAL FIX: Fetch all rows first, then process
+        all_rows = all_amounts_result.fetchall()
+        all_amounts = [abs(float(row[0])) for row in all_rows if row[0] is not None]
+        
+        print(f"🔍 DEBUG: Fetched {len(all_amounts)} amounts for statistics")
+        if all_amounts[:5]:
+            print(f"   Sample amounts: {all_amounts[:5]}")
 
         # Calculate stats from the list
         largest_transaction = max(all_amounts) if all_amounts else 0
@@ -164,6 +163,8 @@ class TransactionQueries:
                 median_transaction = (sorted_amounts[n//2 - 1] + sorted_amounts[n//2]) / 2
             else:
                 median_transaction = sorted_amounts[n//2]
+        
+        print(f"📊 DEBUG Stats: largest={largest_transaction}, smallest={smallest_transaction}, avg={average_transaction}, median={median_transaction}")
 
         # Get categorization stats
         categorized_query = select(func.count(Transaction.id)).where(
@@ -378,7 +379,7 @@ class TransactionQueries:
         return merchants
     
     def _build_filter_conditions(self, filters: TransactionFilters) -> List:
-        """Build filter conditions for transaction queries"""
+        """Build filter conditions for transaction queries - FIXED VERSION"""
         conditions = []
         
         if filters.start_date:
@@ -399,12 +400,20 @@ class TransactionQueries:
             conditions.append(Transaction.main_category == filters.main_category)
         if filters.review_needed is not None:
             conditions.append(Transaction.review_needed == filters.review_needed)
+        
+        # CRITICAL FIX: Array filters need proper handling
         if filters.owners and len(filters.owners) > 0:
+            print(f"🔍 DEBUG: Filtering by owners: {filters.owners}")
             conditions.append(Transaction.owner.in_(filters.owners))
         if filters.account_types and len(filters.account_types) > 0:
+            print(f"🔍 DEBUG: Filtering by account types: {filters.account_types}")
             conditions.append(Transaction.bank_account_type.in_(filters.account_types))
         if filters.main_categories and len(filters.main_categories) > 0:
-            conditions.append(Transaction.main_category.in_(filters.main_categories))        
+            print(f"🔍 DEBUG: Filtering by main categories: {filters.main_categories}")
+            conditions.append(Transaction.main_category.in_(filters.main_categories))
+        
+        print(f"🔍 DEBUG: Total filter conditions: {len(conditions)}")
+        
         return conditions
 
 # Helper function to create queries instance

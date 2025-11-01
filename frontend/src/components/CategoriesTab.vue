@@ -274,7 +274,6 @@ export default {
 
 .type-tab:hover {
   color: var(--color-text);
-  background: rgba(0, 0, 0, 0.02);
 }
 
 .type-tab:hover :deep(.icon-wrapper) {

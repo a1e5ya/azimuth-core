@@ -397,7 +397,7 @@ export default {
   padding: 0.5rem 1rem;
   border: 0.0625rem solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
-  background: var(--color-button);
+  background: var(--color-background);
   color: var(--color-text);
   font-size: var(--text-small);
   font-family: "Livvic", sans-serif;
@@ -475,7 +475,7 @@ export default {
   height: 2.5rem;
   border: 0.0625rem solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
-  background: var(--color-button);
+  background: var(--color-background);
   color: var(--color-text);
   font-size: 1rem;
   cursor: pointer;
@@ -500,7 +500,7 @@ export default {
   font-weight: 600;
   color: var(--color-text);
   padding: 0.5rem;
-  background: white;
+  background: var(--color-background);
   border: 0.0625rem solid rgba(0, 0, 0, 0.1);
   border-radius: var(--radius);
 }

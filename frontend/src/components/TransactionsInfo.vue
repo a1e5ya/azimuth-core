@@ -32,38 +32,6 @@
 
     </div>
 
-    <!-- Column 3 -->
-    <div class="info-column">
-
-      <div class="info-item">
-        <span class="info-label">Largest</span>
-        <span class="info-value">{{ formatCurrency(summary?.largest_transaction) }}</span>
-      </div>
-      
-      <div class="info-item">
-        <span class="info-label">Smallest</span>
-        <span class="info-value">{{ formatCurrency(summary?.smallest_transaction) }}</span>
-      </div>
-      
-
-      
-    </div>
-
-    <!-- Column 4 -->
-    <div class="info-column">
-
-      <div class="info-item">
-        <span class="info-label">Average</span>
-        <span class="info-value">{{ formatCurrency(summary?.average_transaction) }}</span>
-      </div>
-      
-      
-      <div class="info-item">
-        <span class="info-label">Median</span>
-        <span class="info-value">{{ formatCurrency(summary?.median_transaction) }}</span>
-      </div>
-    </div>
-
     <!-- Upload Progress -->
     <div class="upload-progress" v-if="uploads.length > 0">
       <div v-for="upload in uploads.slice(0, 1)" :key="upload.id" class="upload-item">
@@ -174,9 +142,8 @@ export default {
 <style scoped>
 .transactions-info {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 6rem;
-  margin-bottom: var(--gap-standard);
   padding: 0;
 }
 

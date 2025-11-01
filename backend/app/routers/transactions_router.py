@@ -285,3 +285,163 @@ async def reset_all_transactions(
             "message": f"Reset failed: {str(e)}",
             "deleted_count": 0
         }
+
+@router.get("/filter-metadata")
+async def get_filter_metadata(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get unique values for filter dropdowns - optimized query"""
+    
+    from sqlalchemy import distinct
+    
+    print(f"📊 Getting filter metadata for user: {current_user.email}")
+    
+    try:
+        # Get unique owners
+        owners_query = select(distinct(Transaction.owner)).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.owner.isnot(None),
+                Transaction.owner != ''
+            )
+        ).order_by(Transaction.owner)
+        
+        owners_result = await db.execute(owners_query)
+        unique_owners = [row[0] for row in owners_result]
+        
+        # Get unique account types  
+        account_types_query = select(distinct(Transaction.bank_account_type)).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.bank_account_type.isnot(None),
+                Transaction.bank_account_type != ''
+            )
+        ).order_by(Transaction.bank_account_type)
+        
+        account_types_result = await db.execute(account_types_query)
+        unique_account_types = [row[0] for row in account_types_result]
+        
+        # Get owner -> account type mapping
+        owner_account_query = select(
+            Transaction.owner,
+            Transaction.bank_account_type
+        ).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.owner.isnot(None),
+                Transaction.owner != '',
+                Transaction.bank_account_type.isnot(None),
+                Transaction.bank_account_type != ''
+            )
+        ).distinct()
+        
+        owner_account_result = await db.execute(owner_account_query)
+        
+        owner_account_map = {}
+        for row in owner_account_result:
+            owner = row.owner
+            account_type = row.bank_account_type
+            
+            if owner not in owner_account_map:
+                owner_account_map[owner] = []
+            if account_type not in owner_account_map[owner]:
+                owner_account_map[owner].append(account_type)
+        
+        # Sort account types for each owner
+        for owner in owner_account_map:
+            owner_account_map[owner].sort()
+        
+        # Get unique main categories
+        main_categories_query = select(distinct(Transaction.main_category)).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.main_category.isnot(None),
+                Transaction.main_category != ''
+            )
+        ).order_by(Transaction.main_category)
+        
+        main_categories_result = await db.execute(main_categories_query)
+        unique_main_categories = [row[0] for row in main_categories_result]
+        
+        # Get unique categories per main category
+        categories_query = select(
+            Transaction.main_category,
+            Transaction.category
+        ).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.main_category.isnot(None),
+                Transaction.main_category != '',
+                Transaction.category.isnot(None),
+                Transaction.category != ''
+            )
+        ).distinct()
+        
+        categories_result = await db.execute(categories_query)
+        
+        category_map = {}
+        for row in categories_result:
+            main_cat = row.main_category
+            category = row.category
+            
+            if main_cat not in category_map:
+                category_map[main_cat] = []
+            if category not in category_map[main_cat]:
+                category_map[main_cat].append(category)
+        
+        # Sort categories
+        for main_cat in category_map:
+            category_map[main_cat].sort()
+        
+        # Get unique subcategories per main category + category
+        subcategories_query = select(
+            Transaction.main_category,
+            Transaction.category,
+            Transaction.subcategory
+        ).where(
+            and_(
+                Transaction.user_id == current_user.id,
+                Transaction.main_category.isnot(None),
+                Transaction.main_category != '',
+                Transaction.category.isnot(None),
+                Transaction.category != '',
+                Transaction.subcategory.isnot(None),
+                Transaction.subcategory != ''
+            )
+        ).distinct()
+        
+        subcategories_result = await db.execute(subcategories_query)
+        
+        subcategory_map = {}
+        for row in subcategories_result:
+            key = f"{row.main_category}|{row.category}"
+            subcategory = row.subcategory
+            
+            if key not in subcategory_map:
+                subcategory_map[key] = []
+            if subcategory not in subcategory_map[key]:
+                subcategory_map[key].append(subcategory)
+        
+        # Sort subcategories
+        for key in subcategory_map:
+            subcategory_map[key].sort()
+        
+        result = {
+            "owners": unique_owners,
+            "account_types": unique_account_types,
+            "ownerAccountMap": owner_account_map,
+            "mainCategories": unique_main_categories,
+            "categoryMap": category_map,
+            "subcategoryMap": subcategory_map
+        }
+        
+        print(f"✅ Filter metadata: {len(unique_owners)} owners, {len(unique_account_types)} account types")
+        
+        return result
+        
+    except Exception as e:
+        print(f"❌ Failed to get filter metadata: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=str(e))

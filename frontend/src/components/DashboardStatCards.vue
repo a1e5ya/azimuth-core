@@ -163,6 +163,7 @@ export default {
   border-radius: var(--radius);
   height: 145px;
   width: 160px;
+  box-shadow: none;
 }
 
 .stat-label {
