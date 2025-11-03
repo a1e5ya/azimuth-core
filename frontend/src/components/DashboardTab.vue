@@ -31,16 +31,11 @@
         :get-type-color="getTypeColor"
       />
 
-      <!-- Two Column Layout -->
-      <div class="grid grid-2">
-        <DashboardTopCategories
+
+        <DashboardAccountsManagement
           :filtered-transactions="filteredTransactions"
         />
 
-        <DashboardAccountsOverview
-          :filtered-transactions="filteredTransactions"
-        />
-      </div>
     </template>
   </div>
 </template>
@@ -53,8 +48,7 @@ import { useCategoryStore } from '@/stores/categories'
 import DashboardDateRangePicker from './DashboardDateRangePicker.vue'
 import DashboardStatCards from './DashboardStatCards.vue'
 import DashboardIncomeExpensesChart from './DashboardIncomeExpensesChart.vue'
-import DashboardTopCategories from './DashboardTopCategories.vue'
-import DashboardAccountsOverview from './DashboardAccountsOverview.vue'
+import DashboardAccountsManagement from './DashboardAccountsManagement.vue'
 
 export default {
   name: 'DashboardTab',
@@ -62,8 +56,7 @@ export default {
     DashboardDateRangePicker,
     DashboardStatCards,
     DashboardIncomeExpensesChart,
-    DashboardTopCategories,
-    DashboardAccountsOverview
+    DashboardAccountsManagement
   },
   setup() {
     const authStore = useAuthStore()

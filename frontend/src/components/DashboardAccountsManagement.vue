@@ -1,10 +1,9 @@
 <template>
   <div class="container">
     <div class="header-with-action">
-      <h3>Accounts Overview</h3>
-      <button class="btn btn-small" @click="showAddOwnerModal = true">
-        <AppIcon name="plus" size="small" />
-        Add Owner
+      <h3>Account Owners & Accounts</h3>
+      <button class="btn btn-small btn-plus" @click="showAddOwnerModal = true">
+        <AppIcon name="plus" size="medium" />
       </button>
     </div>
     
@@ -18,28 +17,22 @@
     <div v-else-if="owners.length === 0" class="empty-state-small">
       <AppIcon name="credit-card" size="large" />
       <div>No account owners yet</div>
-      <div class="text-small">Create an owner to start managing accounts</div>
+      <div class="text-small">Import training data or create owners manually</div>
     </div>
     
     <!-- Owners & Accounts List -->
-    <div v-else class="accounts-list">
+    <div v-else class="accounts-grid">
       <div 
         v-for="owner in ownersWithStats" 
         :key="owner.id" 
-        class="account-card-compact"
+        class="owner-section"
       >
         <!-- Owner Header with Actions -->
-        <div class="account-header-compact">
-          <div class="account-title-compact">
-            <div 
-              class="owner-badge" 
-              :style="{ backgroundColor: owner.color || '#94a3b8' }"
-            ></div>
-            <div>
-              <div class="account-owner-compact">{{ owner.name }}</div>
-              <div class="account-type-compact">
-                {{ owner.accounts.length }} account{{ owner.accounts.length !== 1 ? 's' : '' }}
-              </div>
+        <div class="owner-header">
+          <div class="owner-info">
+            <div class="owner-name">{{ owner.name }}</div>
+            <div class="owner-meta">
+              {{ owner.accounts.length }} account{{ owner.accounts.length !== 1 ? 's' : '' }}
             </div>
           </div>
           
@@ -56,31 +49,29 @@
           />
         </div>
 
-        <!-- Accounts with Stats -->
-        <div v-if="owner.accounts.length > 0" class="account-stats-compact">
+        <!-- Accounts Grid -->
+        <div v-if="owner.accounts.length > 0" class="accounts-grid-row">
           <div 
             v-for="account in owner.accounts" 
             :key="account.id"
-            class="account-item-with-stats"
+            class="account-card"
           >
-            <!-- Account Info Row -->
-            <div class="account-info-row">
-              <div class="account-name-section">
-                <AppIcon name="credit-card" size="small" />
-                <div>
-                  <div class="account-name">{{ account.name }}</div>
-                  <div class="account-type">{{ account.account_type }}</div>
-                </div>
-              </div>
-
-              <div class="account-actions">
+            <!-- Account Header -->
+            <div class="account-card-header">
+              <div class="account-info">
                 <button 
                   class="btn-icon" 
                   @click="importToAccount(account, owner)"
                   title="Import transactions"
                 >
-                  <AppIcon name="upload" size="small" />
+                  <AppIcon name="file-add" size="medium" />
                 </button>
+                <div>
+                  <div class="account-name">{{ account.account_type }}</div>
+                </div>
+              </div>
+
+              <div class="account-actions">
                 
                 <ActionsMenu
                   :show-add="false"
@@ -94,27 +85,22 @@
             </div>
 
             <!-- Financial Stats -->
-            <div class="account-financial-stats">
+            <div class="account-stats">
               <div class="stat-item">
                 <span class="stat-label">Income:</span>
-                <span class="stat-value positive">{{ formatCurrency(account.stats.income) }}</span>
+                <span class="stat-value">{{ formatCurrency(account.stats.income) }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Expenses:</span>
-                <span class="stat-value negative">{{ formatCurrency(account.stats.expenses) }}</span>
+                <span class="stat-value">{{ formatCurrency(account.stats.expenses) }}</span>
               </div>
               <div class="stat-item">
                 <span class="stat-label">Transfers:</span>
-                <span class="stat-value neutral">{{ formatCurrency(account.stats.transfers) }}</span>
+                <span class="stat-value">{{ formatCurrency(account.stats.transfers) }}</span>
               </div>
               <div class="stat-item stat-total">
                 <span class="stat-label">Balance:</span>
-                <span 
-                  class="stat-value" 
-                  :class="account.stats.balance >= 0 ? 'positive' : 'negative'"
-                >
-                  {{ formatCurrency(account.stats.balance) }}
-                </span>
+                <span class="stat-value">{{ formatCurrency(account.stats.balance) }}</span>
               </div>
             </div>
           </div>
@@ -344,7 +330,7 @@ import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
 
 export default {
-  name: 'DashboardAccountsOverview',
+  name: 'DashboardAccountsManagement',
   components: {
     AppIcon,
     ActionsMenu
@@ -449,10 +435,10 @@ export default {
         })
         
         owners.value = response.data
-        console.log('Loaded owners:', owners.value.length)
+        console.log('✅ Loaded owners:', owners.value.length)
         
       } catch (error) {
-        console.error('Failed to load owners:', error)
+        console.error('❌ Failed to load owners:', error)
       } finally {
         loading.value = false
       }
@@ -702,6 +688,10 @@ export default {
       }
     })
 
+    watch(() => props.filteredTransactions, () => {
+      // Stats will auto-recompute via computed property
+    }, { deep: true })
+
     onMounted(() => {
       if (authStore.user) {
         loadOwners()
@@ -778,73 +768,78 @@ export default {
   to { transform: rotate(360deg); }
 }
 
-.accounts-list {
+.accounts-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-standard);
+}
+
+.owner-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-large);
+}
+
+.owner-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-bottom: var(--gap-small);
+  border-bottom: 1px solid var(--color-background-dark);
+}
+
+.owner-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+}
+
+.owner-name {
+  font-size: var(--text-medium);
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.owner-meta {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.accounts-grid-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr));
+  gap: var(--gap-small);
+}
+
+.account-card {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-large);
   display: flex;
   flex-direction: column;
   gap: var(--gap-small);
 }
 
-.account-card-compact {
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-  padding: var(--gap-small);
+.account-card:hover :deep(.btn-menu-dots) {
+  opacity: 1 !important;
 }
 
-.account-header-compact {
+.owner-header:hover :deep(.btn-menu-dots) {
+  opacity: 1 !important;
+}
+
+.account-card-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: var(--gap-small);
+  align-items: flex-start;
   padding-bottom: var(--gap-small);
   border-bottom: 1px solid var(--color-background-dark);
 }
 
-.account-title-compact {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.owner-badge {
-  width: 1rem;
-  height: 1rem;
-  border-radius: 50%;
-  flex-shrink: 0;
-}
-
-.account-owner-compact {
-  font-size: var(--text-small);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.account-type-compact {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
-}
-
-.account-stats-compact {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.account-item-with-stats {
-  background: var(--color-background-dark);
-  border-radius: var(--radius);
-  padding: var(--gap-small);
-}
-
-.account-info-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--color-background-light);
-}
-
-.account-name-section {
+.account-info {
   display: flex;
   align-items: center;
   gap: 0.5rem;
@@ -881,30 +876,34 @@ export default {
   color: var(--color-text-light);
 }
 
+.btn-plus {
+  margin: 0;
+  background-color: transparent;
+}
+
 .btn-icon:hover {
-  background: var(--color-background-light);
+  background: var(--color-background-dark);
   color: var(--color-text);
 }
 
-.account-financial-stats {
+.account-stats {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.375rem;
 }
 
 .stat-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 0.25rem 0;
   font-size: 0.75rem;
 }
 
 .stat-total {
   padding-top: 0.375rem;
-  border-top: 1px solid var(--color-background-light);
-  font-weight: 600;
   margin-top: 0.25rem;
+  border-top: 1px solid var(--color-background-dark);
+  font-weight: 600;
 }
 
 .stat-label {
@@ -913,28 +912,19 @@ export default {
 
 .stat-value {
   font-weight: 600;
-  font-size: 0.75rem;
-}
-
-.stat-value.positive {
-  color: #22c55e;
-}
-
-.stat-value.negative {
-  color: #ef4444;
-}
-
-.stat-value.neutral {
-  color: #3b82f6;
+  color: var(--color-text);
+  font-size: var(--text-medium);
 }
 
 .empty-accounts {
   text-align: center;
-  padding: var(--gap-small);
+  padding: var(--gap-standard);
   display: flex;
   flex-direction: column;
   gap: var(--gap-small);
   align-items: center;
+  background: var(--color-background-light);
+  border-radius: var(--radius);
 }
 
 /* Modal Styles */
@@ -1082,19 +1072,5 @@ export default {
 .btn-danger:disabled {
   opacity: 0.6;
   cursor: not-allowed;
-}
-
-@media (max-width: 30rem) {
-  .account-owner-compact {
-    font-size: 0.6875rem;
-  }
-  
-  .account-type-compact {
-    font-size: 0.625rem;
-  }
-  
-  .stat-item {
-    font-size: 0.6875rem;
-  }
 }
 </style>

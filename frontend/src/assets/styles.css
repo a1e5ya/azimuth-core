@@ -683,6 +683,7 @@ margin: 0;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+        margin: 0 !important;
 }
 
 .icon-wrapper :deep(svg) {
@@ -690,11 +691,14 @@ margin: 0;
   height: 100%;
   fill: #4a4a4a !important; /* Force dark grey fill */
   stroke: none !important; /* Force no stroke */
+
+
 }
 
 .icon-wrapper :deep(svg *) {
   fill: #4a4a4a !important; /* Force dark grey fill on all children */
   stroke: none !important; /* Force no stroke on all children */
+
 }
 
 /* Icon sizes - all 20x20px */

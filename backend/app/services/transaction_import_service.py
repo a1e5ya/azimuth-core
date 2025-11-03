@@ -1,5 +1,5 @@
 """
-Transaction import service - FIXED ACCOUNT SELECTION
+Transaction import service - AUTO-CREATE OWNERS & ACCOUNTS FROM TRAINING DATA
 """
 from fastapi import Depends
 from ..models.database import get_db
@@ -32,7 +32,7 @@ class TransactionImportService:
         account_id: str = None,  # NEW: for direct account import
         auto_categorize: bool = True
     ) -> Dict[str, Any]:
-        """Import transactions with mode selection"""
+        """Import transactions with mode selection and auto-create owners/accounts in training mode"""
         
         print(f"📤 Starting import: {filename} ({len(file_content)} bytes)")
         print(f"📋 Import mode: {import_mode}")
@@ -55,9 +55,24 @@ class TransactionImportService:
             await self.db.refresh(import_batch)
             print(f"✅ Created batch: {import_batch.id}")
 
-            # Handle account based on import mode
-            account = None
-            if import_mode == "account" and account_id:
+            print("🔄 Processing CSV...")
+            transactions_data, summary = process_csv_upload(
+                file_content, 
+                filename, 
+                str(self.user.id),
+                None  # No account_id yet for training mode
+            )
+            print(f"✅ Processed {len(transactions_data)} transactions")
+
+            # AUTO-CREATE OWNERS AND ACCOUNTS IN TRAINING MODE
+            owner_account_map = {}  # Maps (owner_name, bank_account_type) -> Account
+            
+            if import_mode == "training":
+                print(f"🏗️ Auto-creating owners and accounts from CSV data...")
+                owner_account_map = await self._auto_create_owners_and_accounts(transactions_data)
+                print(f"✅ Created/found {len(owner_account_map)} account mappings")
+            
+            elif import_mode == "account" and account_id:
                 # Use existing account for direct import
                 account_query = select(Account).where(
                     and_(
@@ -72,22 +87,6 @@ class TransactionImportService:
                     raise Exception(f"Account {account_id} not found")
                 
                 print(f"✅ Using account: {account.name} ({account.account_type})")
-            
-            elif import_mode == "training":
-                # Training mode - no account needed
-                print(f"✅ Training mode - no account assignment")
-            
-            else:
-                raise Exception(f"Invalid import mode: {import_mode}")
-
-            print("🔄 Processing CSV...")
-            transactions_data, summary = process_csv_upload(
-                file_content, 
-                filename, 
-                str(self.user.id),
-                str(account.id) if account else None
-            )
-            print(f"✅ Processed {len(transactions_data)} transactions")
 
             # Get user's categories
             user_categories = await self._get_user_categories()
@@ -98,7 +97,7 @@ class TransactionImportService:
                 'none': 0
             }
 
-            print(f"🎯 Mapping to user categories...")
+            print(f"🎯 Mapping to user categories and linking accounts...")
             
             for idx, trans_data in enumerate(transactions_data):
                 if idx % 1000 == 0 and idx > 0:
@@ -107,6 +106,21 @@ class TransactionImportService:
                 category_id = None
                 confidence_score = None
                 source_category = "imported"
+                
+                # Determine account_id based on import mode
+                transaction_account_id = None
+                
+                if import_mode == "training":
+                    # Find account from auto-created map
+                    owner_name = trans_data.get('owner', '').strip()
+                    account_type = trans_data.get('bank_account_type', '').strip()
+                    
+                    key = (owner_name, account_type)
+                    if key in owner_account_map:
+                        transaction_account_id = str(owner_account_map[key].id)
+                
+                elif import_mode == "account" and account:
+                    transaction_account_id = str(account.id)
                 
                 if auto_categorize:
                     csv_main = trans_data.get('main_category', '')
@@ -128,7 +142,7 @@ class TransactionImportService:
                 transaction = Transaction(
                     id=str(uuid.uuid4()),
                     user_id=str(self.user.id),
-                    account_id=str(account.id) if account else None,  # FIXED: Only set if account exists
+                    account_id=transaction_account_id,
                     posted_at=trans_data['posted_at'],
                     amount=trans_data['amount'],
                     currency=trans_data.get('currency', 'EUR'),
@@ -170,7 +184,9 @@ class TransactionImportService:
                 **summary,
                 "categorization": categorization_stats,
                 "import_mode": import_mode,
-                "account_id": str(account.id) if account else None
+                "account_id": str(account.id) if import_mode == "account" and account else None,
+                "owners_created": len(set(k[0] for k in owner_account_map.keys())) if import_mode == "training" else 0,
+                "accounts_created": len(owner_account_map) if import_mode == "training" else 0
             }
             
             await self.db.commit()
@@ -180,6 +196,8 @@ class TransactionImportService:
             elapsed = (datetime.utcnow() - import_batch.created_at).total_seconds()
             print(f"✅ Import complete: {inserted_count} transactions in {elapsed:.1f}s")
             print(f"📊 Categorization: {total_categorized}/{inserted_count} mapped ({total_categorized/inserted_count*100:.1f}%)")
+            if import_mode == "training":
+                print(f"🏗️ Created {len(set(k[0] for k in owner_account_map.keys()))} owners and {len(owner_account_map)} accounts")
             
             audit_entry = AuditLog(
                 user_id=str(self.user.id),
@@ -191,7 +209,7 @@ class TransactionImportService:
                     "rows_imported": inserted_count,
                     "categorization": categorization_stats,
                     "import_mode": import_mode,
-                    "account_id": str(account.id) if account else None,
+                    "account_id": str(account.id) if import_mode == "account" and account else None,
                     "summary": summary
                 }
             )
@@ -209,7 +227,9 @@ class TransactionImportService:
                     "auto_categorized": total_categorized,
                     "categorization_rate": (total_categorized / inserted_count * 100) if inserted_count > 0 else 0,
                     "import_mode": import_mode,
-                    "account_name": account.name if account else "Training Data"
+                    "account_name": account.name if import_mode == "account" and account else "Training Data",
+                    "owners_created": len(set(k[0] for k in owner_account_map.keys())) if import_mode == "training" else 0,
+                    "accounts_created": len(owner_account_map) if import_mode == "training" else 0
                 },
                 "message": f"Imported {inserted_count} transactions. {total_categorized} matched ({total_categorized/inserted_count*100:.1f}%)."
             }
@@ -234,6 +254,90 @@ class TransactionImportService:
                 "summary": {"error": str(e)},
                 "message": f"Import failed: {str(e)}"
             }
+    
+    async def _auto_create_owners_and_accounts(self, transactions_data: List[Dict]) -> Dict:
+        """
+        Auto-create Owner and Account records from CSV data
+        Returns a map of (owner_name, account_type) -> Account object
+        """
+        
+        # Extract unique owner + account combinations
+        unique_combinations = set()
+        for trans in transactions_data:
+            owner_name = (trans.get('owner') or '').strip()
+            bank_account = (trans.get('bank_account') or '').strip()
+            account_type = (trans.get('bank_account_type') or '').strip()
+            
+            if owner_name and account_type:
+                unique_combinations.add((owner_name, bank_account, account_type))
+        
+        print(f"   Found {len(unique_combinations)} unique owner-account combinations")
+        
+        owner_account_map = {}
+        
+        # Get existing owners
+        existing_owners_query = select(Owner).where(Owner.user_id == self.user.id)
+        existing_owners_result = await self.db.execute(existing_owners_query)
+        existing_owners = {owner.name: owner for owner in existing_owners_result.scalars().all()}
+        
+        # Process each combination
+        for owner_name, bank_account, account_type in sorted(unique_combinations):
+            # Get or create owner
+            if owner_name in existing_owners:
+                owner = existing_owners[owner_name]
+                print(f"   ✓ Using existing owner: {owner_name}")
+            else:
+                # Assign color based on owner
+                colors = ['#3b82f6', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6']
+                color = colors[len(existing_owners) % len(colors)]
+                
+                owner = Owner(
+                    id=str(uuid.uuid4()),
+                    user_id=str(self.user.id),
+                    name=owner_name,
+                    color=color,
+                    active=True
+                )
+                self.db.add(owner)
+                await self.db.flush()  # Get the ID
+                existing_owners[owner_name] = owner
+                print(f"   + Created owner: {owner_name}")
+            
+            # Check if account already exists
+            account_query = select(Account).where(
+                and_(
+                    Account.owner_id == owner.id,
+                    Account.account_type == account_type
+                )
+            )
+            account_result = await self.db.execute(account_query)
+            account = account_result.scalar_one_or_none()
+            
+            if not account:
+                # Create account
+                account_name = bank_account if bank_account else f"{owner_name}'s {account_type}"
+                
+                account = Account(
+                    id=str(uuid.uuid4()),
+                    user_id=str(self.user.id),
+                    owner_id=str(owner.id),
+                    name=account_name,
+                    account_type=account_type,
+                    institution=None,
+                    current_balance=0.0,
+                    active=True
+                )
+                self.db.add(account)
+                await self.db.flush()
+                print(f"   + Created account: {owner_name} - {account_name} ({account_type})")
+            else:
+                print(f"   ✓ Using existing account: {owner_name} - {account.name} ({account_type})")
+            
+            # Map by (owner_name, account_type) for easy lookup
+            owner_account_map[(owner_name, account_type)] = account
+        
+        await self.db.commit()
+        return owner_account_map
     
     async def _get_user_categories(self) -> List:
         """Get all active user categories"""
