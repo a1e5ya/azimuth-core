@@ -1,40 +1,36 @@
 <template>
   <div class="tab-content">
-        <!-- Type Tabs -->
-      <div class="type-tabs">
-        <div class="tabs-left">
-        </div>
-        <div class="tabs-left">
-          <button
-            v-for="type in categories"
-            :key="type.id"
-            class="type-tab"
-            :class="{ active: selectedTypeId === type.id }"
-            :style="{ '--tab-hover-color': type.color }"
-            @click="selectedTypeId = type.id"
-          >
-            <AppIcon :name="type.icon" size="medium" />
-            {{ type.name }}
-          </button>
-        </div>
-        
-              <div class="tabs-right">
-          <ActionsMenu
-            class="always-visible"
-            :show-add="true"
-            :show-edit="false"
-            :show-delete="false"
-            :show-check="false"
-            menu-title="Category Actions"
-            @add="addNewCategory"
-          />
-        </div>
-
+    <!-- Type Tabs -->
+    <div class="type-tabs">
+      <div class="tabs-left"></div>
+      <div class="tabs-left">
+        <button
+          v-for="type in categories"
+          :key="type.id"
+          class="type-tab"
+          :class="{ active: selectedTypeId === type.id }"
+          :style="{ '--tab-hover-color': type.color }"
+          @click="selectedTypeId = type.id"
+        >
+          <AppIcon :name="type.icon" size="medium" />
+          {{ type.name }}
+        </button>
       </div>
-    <div       class="container"    >
+      
+      <div class="tabs-right">
+        <ActionsMenu
+          class="always-visible"
+          :show-add="true"
+          :show-edit="false"
+          :show-delete="false"
+          :show-check="false"
+          menu-title="Category Actions"
+          @add="addNewCategory"
+        />
+      </div>
+    </div>
 
-
-
+    <div class="container">
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
@@ -146,7 +142,6 @@ export default {
     const categoryStore = useCategoryStore()
     const selectedTypeId = ref(null)
 
-    // Sort categories in the correct order: INCOME, EXPENSES, TRANSFERS, TARGETS
     const categories = computed(() => {
       const cats = categoryStore.categories || []
       const order = ['income', 'expenses', 'transfers', 'targets']
@@ -176,43 +171,35 @@ export default {
     async function refreshCategories() {
       await categoryStore.loadCategories()
       if (categories.value && categories.value.length > 0 && !selectedTypeId.value) {
-        // Default to first tab (INCOME)
         selectedTypeId.value = categories.value[0].id
       }
     }
 
     function editCategory(category) {
       console.log('Edit:', category.name)
-      // TODO: Open edit modal/form
     }
 
     function deleteCategory(category) {
       console.log('Delete:', category.name)
-      // TODO: Confirm and delete category
     }
 
     function addSubcategory(parent) {
       console.log('Add subcategory to:', parent.name)
-      // TODO: Open add subcategory modal/form
     }
 
     function addNewCategory() {
       console.log('Add new main category to:', currentType.value?.name)
-      // TODO: Open add category modal/form
     }
 
     function getKeywords(categoryId) {
-      // TODO: Fetch keywords for category from backend
       return ''
     }
 
     function updateKeywords(categoryId, keywords) {
       console.log('Update keywords:', categoryId, keywords)
-      // TODO: Save keywords to backend
     }
 
     function getMerchants(categoryId) {
-      // TODO: Fetch merchants for category from backend
       return []
     }
 
@@ -240,7 +227,7 @@ export default {
 </script>
 
 <style scoped>
-/* Type Tabs */
+/* Type Tabs - CategoriesTab specific */
 .type-tabs {
   display: flex;
   justify-content: space-between;
@@ -290,24 +277,7 @@ export default {
   font-weight: 600;
 }
 
-/* Loading */
-.loading-state {
-  text-align: center;
-  padding: var(--gap-large);
-}
-
-.loading-spinner {
-  font-size: var(--text-large);
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--gap-small);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Compact Grid Layout */
+/* Categories Grid Layout */
 .categories-compact-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -323,7 +293,6 @@ export default {
   gap: 0.5rem;
 }
 
-/* Category Header - Compact */
 .category-header-compact {
   display: flex;
   justify-content: space-between;
@@ -349,7 +318,7 @@ export default {
   transition: color 0.2s;
 }
 
-/* Subcategories Compact */
+/* Subcategories */
 .subcats-compact {
   display: flex;
   flex-direction: column;
@@ -383,7 +352,6 @@ export default {
   transition: color 0.2s;
 }
 
-/* Compact Input */
 .keyword-input-compact {
   width: 100%;
   padding: 0.25rem 0.375rem;
@@ -403,7 +371,6 @@ export default {
   font-style: italic;
 }
 
-/* Merchant Tags */
 .merchant-tags-compact {
   display: flex;
   flex-wrap: wrap;
@@ -425,35 +392,8 @@ export default {
   font-style: italic;
 }
 
-/* No Subcategories */
 .no-subcats-compact {
   text-align: center;
   padding: 0.5rem;
-}
-
-.btn {
-  padding: 0.5rem 1rem;
-  border: none;
-  border-radius: 0.25rem;
-  cursor: pointer;
-  font-size: 0.875rem;
-  font-weight: 500;
-  transition: all 0.2s;
-}
-
-.btn-small {
-  padding: 0.375rem 0.75rem;
-  font-size: 0.75rem;
-}
-
-.btn:hover {
-  background: var(--color-background-dark);
-}
-
-/* Responsive */
-@media (max-width: 48rem) {
-  .categories-compact-grid {
-    grid-template-columns: 1fr;
-  }
 }
 </style>

@@ -125,7 +125,6 @@ export default {
       closeMenu()
     }
 
-    // Close menu on Escape key
     function handleEscape(e) {
       if (e.key === 'Escape' && isMenuOpen.value) {
         closeMenu()
@@ -154,12 +153,12 @@ export default {
 </script>
 
 <style scoped>
+/* Component-specific positioning and behavior only */
 .actions-menu-wrapper {
   position: relative;
   display: inline-flex;
 }
 
-/* Three Dots Button */
 .btn-menu-dots {
   background: none;
   border: none;
@@ -174,14 +173,12 @@ export default {
   color: var(--color-text-light);
 }
 
-/* Show on parent hover */
 .category-header-compact:hover .btn-menu-dots,
 .subcat-top:hover .btn-menu-dots,
 .transaction-row:hover .btn-menu-dots {
   opacity: 0.6;
 }
 
-/* Always visible when has class */
 .actions-menu-wrapper.always-visible .btn-menu-dots {
   opacity: 1 !important;
   color: var(--color-text);
@@ -194,7 +191,6 @@ export default {
   color: var(--color-text);
 }
 
-/* Actions Popup */
 .actions-popup {
   position: absolute;
   top: calc(100% + 0.25rem);
@@ -241,7 +237,6 @@ export default {
   color: #22c55e;
 }
 
-/* Backdrop */
 .menu-backdrop {
   position: fixed;
   top: 0;
@@ -252,7 +247,6 @@ export default {
   background: transparent;
 }
 
-/* Fade Transition */
 .actions-fade-enter-active,
 .actions-fade-leave-active {
   transition: all 0.15s ease;

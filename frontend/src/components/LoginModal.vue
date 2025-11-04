@@ -3,38 +3,15 @@
     <div :class="contentClasses" @click.stop>
       <h2 v-if="!isFullScreen">{{ isLogin ? 'Sign In' : 'Sign Up' }}</h2>
       
-      <!-- Email/Password Form -->
       <form @submit.prevent="handleEmailAuth">
-        <input
-          v-model="email"
-          type="email"
-          placeholder="Email"
-          required
-          :class="inputClasses"
-        />
-        
-        <input
-          v-if="!isLogin"
-          v-model="displayName"
-          type="text"
-          placeholder="Display Name (optional)"
-          :class="inputClasses"
-        />
-        
-        <input
-          v-model="password"
-          type="password"
-          placeholder="Password"
-          required
-          :class="inputClasses"
-        />
-        
+        <input v-model="email" type="email" placeholder="Email" required :class="inputClasses" />
+        <input v-if="!isLogin" v-model="displayName" type="text" placeholder="Display Name (optional)" :class="inputClasses" />
+        <input v-model="password" type="password" placeholder="Password" required :class="inputClasses" />
         <button type="submit" :class="authBtnClasses" :disabled="loading">
           {{ loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Sign Up') }}
         </button>
       </form>
       
-      <!-- Toggle Login/Register -->
       <p :class="toggleTextClasses">
         {{ isLogin ? "Don't have an account?" : "Already have an account?" }}
         <button @click="isLogin = !isLogin" class="toggle-btn">
@@ -42,10 +19,8 @@
         </button>
       </p>
       
-      <!-- Error Message -->
       <div v-if="error" class="error-message">{{ error }}</div>
       
-      <!-- Close Button (only for non-fullscreen) -->
       <button v-if="!isFullScreen" @click="closeModal" class="close-btn">×</button>
     </div>
   </div>
@@ -58,19 +33,12 @@ import { useAuthStore } from '@/stores/auth'
 export default {
   name: 'LoginModal',
   props: {
-    showModal: {
-      type: Boolean,
-      default: false
-    },
-    isFullScreen: {
-      type: Boolean,
-      default: false
-    }
+    showModal: { type: Boolean, default: false },
+    isFullScreen: { type: Boolean, default: false }
   },
   emits: ['close'],
   setup(props, { emit }) {
     const authStore = useAuthStore()
-    
     const isLogin = ref(true)
     const email = ref('')
     const password = ref('')
@@ -86,9 +54,7 @@ export default {
     }
     
     const handleOverlayClick = () => {
-      if (!props.isFullScreen) {
-        closeModal()
-      }
+      if (!props.isFullScreen) closeModal()
     }
     
     const resetForm = () => {
@@ -102,7 +68,6 @@ export default {
     const handleEmailAuth = async () => {
       loading.value = true
       error.value = ''
-      
       try {
         let result
         if (isLogin.value) {
@@ -110,92 +75,33 @@ export default {
         } else {
           result = await authStore.register(email.value, password.value, displayName.value)
         }
-        
         if (result.success) {
-          if (!props.isFullScreen) {
-            closeModal()
-          }
+          if (!props.isFullScreen) closeModal()
         } else {
           error.value = result.error
         }
       } catch (err) {
         error.value = err.message
       }
-      
       loading.value = false
     }
     
-    // Computed classes based on fullscreen mode
-    const modalClasses = computed(() => [
-      props.isFullScreen ? 'fullscreen-modal' : 'modal-overlay'
-    ])
-    
-    const contentClasses = computed(() => [
-      props.isFullScreen ? 'fullscreen-content' : 'modal-content'
-    ])
-    
-    const inputClasses = computed(() => [
-      'auth-input',
-      props.isFullScreen ? 'fullscreen-input' : ''
-    ])
-    
-    const authBtnClasses = computed(() => [
-      'auth-btn',
-      props.isFullScreen ? 'fullscreen-auth-btn' : ''
-    ])
-    
-    const toggleTextClasses = computed(() => [
-      'toggle-text',
-      props.isFullScreen ? 'fullscreen-toggle-text' : ''
-    ])
+    const modalClasses = computed(() => [props.isFullScreen ? 'fullscreen-modal' : 'modal-overlay'])
+    const contentClasses = computed(() => [props.isFullScreen ? 'fullscreen-content' : 'modal-content'])
+    const inputClasses = computed(() => ['form-input', props.isFullScreen ? 'fullscreen-input' : ''])
+    const authBtnClasses = computed(() => ['btn', 'btn-primary', props.isFullScreen ? 'fullscreen-auth-btn' : ''])
+    const toggleTextClasses = computed(() => ['toggle-text', props.isFullScreen ? 'fullscreen-toggle-text' : ''])
     
     return {
-      isLogin,
-      email,
-      password,
-      displayName,
-      error,
-      loading,
-      closeModal,
-      handleOverlayClick,
-      handleEmailAuth,
-      modalClasses,
-      contentClasses,
-      inputClasses,
-      authBtnClasses,
-      toggleTextClasses
+      isLogin, email, password, displayName, error, loading,
+      closeModal, handleOverlayClick, handleEmailAuth,
+      modalClasses, contentClasses, inputClasses, authBtnClasses, toggleTextClasses
     }
   }
 }
 </script>
 
 <style scoped>
-/* Regular Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: var(--color-background-light);
-  backdrop-filter: blur(20px);
-  border-radius: var(--radius-large);
-  padding: var(--gap-large);
-  width: 90%;
-  max-width: 400px;
-  position: relative;
-  box-shadow: var(--shadow);
-}
-
-/* Full Screen Modal Styles */
 .fullscreen-modal {
   width: 100%;
   height: 100%;
@@ -213,7 +119,6 @@ export default {
   position: relative;
 }
 
-/* Common Styles */
 .modal-content h2,
 .fullscreen-content h2 {
   text-align: center;
@@ -222,61 +127,15 @@ export default {
   font-weight: 600;
 }
 
-.auth-input {
-  width: 100%;
-  padding: var(--gap-small) var(--gap-standard);
-  border: 2px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  margin-bottom: var(--gap-standard);
-  font-size: var(--text-medium);
-  background: var(--color-button);
-  transition: all 0.3s ease;
-  color: var(--color-text);
-}
-
 .fullscreen-input {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid rgba(255, 255, 255, 0.3);
   color: #333;
 }
 
-.auth-input:focus,
-.fullscreen-input:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-  background: white;
-}
-
-.auth-btn {
-  width: 100%;
-  padding: var(--gap-small) var(--gap-standard);
-  color: #000;
-  border: none;
-  border-radius: var(--radius);
-  font-size: var(--text-medium);
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.3s ease;
-  margin-bottom: var(--gap-standard);
-  box-shadow: var(--shadow);
-  background: var(--color-button);
-}
-
 .fullscreen-auth-btn {
   background: rgba(255, 255, 255, 0.2) !important;
   border: 2px solid rgba(255, 255, 255, 0.3);
-}
-
-.auth-btn:hover:not(:disabled),
-.fullscreen-auth-btn:hover:not(:disabled) {
-  box-shadow: var(--shadow-hover);
-  transform: translateY(-2px);
-}
-
-.auth-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-  transform: none;
 }
 
 .toggle-text {
@@ -303,20 +162,5 @@ export default {
   border-radius: var(--radius);
   font-size: var(--text-small);
   margin-top: var(--gap-standard);
-}
-
-.close-btn {
-  position: absolute;
-  top: var(--gap-small);
-  right: var(--gap-standard);
-  background: none;
-  border: none;
-  font-size: 24px;
-  color: var(--color-text-muted);
-  cursor: pointer;
-}
-
-.close-btn:hover {
-  color: var(--color-text);
 }
 </style>

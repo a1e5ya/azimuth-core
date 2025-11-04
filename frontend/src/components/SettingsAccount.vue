@@ -6,12 +6,12 @@
     
     <div class="form-row">
       <label>Display Name</label>
-      <input v-model="userProfile.displayName" type="text" placeholder="Your name">
+      <input v-model="userProfile.displayName" type="text" placeholder="Your name" class="form-input">
     </div>
     
     <div class="form-row">
       <label>Email</label>
-      <input v-model="userProfile.email" type="email" placeholder="your.email@example.com" disabled>
+      <input v-model="userProfile.email" type="email" placeholder="your.email@example.com" disabled class="form-input">
     </div>
     
     <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
@@ -22,17 +22,17 @@
     
     <div class="form-row">
       <label>Current Password</label>
-      <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password">
+      <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" class="form-input">
     </div>
     
     <div class="form-row">
       <label>New Password</label>
-      <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password">
+      <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" class="form-input">
     </div>
     
     <div class="form-row">
       <label>Confirm New Password</label>
-      <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password">
+      <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" class="form-input">
     </div>
     
     <button @click="changePassword" class="btn btn-primary" :disabled="changingPassword">
@@ -182,61 +182,4 @@ export default {
 }
 </script>
 
-<style scoped>
-/* Using global design system - minimal overrides only */
-.card {
-  break-inside: avoid;
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 7rem 1fr;
-  gap: var(--gap-small);
-  align-items: center;
-  margin-bottom: var(--gap-small);
-}
-
-.form-row label {
-  font-size: var(--text-small);
-  font-weight: 500;
-  color: var(--color-text);
-  text-align: left;
-}
-
-.form-row input {
-  width: 100%;
-  padding: 0.25rem 0.5rem;
-  border: 0.0625rem solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  font-size: var(--text-small);
-  color: var(--color-text);
-  background: var(--color-button);
-  transition: all 0.2s ease;
-}
-
-.form-row input:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-  box-shadow: 0 0 0 0.125rem rgba(0, 0, 0, 0.1);
-}
-
-.form-row input:disabled {
-  background: var(--color-background-dark);
-  color: var(--color-text-muted);
-  cursor: not-allowed;
-  opacity: 0.6;
-}
-
-.divider {
-  margin: var(--gap-small) 0;
-  border: none;
-  border-top: 0.0625rem solid rgba(0, 0, 0, 0.1);
-}
-
-@media (max-width: 48rem) {
-  .form-row {
-    grid-template-columns: 1fr;
-    gap: 0.125rem;
-  }
-}
-</style>
+<!-- NO STYLES - Uses global .card, .form-row, .form-input, .btn, .divider -->
