@@ -162,7 +162,7 @@ export default {
   padding: var(--gap-large);
   border-radius: var(--radius);
   height: 145px;
-  width: 160px;
+  width: 12rem;
   box-shadow: none;
 }
 
@@ -182,35 +182,5 @@ export default {
 .stat-detail {
   font-size: var(--text-small);
   color: var(--color-text-light);
-}
-
-@media (max-width: 64rem) {
-  .grid-4 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-}
-
-@media (max-width: 48rem) {
-  .grid-4 {
-    grid-template-columns: 1fr;
-  }
-  
-  .stat-card {
-    padding: var(--gap-standard);
-  }
-}
-
-@media (max-width: 30rem) {
-  .stat-card {
-    padding: var(--gap-small);
-  }
-  
-  .stat-label {
-    font-size: 0.6875rem;
-  }
-  
-  .stat-value {
-    font-size: var(--text-medium);
-  }
 }
 </style>

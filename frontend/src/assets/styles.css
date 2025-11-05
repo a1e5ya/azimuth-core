@@ -35,7 +35,7 @@
   --topbar-height: 5rem;
   
   /* Shadows */
-  --shadow: none;
+  --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.15);
   --shadow-hover: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.15);
 }
 
@@ -78,6 +78,42 @@ body, #app {
   75% { background: rgba(240, 253, 224, 0.5); }
   90% { background: rgba(233, 232, 252, 0.5); }
   100% { background: rgba(255, 245, 240, 0.5); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(2rem);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    max-height: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+  to {
+    opacity: 1;
+    max-height: 30rem;
+    padding-top: var(--gap-standard);
+    padding-bottom: var(--gap-standard);
+  }
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 #app {
@@ -229,6 +265,7 @@ button * {
   border: none !important;
   color: var(--color-text-light);
   font-weight: 400;
+  font-size: var(--text-large);
 }
 
 .btn-link:hover {
@@ -266,12 +303,12 @@ button * {
 }
 
 .btn-danger {
-  background: #ef4444;
-  color: white;
+  background: #ffdddd;
+  color: rgb(0, 0, 0);
 }
 
 .btn-danger:hover {
-  background: #dc2626;
+  background: #ff9797;
 }
 
 /* ==============================================
@@ -643,7 +680,7 @@ button * {
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--gap-small);
   margin-bottom: var(--gap-standard);
 }
 
@@ -659,7 +696,7 @@ button * {
 
 .form-input,
 .form-select {
-  padding: 0.5rem;
+  padding: var(--gap-small);
   border: 0.0625rem solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
   background: var(--color-button);
@@ -738,7 +775,7 @@ textarea.form-input {
 .empty-title {
   font-size: var(--text-large);
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--gap-small);
 }
 
 .empty-subtitle {
@@ -770,23 +807,23 @@ textarea.form-input {
 }
 
 .icon-small {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1rem;
+  height: 1rem;
 }
 
 .icon-medium {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 1.5rem;
+  height: 1.5rem;
 }
 
 .icon-large {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 2rem;
+  height: 2rem;
 }
 
 .icon-xl {
-  width: 1.25rem;
-  height: 1.25rem;
+  width: 3rem;
+  height: 3rem;
 }
 
 .btn .icon-wrapper {
@@ -836,7 +873,7 @@ textarea.form-input {
 
 .badge {
   display: inline-block;
-  padding: 0.125rem 0.5rem;
+  padding: 0.125rem var(--gap-small);
   border-radius: var(--radius);
   font-size: var(--text-small);
   font-weight: 600;
@@ -889,13 +926,13 @@ textarea.form-input {
   font-size: var(--text-small);
   color: var(--color-text-light);
   background: var(--color-background-dark);
-  padding: 0.1875rem 0.5rem;
+  padding: 0.1875rem var(--gap-small);
   border-radius: var(--radius);
 }
 
 .custom-textarea {
   width: 100%;
-  padding: 0.25rem 0.5rem;
+  padding: 0.25rem var(--gap-small);
   border: 0.0625rem solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
   font-size: var(--text-small);
@@ -1050,7 +1087,7 @@ textarea.form-input {
 }
 
 .stat-value.status-error {
-  color: #dc2626;
+  color: #ffa3a3;
 }
 
 .stat-value.status-info {
@@ -1117,13 +1154,13 @@ textarea.form-input {
   color: var(--color-text);
   margin-bottom: 0.75rem;
   border-bottom: 0.0625rem solid rgba(0, 0, 0, 0.1);
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--gap-small);
 }
 
 .detail-row {
   display: flex;
   justify-content: space-between;
-  padding: 0.5rem 0;
+  padding: var(--gap-small) 0;
   border-bottom: 0.0625rem solid rgba(0, 0, 0, 0.05);
 }
 
@@ -1146,7 +1183,7 @@ textarea.form-input {
 }
 
 .detail-row .status-error {
-  color: #dc2626;
+  color: #ffa3a3;
   font-weight: 600;
 }
 
@@ -1162,7 +1199,7 @@ textarea.form-input {
 .preview-label {
   font-size: var(--text-small);
   color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--gap-small);
 }
 
 .preview-content {

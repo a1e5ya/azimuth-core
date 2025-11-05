@@ -19,7 +19,7 @@
       />
 
       <!-- Right Side: Controls + Chart + Scrollbar + Info -->
-      <div class="timeline-chart-container">
+      <div class="timeline-chart-container container">
         <!-- 1. Controls at the TOP -->
         <TimelineControls
           :current-zoom-level="currentZoomLevel"
@@ -89,13 +89,9 @@ export default {
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
     
-    // Current mode state
-    const currentMode = ref('view') // 'view' or 'add'
-    
-    // Visible range for scrolling
+    const currentMode = ref('view')
     const customVisibleRange = ref(null)
     
-    // Data management
     const {
       loading,
       transactions,
@@ -109,7 +105,6 @@ export default {
       resetZoom
     } = useTimelineData()
     
-    // Calculate full range (including some future for targets)
     const fullRangeStart = computed(() => {
       if (!dateRange.value.start) return new Date()
       return dateRange.value.start
@@ -117,13 +112,11 @@ export default {
     
     const fullRangeEnd = computed(() => {
       if (!dateRange.value.end) return new Date()
-      // Extend to 1 year in the future for target planning
       const futureDate = new Date(dateRange.value.end)
       futureDate.setFullYear(futureDate.getFullYear() + 1)
       return futureDate
     })
     
-    // Calculate visible range based on custom range or full range
     const visibleRangeStart = computed(() => {
       if (customVisibleRange.value) {
         return customVisibleRange.value.start
@@ -138,12 +131,10 @@ export default {
       return dateRange.value.end || new Date()
     })
     
-    // Cursor class based on mode
     const cursorClass = computed(() => {
       return currentMode.value === 'add' ? 'cursor-plus' : 'cursor-default'
     })
     
-    // Visibility management
     const {
       visibleTypes,
       visibleCategories,
@@ -173,7 +164,6 @@ export default {
       }
     )
     
-    // Chart configuration - PASS customVisibleRange
     const {
       hoveredData,
       isPinned,
@@ -200,23 +190,19 @@ export default {
         isSubcategoryVisible: (subcategoryId) => visibleSubcategories.value.includes(subcategoryId),
         isCategoryExpanded: (categoryId) => expandedCategories.value.includes(categoryId)
       },
-      customVisibleRange // Pass this so chart knows about scroll position
+      customVisibleRange
     )
     
-    // Set mode
     function setMode(mode) {
       currentMode.value = mode
       console.log('📍 Mode changed to:', mode)
       
-      // Unpin when switching modes
       if (isPinned.value) {
         unpinHoverData()
       }
     }
     
-    // Handle scroll to new range
     function handleScrollTo({ start, end }) {
-      // Clamp to full range
       const clampedStart = new Date(Math.max(start.getTime(), fullRangeStart.value.getTime()))
       const clampedEnd = new Date(Math.min(end.getTime(), fullRangeEnd.value.getTime()))
       
@@ -228,14 +214,12 @@ export default {
       console.log('📜 Scrolled to:', clampedStart.toLocaleDateString(), '-', clampedEnd.toLocaleDateString())
     }
     
-    // Handle reset zoom with unpin
     function handleResetZoom() {
       resetZoom()
       unpinHoverData()
-      customVisibleRange.value = null // Reset to full range
+      customVisibleRange.value = null
     }
     
-    // Watch for visibility changes
     watch(
       [visibleTypes, visibleCategories, visibleSubcategories, expandedCategories],
       () => {
@@ -244,26 +228,22 @@ export default {
       { deep: true }
     )
     
-    // Watch for zoom level changes
     watch(() => currentZoomLevel.value, () => {
       console.log('Zoom level:', currentZoomLevel.value)
       unpinHoverData()
-      customVisibleRange.value = null // Reset scroll when zooming
+      customVisibleRange.value = null
     })
     
-    // Watch for mode changes
     watch(() => currentMode.value, (newMode) => {
       console.log('Mode changed to:', newMode)
     })
     
-    // Watch for user authentication
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
         loadTransactions(authStore.token)
       }
     })
     
-    // Initialize on mount
     onMounted(async () => {
       if (authStore.user) {
         await categoryStore.loadCategories()
@@ -273,37 +253,26 @@ export default {
     })
     
     return {
-      // Data
       loading,
       hasData,
       currentZoomLevel,
       currentMode,
       cursorClass,
-      
-      // Date ranges for scrollbar
       fullRangeStart,
       fullRangeEnd,
       visibleRangeStart,
       visibleRangeEnd,
-      
-      // Categories
       expenseCategories,
       incomeCategories,
       transferCategories,
       targetCategories,
-      
-      // Visibility
       visibleTypes,
       visibleCategories,
       visibleSubcategories,
       expandedCategories,
-      
-      // Chart
       chartSeries,
       chartOptions,
       hoveredData,
-      
-      // Actions
       toggleType,
       toggleCategory,
       toggleSubcategory,
@@ -341,24 +310,11 @@ export default {
   position: relative;
 }
 
-/* Cursor styles for different modes */
 .cursor-default :deep(.apexcharts-svg) {
   cursor: default !important;
 }
 
 .cursor-plus :deep(.apexcharts-svg) {
   cursor: crosshair !important;
-}
-
-@media (max-width: 64rem) {
-  .timeline-main-content {
-    flex-direction: column;
-  }
-}
-
-@media (max-width: 48rem) {
-  .timeline-container {
-    padding: var(--gap-small);
-  }
 }
 </style>

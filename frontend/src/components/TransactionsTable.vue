@@ -3,7 +3,7 @@
     <!-- Bulk Actions -->
     <div class="bulk-actions" v-if="selectedIds.length > 0">
       <span class="bulk-selection">{{ selectedIds.length }} selected</span>
-      <select v-model="bulkCategoryId" class="bulk-category-select">
+      <select v-model="bulkCategoryId" class="bulk-category-select form-select">
         <option value="">Select category for bulk assignment...</option>
         <optgroup 
           v-for="group in groupedCategories" 
@@ -297,12 +297,11 @@ export default {
     }
 
     const getAccountInfo = (transaction) => {
-  // Show bank_account and bank_account_type from CSV
-  if (transaction.bank_account && transaction.bank_account_type) {
-    return `${transaction.bank_account} (${transaction.bank_account_type})`
-  }
-  return transaction.bank_account || transaction.bank_account_type || '-'
-}
+      if (transaction.bank_account && transaction.bank_account_type) {
+        return `${transaction.bank_account} (${transaction.bank_account_type})`
+      }
+      return transaction.bank_account || transaction.bank_account_type || '-'
+    }
 
     return {
       selectedIds,
@@ -341,39 +340,7 @@ export default {
 }
 
 .bulk-category-select {
-  padding: 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
   min-width: 12rem;
-}
-
-.loading-state,
-.empty-state {
-  text-align: center;
-  padding: var(--gap-large);
-  color: var(--color-text-light);
-}
-
-.loading-spinner {
-  font-size: var(--text-large);
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--gap-standard);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.empty-title {
-  font-size: var(--text-large);
-  font-weight: 600;
-  margin-bottom: 0.5rem;
-}
-
-.empty-subtitle {
-  color: var(--color-text-muted);
 }
 
 .transactions-table-container {

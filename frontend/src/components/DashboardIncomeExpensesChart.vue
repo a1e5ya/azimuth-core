@@ -227,12 +227,6 @@ export default {
   padding: var(--gap-small);
 }
 
-.empty-state {
-  text-align: center;
-  padding: var(--gap-large);
-  color: var(--color-text-light);
-}
-
 :deep(.apexcharts-tooltip) {
   background: var(--color-background-light) !important;
   border: 1px solid var(--color-background-dark) !important;

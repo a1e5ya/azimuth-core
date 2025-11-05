@@ -8,13 +8,13 @@
     </div>
     
     <!-- Loading State -->
-    <div v-if="loading" class="loading-state-small">
+    <div v-if="loading" class="loading-state">
       <div class="loading-spinner">⟳</div>
       <div>Loading...</div>
     </div>
     
     <!-- Empty State -->
-    <div v-else-if="owners.length === 0" class="empty-state-small">
+    <div v-else-if="owners.length === 0" class="empty-state">
       <AppIcon name="credit-card" size="large" />
       <div>No account owners yet</div>
       <div class="text-small">Import training data or create owners manually</div>
@@ -351,7 +351,6 @@ export default {
     const deleting = ref(false)
     const owners = ref([])
     
-    // Modals
     const showAddOwnerModal = ref(false)
     const showAccountModal = ref(false)
     const editingOwner = ref(null)
@@ -360,7 +359,6 @@ export default {
     const deletingOwner = ref(null)
     const deletingAccount = ref(null)
     
-    // Forms
     const ownerForm = ref({
       name: '',
       color: '#3b82f6'
@@ -374,16 +372,13 @@ export default {
       current_balance: 0
     })
     
-    // File import
     const fileInput = ref(null)
     const importingAccount = ref(null)
     const importingOwner = ref(null)
 
-    // Owners with calculated stats from filtered transactions
     const ownersWithStats = computed(() => {
       return owners.value.map(owner => {
         const accountsWithStats = owner.accounts.map(account => {
-          // Filter transactions for this account
           const accountTransactions = props.filteredTransactions.filter(
             tx => tx.account_id === account.id
           )
@@ -444,7 +439,6 @@ export default {
       }
     }
 
-    // Owner CRUD
     function showAddAccountModal(owner) {
       selectedOwner.value = owner
       accountForm.value = {
@@ -537,7 +531,6 @@ export default {
       }
     }
 
-    // Account CRUD
     function editAccount(account, owner) {
       editingAccount.value = account
       selectedOwner.value = owner
@@ -611,7 +604,7 @@ export default {
       deleting.value = true
       
       try {
-        const force = true // Always force delete for now
+        const force = true
         
         await axios.delete(
           `${API_BASE}/accounts/${deletingAccount.value.account.id}?force=${force}`,
@@ -629,7 +622,6 @@ export default {
       }
     }
 
-    // Import to account
     function importToAccount(account, owner) {
       importingAccount.value = account
       importingOwner.value = owner
@@ -746,28 +738,6 @@ export default {
   margin: 0;
 }
 
-.loading-state-small,
-.empty-state-small {
-  text-align: center;
-  padding: var(--gap-standard);
-  color: var(--color-text-muted);
-  font-size: var(--text-small);
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-small);
-  align-items: center;
-}
-
-.loading-spinner {
-  font-size: var(--text-large);
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .accounts-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
@@ -842,7 +812,7 @@ export default {
 .account-info {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
+  gap: var(--gap-small);
   flex: 1;
 }
 
@@ -850,11 +820,6 @@ export default {
   font-size: var(--text-small);
   font-weight: 600;
   color: var(--color-text);
-}
-
-.account-type {
-  font-size: 0.6875rem;
-  color: var(--color-text-muted);
 }
 
 .account-actions {
@@ -927,150 +892,7 @@ export default {
   border-radius: var(--radius);
 }
 
-/* Modal Styles */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-
-.modal-content {
-  background: var(--color-background-light);
-  backdrop-filter: blur(1.25rem);
-  border-radius: var(--radius-large);
-  padding: 0;
-  width: 90%;
-  max-width: 35rem;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--gap-standard);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0.25rem;
-}
-
-.close-btn:hover {
-  color: var(--color-text);
-}
-
-.modal-body {
-  padding: var(--gap-standard);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--gap-small);
-  padding: var(--gap-standard);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  margin-bottom: var(--gap-standard);
-}
-
-.form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-group label {
-  font-weight: 600;
-  color: var(--color-text-light);
-  font-size: var(--text-small);
-}
-
-.form-input {
-  padding: 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  font-size: var(--text-medium);
-  font-family: inherit;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-}
-
-.color-picker {
-  display: flex;
-  gap: var(--gap-small);
-  align-items: center;
-}
-
-.color-input {
-  width: 3rem;
-  height: 2.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  cursor: pointer;
-}
-
 .delete-modal {
   max-width: 30rem;
-}
-
-.delete-warning {
-  display: flex;
-  gap: var(--gap-standard);
-  padding: var(--gap-standard);
-  background: rgba(239, 68, 68, 0.05);
-  border-radius: var(--radius);
-}
-
-.warning-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.warning-text p {
-  margin-bottom: var(--gap-small);
-}
-
-.warning-text p:last-child {
-  margin-bottom: 0;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
-.btn-danger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

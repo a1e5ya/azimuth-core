@@ -46,7 +46,6 @@ export default {
     const dragStartX = ref(0)
     const dragStartLeft = ref(0)
 
-    // Calculate scrollbar thumb position and width
     const thumbStyle = computed(() => {
       const fullRange = props.fullRangeEnd.getTime() - props.fullRangeStart.getTime()
       if (fullRange <= 0) return { width: '100%', left: '0%' }
@@ -63,7 +62,6 @@ export default {
       }
     })
 
-    // Handle track click - jump to position
     function handleTrackClick(event) {
       if (event.target.classList.contains('scrollbar-thumb')) return
       
@@ -74,7 +72,6 @@ export default {
       const fullRange = props.fullRangeEnd.getTime() - props.fullRangeStart.getTime()
       const visibleRange = props.visibleRangeEnd.getTime() - props.visibleRangeStart.getTime()
       
-      // Center the visible window at click position
       const targetCenter = props.fullRangeStart.getTime() + (fullRange * clickPercent)
       const newStart = new Date(targetCenter - (visibleRange / 2))
       const newEnd = new Date(targetCenter + (visibleRange / 2))
@@ -82,7 +79,6 @@ export default {
       emit('scroll-to', { start: newStart, end: newEnd })
     }
 
-    // Start dragging thumb
     function startDragging(event) {
       event.preventDefault()
       
@@ -99,7 +95,6 @@ export default {
       document.body.style.cursor = 'grabbing'
     }
 
-    // Handle dragging
     function handleDrag(event) {
       if (!isDragging.value) return
       
@@ -121,7 +116,6 @@ export default {
       emit('scroll-to', { start: newStart, end: newEnd })
     }
 
-    // Stop dragging
     function stopDragging() {
       isDragging.value = false
       document.removeEventListener('mousemove', handleDrag)
@@ -130,12 +124,10 @@ export default {
       document.body.style.cursor = ''
     }
 
-    // Watch for zoom changes to update thumb size
     watch(() => [props.visibleRangeStart, props.visibleRangeEnd], () => {
       console.log('📏 Scrollbar thumb updated')
     })
 
-    // Cleanup on unmount
     onUnmounted(() => {
       document.removeEventListener('mousemove', handleDrag)
       document.removeEventListener('mouseup', stopDragging)
@@ -157,7 +149,7 @@ export default {
 <style scoped>
 .timeline-scrollbar-wrapper {
   width: 100%;
-  padding: 0.5rem;
+  padding: var(--gap-small);
   background: var(--color-background);
   border-radius: var(--radius);
 }
@@ -165,7 +157,7 @@ export default {
 .scrollbar-track {
   position: relative;
   width: 100%;
-  height: 0.5rem;
+  height: var(--gap-small);
   background: var(--color-background-light);
   border-radius: 0.25rem;
   cursor: pointer;
@@ -193,15 +185,5 @@ export default {
   cursor: grabbing;
   background: var(--color-button-active);
   opacity: 1;
-}
-
-@media (max-width: 48rem) {
-  .timeline-scrollbar-wrapper {
-    padding: 0.375rem;
-  }
-
-  .scrollbar-track {
-    height: 0.625rem;
-  }
 }
 </style>

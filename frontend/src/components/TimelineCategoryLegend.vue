@@ -1,5 +1,5 @@
 <template>
-  <div class="timeline-legend-sidebar">
+  <div class="timeline-legend-sidebar container">
     <!-- EXPENSES Section -->
     <div class="legend-section">
       <div 

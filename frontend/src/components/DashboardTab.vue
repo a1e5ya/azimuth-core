@@ -8,8 +8,6 @@
 
     <!-- Dashboard Content -->
     <template v-else>
-
-
       <!-- Stats Overview with Date Picker -->
       <div class="stats-with-controls">
         <DashboardStatCards
@@ -31,15 +29,12 @@
         :get-type-color="getTypeColor"
       />
 
-
-        <DashboardAccountsManagement
-          :filtered-transactions="filteredTransactions"
-        />
-
+      <DashboardAccountsManagement
+        :filtered-transactions="filteredTransactions"
+      />
     </template>
   </div>
 </template>
-
 
 <script>
 import { ref, computed, watch, onMounted } from 'vue'
@@ -70,7 +65,6 @@ export default {
       endDate: new Date()
     })
 
-    // Calculate available date range from transactions
     const minAvailableDate = computed(() => {
       if (transactions.value.length === 0) return null
       const dates = transactions.value.map(t => new Date(t.posted_at))
@@ -83,14 +77,12 @@ export default {
       return new Date(Math.max(...dates))
     })
 
-    // Filter transactions by date range
     const filteredTransactions = computed(() => {
       if (transactions.value.length === 0) return []
 
       const start = new Date(dateRange.value.startDate)
       const end = new Date(dateRange.value.endDate)
       
-      // Set time to start/end of day for accurate filtering
       start.setHours(0, 0, 0, 0)
       end.setHours(23, 59, 59, 999)
 
@@ -100,14 +92,12 @@ export default {
       })
     })
 
-    // Filtered transactions with adjacent months for chart continuity
     const filteredTransactionsWithContext = computed(() => {
       if (transactions.value.length === 0) return []
 
       const start = new Date(dateRange.value.startDate)
       const end = new Date(dateRange.value.endDate)
       
-      // Include previous and next month for chart line continuity
       const expandedStart = new Date(start)
       expandedStart.setMonth(expandedStart.getMonth() - 1)
       expandedStart.setHours(0, 0, 0, 0)
@@ -166,7 +156,6 @@ export default {
         
         transactions.value = allTransactions
 
-        // Set initial date range to all time
         if (allTransactions.length > 0) {
           const dates = allTransactions.map(t => new Date(t.posted_at))
           dateRange.value = {
@@ -229,35 +218,11 @@ export default {
 </script>
 
 <style scoped>
-.loading-state,
-.empty-state {
-  text-align: center;
-  padding: var(--gap-large);
-  color: var(--color-text-light);
-}
-
-.loading-spinner {
-  font-size: var(--text-large);
-  animation: spin 1s linear infinite;
-  margin-bottom: var(--gap-standard);
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
 .stats-with-controls {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
   gap: var(--gap-large);
   margin-bottom: var(--gap-standard);
-}
-
-@media (max-width: 64rem) {
-  .stats-with-controls {
-    flex-direction: column;
-  }
 }
 </style>

@@ -23,7 +23,7 @@
           <span class="text-medium">azimuth</span>
         </button>
         
-        <div class="flex flex-gap">
+        <div class="flex flex-gap-lg">
           <button 
             class="btn btn-link"
             :class="{ 'btn-active': currentTab === 'transactions' }"

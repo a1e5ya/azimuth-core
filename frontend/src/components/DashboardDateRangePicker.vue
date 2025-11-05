@@ -5,15 +5,13 @@
       <button
         v-for="mode in modes"
         :key="mode.id"
-        class="mode-btn"
-        :class="{ active: currentMode === mode.id }"
+        class="btn btn-small mode-btn"
+        :class="{ 'btn-active': currentMode === mode.id }"
         @click="switchMode(mode.id)"
       >
         {{ mode.label }}
       </button>
     </div>
-
-
 
     <!-- Navigation Controls -->
     <div class="navigation-container two-column">
@@ -21,22 +19,22 @@
       <div class="date-column">
         <!-- Year Navigation -->
         <div class="nav-row">
-          <button class="nav-btn" @click="adjustYear('start', -1)" :disabled="isStartYearMin">
+          <button class="btn btn-icon nav-btn" @click="adjustYear('start', -1)" :disabled="isStartYearMin">
             <span>←</span>
           </button>
           <div class="date-display">{{ startYear }}</div>
-          <button class="nav-btn" @click="adjustYear('start', 1)" :disabled="isStartYearMax">
+          <button class="btn btn-icon nav-btn" @click="adjustYear('start', 1)" :disabled="isStartYearMax">
             <span>→</span>
           </button>
         </div>
 
         <!-- Month Navigation (only for Monthly, Range, and All Time) -->
         <div class="nav-row" :class="{ invisible: currentMode === 'yearly' }">
-          <button class="nav-btn" @click="adjustMonth('start', -1)" :disabled="isStartMonthMin">
+          <button class="btn btn-icon nav-btn" @click="adjustMonth('start', -1)" :disabled="isStartMonthMin">
             <span>←</span>
           </button>
           <div class="date-display">{{ getMonthName(startMonth) }}</div>
-          <button class="nav-btn" @click="adjustMonth('start', 1)" :disabled="isStartMonthMax">
+          <button class="btn btn-icon nav-btn" @click="adjustMonth('start', 1)" :disabled="isStartMonthMax">
             <span>→</span>
           </button>
         </div>
@@ -46,29 +44,29 @@
       <div class="date-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
         <!-- Year Navigation -->
         <div class="nav-row">
-          <button class="nav-btn" @click="adjustYear('end', -1)" :disabled="isEndYearMin">
+          <button class="btn btn-icon nav-btn" @click="adjustYear('end', -1)" :disabled="isEndYearMin">
             <span>←</span>
           </button>
           <div class="date-display">{{ endYear }}</div>
-          <button class="nav-btn" @click="adjustYear('end', 1)" :disabled="isEndYearMax">
+          <button class="btn btn-icon nav-btn" @click="adjustYear('end', 1)" :disabled="isEndYearMax">
             <span>→</span>
           </button>
         </div>
 
         <!-- Month Navigation -->
         <div class="nav-row">
-          <button class="nav-btn" @click="adjustMonth('end', -1)" :disabled="isEndMonthMin">
+          <button class="btn btn-icon nav-btn" @click="adjustMonth('end', -1)" :disabled="isEndMonthMin">
             <span>←</span>
           </button>
           <div class="date-display">{{ getMonthName(endMonth) }}</div>
-          <button class="nav-btn" @click="adjustMonth('end', 1)" :disabled="isEndMonthMax">
+          <button class="btn btn-icon nav-btn" @click="adjustMonth('end', 1)" :disabled="isEndMonthMax">
             <span>→</span>
           </button>
         </div>
       </div>
     </div>
 
-        <!-- Labels Row (always present for consistent sizing) -->
+    <!-- Labels Row (always present for consistent sizing) -->
     <div class="labels-row">
       <div class="label-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
         FROM
@@ -123,7 +121,6 @@ export default {
       'July', 'August', 'September', 'October', 'November', 'December'
     ]
 
-    // Watch for external changes to dateRange prop
     watch(() => props.dateRange, (newRange) => {
       startYear.value = newRange.startDate.getFullYear()
       startMonth.value = newRange.startDate.getMonth()
@@ -131,7 +128,6 @@ export default {
       endMonth.value = newRange.endDate.getMonth()
     }, { deep: true })
 
-    // Computed properties for navigation limits
     const minYear = computed(() => {
       if (!props.minAvailableDate) return 2000
       const date = props.minAvailableDate instanceof Date 
@@ -197,7 +193,6 @@ export default {
         }
         return startMonth.value >= 11
       }
-      // In range mode
       if (startYear.value === endYear.value) {
         return startMonth.value >= endMonth.value
       }
@@ -227,7 +222,6 @@ export default {
 
       switch (modeId) {
         case 'monthly':
-          // Set to current month only
           { const currentDate = new Date()
           startYear.value = currentDate.getFullYear()
           startMonth.value = currentDate.getMonth()
@@ -237,7 +231,6 @@ export default {
           break }
 
         case 'yearly':
-          // Set to current year
           { const currentYear = new Date().getFullYear()
           startYear.value = currentYear
           startMonth.value = 0
@@ -247,12 +240,10 @@ export default {
           break }
 
         case 'range':
-          // Keep current selections
           emitDateRange()
           break
 
         case 'all-time':
-          // Set to full available range
           if (props.minAvailableDate && props.maxAvailableDate) {
             const minDate = props.minAvailableDate instanceof Date 
               ? props.minAvailableDate 
@@ -277,7 +268,6 @@ export default {
         if (newYear >= minYear.value && newYear <= maxYear.value) {
           startYear.value = newYear
           
-          // In single column modes, sync end with start
           if (currentMode.value === 'monthly') {
             endYear.value = newYear
           } else if (currentMode.value === 'yearly') {
@@ -308,12 +298,10 @@ export default {
           newYear += 1
         }
 
-        // Validate bounds
         if (newYear >= minYear.value && newYear <= maxYear.value) {
           startYear.value = newYear
           startMonth.value = newMonth
 
-          // In monthly mode, sync end with start
           if (currentMode.value === 'monthly') {
             endYear.value = newYear
             endMonth.value = newMonth
@@ -333,7 +321,6 @@ export default {
           newYear += 1
         }
 
-        // Validate bounds
         if (newYear >= startYear.value && newYear <= maxYear.value) {
           endYear.value = newYear
           endMonth.value = newMonth
@@ -344,7 +331,7 @@ export default {
 
     function emitDateRange() {
       const startDate = new Date(startYear.value, startMonth.value, 1)
-      const endDate = new Date(endYear.value, endMonth.value + 1, 0) // Last day of month
+      const endDate = new Date(endYear.value, endMonth.value + 1, 0)
       
       emit('update:dateRange', {
         startDate,
@@ -381,47 +368,26 @@ export default {
   display: flex;
   flex-direction: column;
   width: 450px;
-  gap: 1rem;
+  gap: var(--gap-standard);
   padding: 1.25rem;
 }
 
-/* Mode Toggle Buttons */
 .mode-buttons {
   display: flex;
-  gap: 0.5rem;
+  gap: var(--gap-small);
   flex-wrap: wrap;
   justify-content: space-between;
 }
 
 .mode-btn {
-  padding: 0.5rem 1rem;
-  border: 0.0625rem solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-background);
-  color: var(--color-text);
-  font-size: var(--text-small);
-  font-family: "Livvic", sans-serif;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s ease;
+  margin: 0;
 }
 
-.mode-btn:hover {
-  background: var(--color-button-hover);
-}
-
-.mode-btn.active {
-  background: var(--color-button-active);
-  color: white;
-  border-color: var(--color-button-active);
-}
-
-/* Labels Row */
 .labels-row {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 1rem;
-  margin-top: 0.5rem;
+  gap: var(--gap-standard);
+  margin-top: var(--gap-small);
 }
 
 .label-column {
@@ -437,10 +403,9 @@ export default {
   visibility: hidden;
 }
 
-/* Navigation Container */
 .navigation-container {
   display: flex;
-  gap: 1rem;
+  gap: var(--gap-standard);
 }
 
 .navigation-container.two-column {
@@ -451,18 +416,17 @@ export default {
 .date-column {
   display: flex;
   flex-direction: column;
-  gap: 0.5rem;
+  gap: var(--gap-small);
 }
 
 .date-column.invisible {
   visibility: hidden;
 }
 
-/* Navigation Row */
 .nav-row {
   display: grid;
   grid-template-columns: 2.5rem 1fr 2.5rem;
-  gap: 0.5rem;
+  gap: var(--gap-small);
   align-items: center;
 }
 
@@ -473,25 +437,8 @@ export default {
 .nav-btn {
   width: 2.5rem;
   height: 2.5rem;
-  border: 0.0625rem solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-background);
-  color: var(--color-text);
+  margin: 0;
   font-size: 1rem;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.nav-btn:hover:not(:disabled) {
-  background: var(--color-button-hover);
-}
-
-.nav-btn:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
 }
 
 .date-display {
@@ -499,52 +446,9 @@ export default {
   font-size: var(--text-small);
   font-weight: 600;
   color: var(--color-text);
-  padding: 0.5rem;
+  padding: var(--gap-small);
   background: var(--color-background);
   border: 0.0625rem solid rgba(0, 0, 0, 0.1);
   border-radius: var(--radius);
-}
-
-/* Responsive Design */
-@media (max-width: 48rem) {
-  .time-range-picker {
-    padding: 1rem;
-  }
-
-  .navigation-container.two-column {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
-  .labels-row {
-    grid-template-columns: 1fr;
-    gap: 1.5rem;
-  }
-
-  .label-column {
-    text-align: left;
-  }
-}
-
-@media (max-width: 30rem) {
-  .mode-buttons {
-    gap: 0.375rem;
-  }
-
-  .mode-btn {
-    padding: 0.4rem 0.75rem;
-    font-size: 0.6875rem;
-  }
-
-  .nav-btn {
-    width: 2rem;
-    height: 2rem;
-    font-size: 0.875rem;
-  }
-
-  .date-display {
-    font-size: 0.6875rem;
-    padding: 0.375rem;
-  }
 }
 </style>

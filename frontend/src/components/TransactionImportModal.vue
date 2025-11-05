@@ -333,11 +333,6 @@ export default {
   margin: var(--gap-small) 0;
 }
 
-.help-text {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-}
-
 .file-list {
   width: 100%;
 }
@@ -363,86 +358,6 @@ export default {
   font-size: 1.5rem;
   cursor: pointer;
   color: var(--color-text-muted);
-  padding: 0 0.5rem;
-}
-
-.radio-group {
-  display: flex;
-  flex-direction: column;
-  gap: var(--gap-small);
-}
-
-.radio-option {
-  display: flex;
-  gap: var(--gap-standard);
-  padding: var(--gap-standard);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.radio-option:hover {
-  border-color: var(--color-button-active);
-  background: rgba(0, 0, 0, 0.02);
-}
-
-.radio-option input[type="radio"] {
-  margin-top: 0.25rem;
-}
-
-.radio-content p {
-  margin: 0.25rem 0 0 0;
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-}
-
-.form-select {
-  width: 100%;
-  padding: var(--gap-small);
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  font-size: var(--text-medium);
-}
-
-.account-preview {
-  margin-top: var(--gap-standard);
-  padding: var(--gap-standard);
-  background: var(--color-background-light);
-  border-radius: var(--radius);
-}
-
-.preview-label {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-  margin-bottom: 0.5rem;
-}
-
-.preview-content {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
-  flex-wrap: wrap;
-}
-
-.owner-badge {
-  padding: 0.25rem 0.75rem;
-  border-radius: var(--radius);
-  font-size: var(--text-small);
-  color: white;
-}
-
-.checkbox-option {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
-  cursor: pointer;
-}
-
-.loading-text {
-  padding: var(--gap-standard);
-  text-align: center;
-  color: var(--color-text-muted);
+  padding: 0 var(--gap-small);
 }
 </style>

@@ -5,7 +5,7 @@
       <!-- Zoom Controls - Left Side -->
       <div class="zoom-controls">
         <button 
-          class="btn btn-icon btn-small"
+          class="btn btn-icon"
           :disabled="currentZoomLevel <= 0"
           @click="$emit('zoom-out')"
           title="Zoom Out"
@@ -14,7 +14,7 @@
         </button>
         
         <button 
-          class="btn btn-icon btn-small"
+          class="btn btn-icon"
           :disabled="currentZoomLevel >= 2"
           @click="$emit('zoom-in')"
           title="Zoom In"
@@ -23,7 +23,7 @@
         </button>
         
         <button 
-          class="btn btn-icon btn-small"
+          class="btn btn-icon"
           @click="$emit('reset-zoom')"
           title="Reset Zoom"
         >
@@ -90,7 +90,6 @@ export default {
   },
   emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'set-mode', 'scroll-to'],
   setup(props, { emit }) {
-    // Toggle between view and add modes
     function toggleMode() {
       const newMode = props.currentMode === 'view' ? 'add' : 'view'
       emit('set-mode', newMode)
@@ -110,7 +109,6 @@ export default {
   gap: var(--gap-small);
 }
 
-/* Controls Row */
 .controls-row {
   display: flex;
   justify-content: space-between;
@@ -118,7 +116,6 @@ export default {
   gap: var(--gap-standard);
 }
 
-/* Zoom Controls */
 .zoom-controls {
   display: flex;
   align-items: center;
@@ -140,12 +137,6 @@ export default {
   background: var(--color-background-light);
 }
 
-.zoom-controls .btn-icon:disabled {
-  opacity: 0.3;
-  cursor: not-allowed;
-}
-
-/* Mode Toggle Switch */
 .mode-toggle-switch {
   display: flex;
   align-items: center;
@@ -181,14 +172,14 @@ export default {
 
 .toggle-option {
   position: absolute;
-width: 2rem;
-    height: 2rem;
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
-      border-radius: var(--radius);
-        background: var(--color-background-light);
-        opacity: 0.8;
+  border-radius: var(--radius);
+  background: var(--color-background-light);
+  opacity: 0.8;
   transition: all 0.3s;
   z-index: 1;
   color: var(--color-text-light);
@@ -206,34 +197,5 @@ width: 2rem;
   background: var(--color-background-light);
   color: white;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-/* Responsive */
-@media (max-width: 48rem) {
-  .controls-row {
-    flex-direction: row;
-    flex-wrap: wrap;
-  }
-
-  .zoom-controls {
-    flex: 1;
-    justify-content: flex-start;
-  }
-
-  .mode-toggle-switch {
-    flex: 0 0 auto;
-  }
-}
-
-@media (max-width: 30rem) {
-  .toggle-label {
-    width: 4.5rem;
-    height: 1.75rem;
-  }
-
-  .toggle-option {
-    width: 2rem;
-    height: 1.25rem;
-  }
 }
 </style>

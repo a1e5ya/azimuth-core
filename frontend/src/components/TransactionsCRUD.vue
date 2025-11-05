@@ -314,86 +314,6 @@ export default {
 </script>
 
 <style scoped>
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  animation: fadeIn 0.3s ease;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-.modal-content {
-  background: var(--color-background-light);
-  backdrop-filter: blur(1.25rem);
-  border-radius: var(--radius-large);
-  padding: 0;
-  width: 90%;
-  max-width: 40rem;
-  max-height: 80vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow);
-  animation: slideUp 0.3s ease;
-}
-
-@keyframes slideUp {
-  from {
-    opacity: 0;
-    transform: translateY(2rem);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: var(--gap-standard);
-  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
-}
-
-.modal-header h3 {
-  margin: 0;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: var(--color-text-muted);
-  padding: 0.25rem;
-}
-
-.close-btn:hover {
-  color: var(--color-text);
-}
-
-.modal-body {
-  padding: var(--gap-standard);
-}
-
-.modal-actions {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--gap-small);
-  padding: var(--gap-standard);
-  border-top: 1px solid rgba(0, 0, 0, 0.1);
-}
-
 .transaction-edit-modal {
   max-width: 35rem;
 }
@@ -404,56 +324,8 @@ export default {
   gap: var(--gap-standard);
 }
 
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-}
-
-.form-group label {
-  font-weight: 600;
-  color: var(--color-text-light);
-  font-size: var(--text-small);
-}
-
-.form-input {
-  padding: 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
-  font-size: var(--text-medium);
-  font-family: inherit;
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--color-button-active);
-}
-
-textarea.form-input {
-  resize: vertical;
-  min-height: 4rem;
-}
-
 .delete-modal {
   max-width: 30rem;
-}
-
-.delete-warning {
-  display: flex;
-  gap: var(--gap-standard);
-  padding: var(--gap-standard);
-  background: rgba(239, 68, 68, 0.05);
-  border-radius: var(--radius);
-}
-
-.warning-icon {
-  font-size: 2rem;
-  flex-shrink: 0;
-}
-
-.warning-text p {
-  margin-bottom: var(--gap-small);
 }
 
 .transaction-details {
@@ -461,19 +333,5 @@ textarea.form-input {
   background: var(--color-background-light);
   border-radius: var(--radius);
   margin: var(--gap-small) 0;
-}
-
-.btn-danger {
-  background: #ef4444;
-  color: white;
-}
-
-.btn-danger:hover {
-  background: #dc2626;
-}
-
-.btn-danger:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 </style>

@@ -7,7 +7,7 @@
         <input 
           type="date" 
           v-model="localFilters.startDate"
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           @change="emitFilters"
         >
       </div>
@@ -17,7 +17,7 @@
         <input 
           type="date" 
           v-model="localFilters.endDate"
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           @change="emitFilters"
         >
       </div>
@@ -27,7 +27,7 @@
         <input 
           type="number" 
           v-model.number="localFilters.minAmount"
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           placeholder="0.00"
           step="0.01"
           @change="emitFilters"
@@ -39,7 +39,7 @@
         <input 
           type="number" 
           v-model.number="localFilters.maxAmount"
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           placeholder="1000.00"
           step="0.01"
           @change="emitFilters"
@@ -47,16 +47,13 @@
       </div>
     </div>
     
-
-    
     <!-- Second Row: Subcategories & Search -->
     <div class="filters-row filters-row-actions">
-
       <div class="filter-group-compact">
         <label>Type</label>
         <select 
           v-model="localFilters.types" 
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           multiple
           size="3"
           @change="handleTypeChange"
@@ -71,11 +68,11 @@
         </select>
       </div>
 
-              <div class="filter-group-compact">
+      <div class="filter-group-compact">
         <label>Category</label>
         <select 
           v-model="localFilters.categories" 
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           multiple
           size="3"
           :disabled="localFilters.types.length === 0"
@@ -95,7 +92,7 @@
         <label>Subcategory</label>
         <select 
           v-model="localFilters.subcategories" 
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           multiple
           size="3"
           :disabled="localFilters.categories.length === 0"
@@ -110,10 +107,6 @@
           </option>
         </select>
       </div>
-      
-
-      
-
     </div>
 
     <!-- Third Row: Owner & Account Type -->
@@ -122,7 +115,7 @@
         <label>Owner</label>
         <select 
           v-model="localFilters.owners" 
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           multiple
           size="3"
           @change="handleOwnerChange"
@@ -141,7 +134,7 @@
         <label>Account Type</label>
         <select 
           v-model="localFilters.accountTypes" 
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           multiple
           size="3"
           @change="handleAccountTypeChange"
@@ -156,23 +149,22 @@
         </select>
       </div>
 
-            <div class="filter-group-compact filter-search-compact">
+      <div class="filter-group-compact filter-search-compact">
         <label>Search</label>
         <input 
           type="text" 
           v-model="localFilters.merchant"
-          class="filter-input-compact"
+          class="form-input filter-input-compact"
           placeholder="Search merchant, message..."
           @input="emitFilters"
         >
       </div>
 
-            <div class="filter-actions-compact">
+      <div class="filter-actions-compact">
         <button class="btn btn-small" @click="clearAllFilters">Clear</button>
         <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
       </div>
     </div>
-
   </div>
 </template>
 
@@ -210,22 +202,18 @@ export default {
       subcategories: []
     })
 
-    // Initialize from parent
     watch(() => props.modelValue, (newVal) => {
       localFilters.value = { ...newVal }
     }, { immediate: true, deep: true })
 
-    // Available owners - all unique owners
     const availableOwners = computed(() => {
       if (!props.filterOptions.ownerAccountMap) return []
       return Object.keys(props.filterOptions.ownerAccountMap).sort()
     })
 
-    // Available account types - filtered by selected owners
     const availableAccountTypes = computed(() => {
       if (!props.filterOptions.ownerAccountMap) return []
       
-      // If no owners selected, show all account types
       if (localFilters.value.owners.length === 0) {
         const allTypes = new Set()
         Object.values(props.filterOptions.ownerAccountMap).forEach(types => {
@@ -234,7 +222,6 @@ export default {
         return Array.from(allTypes).sort()
       }
       
-      // Show only account types for selected owners
       const types = new Set()
       localFilters.value.owners.forEach(owner => {
         const ownerTypes = props.filterOptions.ownerAccountMap[owner] || []
@@ -243,16 +230,13 @@ export default {
       return Array.from(types).sort()
     })
 
-    // Available types (main categories)
     const availableTypes = computed(() => {
       return props.filterOptions.mainCategories || []
     })
 
-    // Available categories - filtered by selected types
     const availableCategories = computed(() => {
       if (!props.filterOptions.categoryMap) return []
       
-      // If no types selected, show no categories
       if (localFilters.value.types.length === 0) return []
       
       const categories = new Set()
@@ -263,11 +247,9 @@ export default {
       return Array.from(categories).sort()
     })
 
-    // Available subcategories - filtered by selected categories
     const availableSubcategories = computed(() => {
       if (!props.filterOptions.subcategoryMap) return []
       
-      // If no categories selected, show no subcategories
       if (localFilters.value.categories.length === 0) return []
       
       const subcategories = new Set()
@@ -286,7 +268,6 @@ export default {
     }
 
     const handleOwnerChange = () => {
-      // Filter out account types that are no longer available
       const validTypes = availableAccountTypes.value
       localFilters.value.accountTypes = localFilters.value.accountTypes.filter(
         type => validTypes.includes(type)
@@ -299,13 +280,11 @@ export default {
     }
 
     const handleTypeChange = () => {
-      // Filter out categories that are no longer available
       const validCategories = availableCategories.value
       localFilters.value.categories = localFilters.value.categories.filter(
         cat => validCategories.includes(cat)
       )
       
-      // Filter out subcategories that are no longer available
       const validSubcategories = availableSubcategories.value
       localFilters.value.subcategories = localFilters.value.subcategories.filter(
         sub => validSubcategories.includes(sub)
@@ -315,7 +294,6 @@ export default {
     }
 
     const handleCategoryChange = () => {
-      // Filter out subcategories that are no longer available
       const validSubcategories = availableSubcategories.value
       localFilters.value.subcategories = localFilters.value.subcategories.filter(
         sub => validSubcategories.includes(sub)
@@ -367,21 +345,6 @@ export default {
   animation: slideDown 0.3s ease;
 }
 
-@keyframes slideDown {
-  from {
-    opacity: 0;
-    max-height: 0;
-    padding-top: 0;
-    padding-bottom: 0;
-  }
-  to {
-    opacity: 1;
-    max-height: 30rem;
-    padding-top: var(--gap-standard);
-    padding-bottom: var(--gap-standard);
-  }
-}
-
 .filters-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
@@ -414,18 +377,9 @@ export default {
 }
 
 .filter-input-compact {
-  padding: 0.375rem 0.5rem;
-  border: 1px solid rgba(0, 0, 0, 0.2);
-  border-radius: var(--radius);
-  background: var(--color-button);
+  padding: 0.375rem var(--gap-small);
   font-size: var(--text-small);
-  transition: border-color 0.2s ease;
-min-height: 33px;
-}
-
-.filter-input-compact:focus {
-  outline: none;
-  border-color: var(--color-button-active);
+  min-height: 33px;
 }
 
 .filter-input-compact[multiple] {
@@ -442,10 +396,6 @@ min-height: 33px;
   background: var(--color-background-dark);
 }
 
-.filter-input-compact:disabled {
-  opacity: 0.5;
-}
-
 .filter-search-compact {
   flex: 1;
 }
@@ -453,7 +403,11 @@ min-height: 33px;
 .filter-actions-compact {
   display: flex;
   gap: var(--gap-small);
-align-items: flex-start;
-    justify-content: center;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.filter-actions-compact .btn-small {
+  margin: 0;
 }
 </style>

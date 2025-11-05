@@ -7,7 +7,7 @@
     <template v-else>
       <div class="hover-info-header">
         <h4>{{ formatDate(hoveredData.date) }}</h4>
-        <button class="btn-icon btn-small" @click="$emit('unpin')">
+        <button class="btn btn-icon hover-close-btn" @click="$emit('unpin')">
           <AppIcon name="times" size="small" />
         </button>
       </div>
@@ -137,7 +137,7 @@ export default {
   justify-content: space-between;
   align-items: center;
   margin-bottom: var(--gap-standard);
-  padding-bottom: 0.5rem;
+  padding-bottom: var(--gap-small);
   border-bottom: 2px solid var(--color-background-dark);
 }
 
@@ -147,15 +147,16 @@ export default {
   font-weight: 600;
 }
 
-.hover-info-header .btn-icon {
+.hover-close-btn {
   width: 1.5rem;
   height: 1.5rem;
   padding: 0.25rem;
   background: transparent;
   box-shadow: none;
+  margin: 0;
 }
 
-.hover-info-header .btn-icon:hover {
+.hover-close-btn:hover {
   background: var(--color-background-dark);
 }
 
@@ -209,7 +210,7 @@ export default {
 .hover-info-value {
   font-size: var(--text-large);
   font-weight: 600;
-  margin-bottom: 0.5rem;
+  margin-bottom: var(--gap-small);
 }
 
 .hover-info-value.positive {
@@ -224,8 +225,8 @@ export default {
   display: flex;
   flex-direction: column;
   gap: 0.25rem;
-  margin-top: 0.5rem;
-  padding-top: 0.5rem;
+  margin-top: var(--gap-small);
+  padding-top: var(--gap-small);
   border-top: 1px solid var(--color-background-dark);
 }
 
@@ -244,21 +245,5 @@ export default {
 .hover-category-amount {
   font-weight: 500;
   color: var(--color-text);
-}
-
-@media (max-width: 48rem) {
-  .hover-info-field {
-    padding: var(--gap-small);
-  }
-  
-  .hover-info-row-split {
-    grid-template-columns: 1fr;
-  }
-}
-
-@media (max-width: 30rem) {
-  .hover-info-categories {
-    font-size: 0.6875rem;
-  }
 }
 </style>

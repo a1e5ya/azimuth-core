@@ -3,24 +3,23 @@
     <div class="container">
       <!-- Transactions Header with Actions and Pagination -->
       <div class="transactions-header">
-
-      <!-- Transactions Info Component -->
-      <TransactionsInfo
-        :summary="summary"
-        :filtered-count="filteredCount"
-        :has-active-filters="hasActiveFilters"
-        :uploads="localUploads"
-      />
+        <!-- Transactions Info Component -->
+        <TransactionsInfo
+          :summary="summary"
+          :filtered-count="filteredCount"
+          :has-active-filters="hasActiveFilters"
+          :uploads="localUploads"
+        />
 
         <!-- left: Action Buttons -->
         <div class="action-buttons-compact">
-<button 
-  class="btn btn-icon" 
-  @click="showImportModal = true"
-  title="Import Transactions"
->
-  <AppIcon name="file-add" size="medium" />
-</button>
+          <button 
+            class="btn btn-icon" 
+            @click="showImportModal = true"
+            title="Import Transactions"
+          >
+            <AppIcon name="file-add" size="medium" />
+          </button>
           
           <button 
             class="btn btn-icon" 
@@ -39,8 +38,6 @@
           >
             <AppIcon name="refresh" size="medium" />
           </button>
-          
-
         </div>
         
         <!-- right: Pagination -->
@@ -72,11 +69,7 @@
             <AppIcon name="angle-double-right" size="medium" />
           </button>
         </div>
-
-
-
-
-            </div>
+      </div>
       
       <!-- Filters Component -->
       <TransactionsFilters
@@ -110,11 +103,11 @@
     />
 
     <TransactionImportModal
-  :show="showImportModal"
-  @close="showImportModal = false"
-  @import-started="handleImportStarted"
-  @import-complete="handleImportComplete"
-/>
+      :show="showImportModal"
+      @close="showImportModal = false"
+      @import-started="handleImportStarted"
+      @import-complete="handleImportComplete"
+    />
   </div>
 </template>
 
@@ -168,17 +161,17 @@ export default {
     const showFilters = ref(false)
     const showImportModal = ref(false)
     
-const handleImportStarted = () => {
-  addChatMessage({ response: 'Starting import...' })
-}
+    const handleImportStarted = () => {
+      addChatMessage({ response: 'Starting import...' })
+    }
 
-const handleImportComplete = async (result) => {
-  if (result.success) {
-    addChatMessage({ response: `Imported ${result.fileCount} files!` })
-    await loadTransactions()
-    await loadSummary()
-  }
-}
+    const handleImportComplete = async (result) => {
+      if (result.success) {
+        addChatMessage({ response: `Imported ${result.fileCount} files!` })
+        await loadTransactions()
+        await loadSummary()
+      }
+    }
 
     const filters = ref({
       startDate: '',
@@ -353,122 +346,115 @@ const handleImportComplete = async (result) => {
       }
     }
 
-const loadFilterOptions = async () => {
-  if (!props.user) return
-  
-  try {
-    const token = authStore.token
-    
-    // Try the new optimized endpoint first
-    const response = await axios.get(`${API_BASE}/transactions/filter-metadata`, {
-      headers: { 'Authorization': `Bearer ${token}` }
-    })
-    
-    filterOptions.value = response.data
-    
-    console.log('✅ Filter options loaded:', {
-      owners: filterOptions.value.owners?.length || 0,
-      ownerAccountMap: Object.keys(filterOptions.value.ownerAccountMap || {}).length,
-      accountTypes: filterOptions.value.account_types?.length || 0,
-      mainCategories: filterOptions.value.mainCategories?.length || 0
-    })
-    
-  } catch (error) {
-    console.error('Filter metadata endpoint failed, using fallback:', error)
-    
-    // Fallback to old method but load MORE pages
-    const token = authStore.token
-    const ownerAccountMap = {}
-    const mainCats = new Set()
-    const categoryMap = {}
-    const subcategoryMap = {}
-    
-    let page = 1
-    let hasMore = true
-    const batchSize = 200
-    const maxPages = 100  // Increased from 10 to 100!
-    
-    while (hasMore && page <= maxPages) {
-      const response = await axios.get(`${API_BASE}/transactions/list`, {
-        params: { page: page, limit: batchSize },
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
+    const loadFilterOptions = async () => {
+      if (!props.user) return
       
-      const pageTransactions = response.data
-      
-      if (pageTransactions.length === 0) {
-        hasMore = false
-        break
-      }
-      
-      pageTransactions.forEach(t => {
-        // Owner and account type mapping
-        if (t.owner && t.bank_account_type) {
-          if (!ownerAccountMap[t.owner]) {
-            ownerAccountMap[t.owner] = new Set()
+      try {
+        const token = authStore.token
+        
+        const response = await axios.get(`${API_BASE}/transactions/filter-metadata`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        filterOptions.value = response.data
+        
+        console.log('✅ Filter options loaded:', {
+          owners: filterOptions.value.owners?.length || 0,
+          ownerAccountMap: Object.keys(filterOptions.value.ownerAccountMap || {}).length,
+          accountTypes: filterOptions.value.account_types?.length || 0,
+          mainCategories: filterOptions.value.mainCategories?.length || 0
+        })
+        
+      } catch (error) {
+        console.error('Filter metadata endpoint failed, using fallback:', error)
+        
+        const token = authStore.token
+        const ownerAccountMap = {}
+        const mainCats = new Set()
+        const categoryMap = {}
+        const subcategoryMap = {}
+        
+        let page = 1
+        let hasMore = true
+        const batchSize = 200
+        const maxPages = 100
+        
+        while (hasMore && page <= maxPages) {
+          const response = await axios.get(`${API_BASE}/transactions/list`, {
+            params: { page: page, limit: batchSize },
+            headers: { 'Authorization': `Bearer ${token}` }
+          })
+          
+          const pageTransactions = response.data
+          
+          if (pageTransactions.length === 0) {
+            hasMore = false
+            break
           }
-          ownerAccountMap[t.owner].add(t.bank_account_type)
+          
+          pageTransactions.forEach(t => {
+            if (t.owner && t.bank_account_type) {
+              if (!ownerAccountMap[t.owner]) {
+                ownerAccountMap[t.owner] = new Set()
+              }
+              ownerAccountMap[t.owner].add(t.bank_account_type)
+            }
+            
+            if (t.main_category) {
+              mainCats.add(t.main_category)
+              
+              if (t.category) {
+                if (!categoryMap[t.main_category]) {
+                  categoryMap[t.main_category] = new Set()
+                }
+                categoryMap[t.main_category].add(t.category)
+                
+                if (t.subcategory) {
+                  const key = `${t.main_category}|${t.category}`
+                  if (!subcategoryMap[key]) {
+                    subcategoryMap[key] = new Set()
+                  }
+                  subcategoryMap[key].add(t.subcategory)
+                }
+              }
+            }
+          })
+          
+          if (pageTransactions.length < batchSize) {
+            hasMore = false
+          }
+          
+          page++
         }
         
-        // Main categories
-        if (t.main_category) {
-          mainCats.add(t.main_category)
-          
-          // Categories
-          if (t.category) {
-            if (!categoryMap[t.main_category]) {
-              categoryMap[t.main_category] = new Set()
-            }
-            categoryMap[t.main_category].add(t.category)
-            
-            // Subcategories
-            if (t.subcategory) {
-              const key = `${t.main_category}|${t.category}`
-              if (!subcategoryMap[key]) {
-                subcategoryMap[key] = new Set()
-              }
-              subcategoryMap[key].add(t.subcategory)
-            }
-          }
+        const ownerAccountMapArray = {}
+        Object.keys(ownerAccountMap).forEach(owner => {
+          ownerAccountMapArray[owner] = Array.from(ownerAccountMap[owner]).sort()
+        })
+        
+        const categoryMapArray = {}
+        Object.keys(categoryMap).forEach(main => {
+          categoryMapArray[main] = Array.from(categoryMap[main]).sort()
+        })
+        
+        const subcategoryMapArray = {}
+        Object.keys(subcategoryMap).forEach(key => {
+          subcategoryMapArray[key] = Array.from(subcategoryMap[key]).sort()
+        })
+        
+        filterOptions.value = {
+          ownerAccountMap: ownerAccountMapArray,
+          mainCategories: Array.from(mainCats).sort(),
+          categoryMap: categoryMapArray,
+          subcategoryMap: subcategoryMapArray
         }
-      })
-      
-      if (pageTransactions.length < batchSize) {
-        hasMore = false
+        
+        console.log('✅ Filter options loaded (fallback):', {
+          owners: Object.keys(filterOptions.value.ownerAccountMap).length,
+          mainCategories: filterOptions.value.mainCategories.length
+        })
       }
-      
-      page++
     }
-    
-    // Convert Sets to Arrays
-    const ownerAccountMapArray = {}
-    Object.keys(ownerAccountMap).forEach(owner => {
-      ownerAccountMapArray[owner] = Array.from(ownerAccountMap[owner]).sort()
-    })
-    
-    const categoryMapArray = {}
-    Object.keys(categoryMap).forEach(main => {
-      categoryMapArray[main] = Array.from(categoryMap[main]).sort()
-    })
-    
-    const subcategoryMapArray = {}
-    Object.keys(subcategoryMap).forEach(key => {
-      subcategoryMapArray[key] = Array.from(subcategoryMap[key]).sort()
-    })
-    
-    filterOptions.value = {
-      ownerAccountMap: ownerAccountMapArray,
-      mainCategories: Array.from(mainCats).sort(),
-      categoryMap: categoryMapArray,
-      subcategoryMap: subcategoryMapArray
-    }
-    
-    console.log('✅ Filter options loaded (fallback):', {
-      owners: Object.keys(filterOptions.value.ownerAccountMap).length,
-      mainCategories: filterOptions.value.mainCategories.length
-    })
-  }
-}
 
     const loadSummary = async () => {
       if (!props.user) return
@@ -485,70 +471,67 @@ const loadFilterOptions = async () => {
       }
     }
 
-const loadTransactions = async () => {
-  if (!props.user) return
-  
-  loading.value = true
-  try {
-    const token = authStore.token
-    
-    const params = {
-      page: currentPage.value,
-      limit: pageSize.value,
-      sort_by: sortBy.value,
-      sort_order: sortOrder.value
-    }
-    
-    // Add ALL filters - no conditions!
-    if (filters.value.startDate) params.start_date = filters.value.startDate
-    if (filters.value.endDate) params.end_date = filters.value.endDate
-    if (filters.value.merchant) params.merchant = filters.value.merchant
-    if (filters.value.minAmount !== null && filters.value.minAmount !== undefined) {
-      params.min_amount = filters.value.minAmount
-    }
-    if (filters.value.maxAmount !== null && filters.value.maxAmount !== undefined) {
-      params.max_amount = filters.value.maxAmount
-    }
-    
-    // Array filters - ALWAYS add if they exist
-    if (filters.value.owners && filters.value.owners.length > 0) {
-      params.owners = filters.value.owners
-    }
-    if (filters.value.accountTypes && filters.value.accountTypes.length > 0) {
-      params.account_types = filters.value.accountTypes
-    }
-    if (filters.value.types && filters.value.types.length > 0) {
-      params.main_categories = filters.value.types
-    }
-    
-    // DEBUG
-    console.log('🔍 Filters:', JSON.stringify(params, null, 2))
-    console.log('🔍 Filter values:', filters.value)
-    
-    const response = await axios.get(`${API_BASE}/transactions/list`, {
-      params,
-      headers: { 'Authorization': `Bearer ${token}` },
-      paramsSerializer: {
-        indexes: null
+    const loadTransactions = async () => {
+      if (!props.user) return
+      
+      loading.value = true
+      try {
+        const token = authStore.token
+        
+        const params = {
+          page: currentPage.value,
+          limit: pageSize.value,
+          sort_by: sortBy.value,
+          sort_order: sortOrder.value
+        }
+        
+        if (filters.value.startDate) params.start_date = filters.value.startDate
+        if (filters.value.endDate) params.end_date = filters.value.endDate
+        if (filters.value.merchant) params.merchant = filters.value.merchant
+        if (filters.value.minAmount !== null && filters.value.minAmount !== undefined) {
+          params.min_amount = filters.value.minAmount
+        }
+        if (filters.value.maxAmount !== null && filters.value.maxAmount !== undefined) {
+          params.max_amount = filters.value.maxAmount
+        }
+        
+        if (filters.value.owners && filters.value.owners.length > 0) {
+          params.owners = filters.value.owners
+        }
+        if (filters.value.accountTypes && filters.value.accountTypes.length > 0) {
+          params.account_types = filters.value.accountTypes
+        }
+        if (filters.value.types && filters.value.types.length > 0) {
+          params.main_categories = filters.value.types
+        }
+        
+        console.log('🔍 Filters:', JSON.stringify(params, null, 2))
+        console.log('🔍 Filter values:', filters.value)
+        
+        const response = await axios.get(`${API_BASE}/transactions/list`, {
+          params,
+          headers: { 'Authorization': `Bearer ${token}` },
+          paramsSerializer: {
+            indexes: null
+          }
+        })
+        
+        console.log('🔍 Got', response.data.length, 'transactions')
+        
+        transactions.value = response.data
+        
+        if (hasActiveFilters.value) {
+          filteredCount.value = response.data.length
+        } else {
+          filteredCount.value = summary.value?.total_transactions || 0
+        }
+        
+      } catch (error) {
+        console.error('Failed to load transactions:', error)
+      } finally {
+        loading.value = false
       }
-    })
-    
-    console.log('🔍 Got', response.data.length, 'transactions')
-    
-    transactions.value = response.data
-    
-    if (hasActiveFilters.value) {
-      filteredCount.value = response.data.length
-    } else {
-      filteredCount.value = summary.value?.total_transactions || 0
     }
-    
-  } catch (error) {
-    console.error('Failed to load transactions:', error)
-  } finally {
-    loading.value = false
-  }
-}
 
     const refreshTransactions = async () => {
       await loadSummary()
@@ -619,11 +602,9 @@ const loadTransactions = async () => {
         
       } catch (error) {
         console.error('Bulk categorization failed:', error)
-        // Removed undefined 'response' usage
         addChatMessage({
           response: 'Bulk categorization failed. Please try again.'
         })
-        
       }
     }
 
@@ -678,9 +659,9 @@ const loadTransactions = async () => {
       handleTransactionUpdated,
       handleTransactionDeleted,
       handleBulkCategorize,
-        showImportModal,
-  handleImportStarted,
-  handleImportComplete
+      showImportModal,
+      handleImportStarted,
+      handleImportComplete
     }
   }
 }
@@ -695,7 +676,7 @@ const loadTransactions = async () => {
 .action-buttons-compact .btn-icon {
   width: 2.5rem;
   height: 2.5rem;
-  padding: 0.5rem;
+  padding: var(--gap-small);
   backdrop-filter: blur(1.25rem);
   background: var(--color-background);
   box-shadow: var(--shadow);
@@ -717,73 +698,6 @@ const loadTransactions = async () => {
   border-radius: var(--radius);
 }
 
-.transactions-header-controls {
-  display: flex;
-  flex-direction: row;
-  gap: var(--gap-standard);
-}
-
-.header-stats {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-standard);
-  flex-wrap: wrap;
-}
-
-.stat-item {
-  display: flex;
-  align-items: baseline;
-  gap: 0.25rem;
-}
-
-.stat-label {
-  font-size: var(--text-small);
-  color: var(--color-text-muted);
-}
-
-.stat-value {
-  font-size: var(--text-medium);
-  font-weight: 600;
-  color: var(--color-text);
-}
-
-.upload-inline {
-  display: flex;
-  gap: var(--gap-small);
-}
-
-.upload-mini {
-  display: flex;
-  align-items: center;
-  gap: 0.375rem;
-padding: 0;
-  border-radius: var(--radius);
-  font-size: var(--text-small);
-  margin-bottom: 0.5rem;
-}
-
-.loading-spinner-mini {
-  animation: spin 1s linear infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-.upload-mini-text {
-  max-width: 10rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.upload-mini-count {
-  color: var(--color-text-muted);
-  font-size: 0.75rem;
-}
-
 .pagination-controls {
   display: flex;
   align-items: center;
@@ -791,8 +705,8 @@ padding: 0;
 }
 
 .page-size-select {
-  padding: 0.375rem 0.5rem;
-  margin: 0 1rem;
+  padding: 0.375rem var(--gap-small);
+  margin: 0 var(--gap-standard);
   border: 1px solid rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
   background: transparent;
