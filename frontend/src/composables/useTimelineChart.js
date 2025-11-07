@@ -337,13 +337,25 @@ export function useTimelineChart(
   
   /**
    * Build chart series from visible data
+   * FIXED: Transfers now stack correctly based on their sign
+   * FIXED: Alphabetical order for predictable stacking
+   * FIXED: Gradient fill for fade-out effect from zero line
    */
   const chartSeries = computed(() => {
     if (!timelineData.value.length) return []
     
     const series = []
     
-    // Build series based on visible types
+    // CRITICAL: Order matters for stacking!
+    // Stack from zero line OUTWARD in ALPHABETICAL order
+    
+    // ========== NEGATIVE STACK (below zero line) ==========
+    // Build arrays first, then SORT ALPHABETICALLY
+    
+    const expenseSeries = []
+    const negativeTransferSeries = []
+    
+    // 1. Collect EXPENSES (always negative)
     if (isTypeVisible('expenses')) {
       const expensesByCategory = buildExpensesByCategory()
       
@@ -352,18 +364,79 @@ export function useTimelineChart(
         
         const data = timelineData.value.map(d => ({
           x: d.date,
-          y: -(dateMap.get(d.date) || 0) // Negative for expenses
+          y: -(dateMap.get(d.date) || 0)
         }))
         
-        series.push({
+        expenseSeries.push({
           name: categoryName,
-          type: 'line',
+          type: 'area',
           data: data,
-          color: color
+          color: color,
+          fillColor: {
+            type: 'gradient',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.9,  // More opaque at the edge
+              opacityTo: 0.3,    // Fade out toward zero line
+              stops: [0, 100]
+            }
+          }
         })
       })
     }
     
+    // 2. Collect NEGATIVE TRANSFERS (stack with expenses)
+    if (isTypeVisible('transfers')) {
+      const transfersByCategory = buildTransfersByCategory()
+      
+      Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
+        const color = getCategoryColor(categoryStore.categories, categoryName)
+        
+        // Only include NEGATIVE values in this series
+        const data = timelineData.value.map(d => {
+          const value = dateMap.get(d.date) || 0
+          return {
+            x: d.date,
+            y: value < 0 ? value : 0  // Only negative transfers
+          }
+        })
+        
+        // Only add if there are any negative values
+        const hasNegativeValues = data.some(point => point.y < 0)
+        if (hasNegativeValues) {
+          negativeTransferSeries.push({
+            name: `${categoryName} (Out)`,
+            type: 'area',
+            data: data,
+            color: color,
+            fillColor: {
+              type: 'gradient',
+              gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.9,
+                opacityTo: 0.3,
+                stops: [0, 100]
+              }
+            }
+          })
+        }
+      })
+    }
+    
+    // Sort ALPHABETICALLY (A-Z) so closest to zero is 'A', furthest is 'Z'
+    expenseSeries.sort((a, b) => a.name.localeCompare(b.name))
+    negativeTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
+    
+    series.push(...expenseSeries)
+    series.push(...negativeTransferSeries)
+    
+    // ========== POSITIVE STACK (above zero line) ==========
+    // Build arrays first, then SORT ALPHABETICALLY
+    
+    const incomeSeries = []
+    const positiveTransferSeries = []
+    
+    // 3. Collect INCOME (always positive)
     if (isTypeVisible('income')) {
       const incomeByCategory = buildIncomeByCategory()
       
@@ -372,67 +445,133 @@ export function useTimelineChart(
         
         const data = timelineData.value.map(d => ({
           x: d.date,
-          y: dateMap.get(d.date) || 0 // Positive for income
+          y: Math.abs(dateMap.get(d.date) || 0)  // CRITICAL: Force positive for income
         }))
         
-        series.push({
+        incomeSeries.push({
           name: categoryName,
-          type: 'line',
+          type: 'area',
           data: data,
-          color: color
+          color: color,
+          fillColor: {
+            type: 'gradient',
+            gradient: {
+              shadeIntensity: 1,
+              opacityFrom: 0.9,  // More opaque at the edge
+              opacityTo: 0.3,    // Fade out toward zero line
+              stops: [0, 100]
+            }
+          }
         })
       })
     }
     
+    // 4. Collect POSITIVE TRANSFERS (stack with income)
     if (isTypeVisible('transfers')) {
       const transfersByCategory = buildTransfersByCategory()
       
       Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
         const color = getCategoryColor(categoryStore.categories, categoryName)
         
-        const data = timelineData.value.map(d => ({
-          x: d.date,
-          y: dateMap.get(d.date) || 0
-        }))
-        
-        series.push({
-          name: categoryName,
-          type: 'line',
-          data: data,
-          color: color
+        // Only include POSITIVE values in this series
+        const data = timelineData.value.map(d => {
+          const value = dateMap.get(d.date) || 0
+          return {
+            x: d.date,
+            y: value > 0 ? value : 0  // Only positive transfers
+          }
         })
+        
+        // Only add if there are any positive values
+        const hasPositiveValues = data.some(point => point.y > 0)
+        if (hasPositiveValues) {
+          positiveTransferSeries.push({
+            name: `${categoryName} (In)`,
+            type: 'area',
+            data: data,
+            color: color,
+            fillColor: {
+              type: 'gradient',
+              gradient: {
+                shadeIntensity: 1,
+                opacityFrom: 0.9,
+                opacityTo: 0.3,
+                stops: [0, 100]
+              }
+            }
+          })
+        }
       })
     }
     
+    // Sort ALPHABETICALLY (A-Z) so closest to zero is 'A', furthest is 'Z'
+    incomeSeries.sort((a, b) => a.name.localeCompare(b.name))
+    positiveTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
+    
+    series.push(...incomeSeries)
+    series.push(...positiveTransferSeries)
+    
     // TODO: Add targets visualization here when target data becomes available
-    // Targets would be displayed differently (e.g., as horizontal lines or markers)
     if (isTypeVisible('targets')) {
       // Future implementation for targets visualization
-      // This will display saved/planned targets as reference lines on the chart
     }
     
     return series
   })
   
   /**
-   * Calculate max Y-axis value
+   * Calculate max Y-axis value with dynamic zero-line positioning
+   * Power BI style: zero line moves based on data
+   * CRITICAL FIX: Calculate CUMULATIVE stacked values, not individual series max
    */
   const yAxisMax = computed(() => {
-    if (!chartSeries.value.length) return 1000
+    if (!chartSeries.value.length || !timelineData.value.length) {
+      return { maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false }
+    }
     
     let maxPositive = 0
     let maxNegative = 0
+    let hasPositive = false
+    let hasNegative = false
     
-    chartSeries.value.forEach(series => {
-      series.data.forEach(point => {
-        const val = point.y
-        if (val > maxPositive) maxPositive = val
-        if (val < maxNegative) maxNegative = val
+    // For each date point, calculate STACKED TOTALS
+    timelineData.value.forEach((dataPoint, index) => {
+      let cumulativePositive = 0
+      let cumulativeNegative = 0
+      
+      // Sum up all series values at this date point
+      chartSeries.value.forEach(series => {
+        const point = series.data[index]
+        if (point && point.y) {
+          if (point.y > 0) {
+            cumulativePositive += point.y
+            hasPositive = true
+          } else if (point.y < 0) {
+            cumulativeNegative += point.y
+            hasNegative = true
+          }
+        }
       })
+      
+      // Track the maximum cumulative values
+      if (cumulativePositive > maxPositive) {
+        maxPositive = cumulativePositive
+      }
+      if (cumulativeNegative < maxNegative) {
+        maxNegative = cumulativeNegative
+      }
     })
     
-    const maxValue = Math.max(maxPositive, Math.abs(maxNegative))
-    return maxValue * 1.1 // 10% padding
+    // Add 15% padding for better visibility
+    maxPositive = maxPositive * 1.15
+    maxNegative = maxNegative * 1.15
+    
+    return {
+      maxPositive,
+      maxNegative: Math.abs(maxNegative),
+      hasPositive,
+      hasNegative
+    }
   })
   
   /**
@@ -465,17 +604,41 @@ export function useTimelineChart(
   }
   
   /**
-   * Build chart options - NOW WITH PROPER XAXIS RANGE
+   * Build chart options - NOW WITH DYNAMIC ZERO-LINE POSITIONING (Power BI style)
    */
   const chartOptions = computed(() => {
     const range = visibleDateRange.value
+    const yAxis = yAxisMax.value
+    
+    // POWER BI LOGIC: Dynamic zero-line positioning
+    let yMin, yMax
+    
+    if (yAxis.hasPositive && yAxis.hasNegative) {
+      // Both income and expenses: zero in middle
+      const maxRange = Math.max(yAxis.maxPositive, yAxis.maxNegative)
+      yMin = -maxRange
+      yMax = maxRange
+    } else if (yAxis.hasPositive && !yAxis.hasNegative) {
+      // Only income/positive: zero at bottom
+      yMin = 0
+      yMax = yAxis.maxPositive
+    } else if (!yAxis.hasPositive && yAxis.hasNegative) {
+      // Only expenses/negative: zero at top
+      yMin = -yAxis.maxNegative
+      yMax = 0
+    } else {
+      // No data
+      yMin = -1000
+      yMax = 1000
+    }
     
     return {
       chart: {
         id: 'timeline-main',
-        type: 'line',
+        type: 'area',
         height: 500,
-        stacked: false,
+        stacked: true,  // Enable stacking
+        stackType: 'normal',  // CRITICAL: This makes it cumulative stacking
         toolbar: {
           show: false
         },
@@ -483,9 +646,16 @@ export function useTimelineChart(
           enabled: false
         },
         animations: {
-          enabled: true,
+          enabled: true,  // Enable animations
           easing: 'easeinout',
-          speed: 400
+          speed: 500,
+          animateGradually: {
+            enabled: false  // CRITICAL: Disable gradual animation - all series animate together
+          },
+          dynamicAnimation: {
+            enabled: true,  // Enable for adding/removing series
+            speed: 350  // Fast animation when toggling categories
+          }
         },
         events: {
           mouseMove: (event, chartContext, config) => {
@@ -515,11 +685,11 @@ export function useTimelineChart(
       },
       stroke: {
         curve: 'smooth',
-        width: 2
+        width: 1,  // Reduced from 2 to make cleaner boundaries
+        colors: undefined  // Use series colors for strokes
       },
       fill: {
-        type: 'solid',
-        opacity: 1
+        type: 'gradient'  // Use gradient fill (defined per series)
       },
       legend: {
         show: false
@@ -585,8 +755,8 @@ export function useTimelineChart(
             fontSize: '12px'
           }
         },
-        min: -yAxisMax.value,
-        max: yAxisMax.value
+        min: yMin,  // DYNAMIC: Changes based on visible data
+        max: yMax   // DYNAMIC: Changes based on visible data
       },
       tooltip: {
         enabled: false
@@ -596,7 +766,10 @@ export function useTimelineChart(
           y: 0,
           borderColor: '#374151',
           borderWidth: 2,
-          opacity: 0.8
+          opacity: 0.8,
+          label: {
+            text: yAxis.hasPositive && yAxis.hasNegative ? 'Zero Line' : ''
+          }
         }]
       }
     }

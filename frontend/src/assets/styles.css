@@ -62,8 +62,8 @@ html, body {
 body, #app {
   margin: 0;
   height: 100vh;
-  background: #fff5f0;
-  animation: full-waves 150s ease-in-out infinite;
+  background: #e4e4e4;
+  /* animation: full-waves 150s ease-in-out infinite;*/
   font-family: "Livvic", -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;  
   font-weight: 400;
   color: var(--color-text);
