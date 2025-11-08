@@ -14,7 +14,7 @@ import uuid
 
 from ..models.database import Account, Owner, Transaction, User, get_db
 from ..auth.local_auth import get_current_user
-from ..services.transaction_import_service import TransactionImportService
+from ..services.transaction_service import TransactionImportService
 
 router = APIRouter()
 

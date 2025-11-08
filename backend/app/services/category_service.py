@@ -1,28 +1,330 @@
 """
-Category service - Business logic for category operations
+Consolidated Category Service - Handles all category operations
+Merged from: category_service, category_initialization, category_mappings, 
+             category_training, category_queries
 """
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, delete
-from typing import List, Dict, Any, Optional
+from sqlalchemy import select, and_, func, delete, desc
+from typing import List, Dict, Any, Optional, Tuple
+from datetime import date
 import uuid
+import random
 from difflib import SequenceMatcher
+from collections import defaultdict
+from fastapi import Depends, HTTPException
 
 from ..models.database import Category, Transaction, User, get_db
 from ..auth.local_auth import get_current_user
-from .category_initialization import get_or_create_uncategorized
-from fastapi import Depends, HTTPException
 
+
+# ============================================================================
+# DEFAULT CATEGORY STRUCTURE
+# ============================================================================
+
+DEFAULT_CATEGORIES = {
+    'income': {
+        'id': 'income',
+        'name': 'INCOME',
+        'icon': 'apps-add',
+        'color': '#00C9A0',
+        'categories': [
+            {
+                'id': 'benefits-support',
+                'name': 'Benefits & Support',
+                'icon': 'comment-check',
+                'color': '#4DB8B8',
+                'subcolors': ['#B8E3E3', '#A3DBDB', '#8AD0D0', '#C9E8E8', '#D9F0F0', '#E3F4F4'],
+                'subcategories': [
+                    {'id': 'unemployment-benefits', 'name': 'Unemployment Benefits', 'icon': 'comment-check'},
+                    {'id': 'social-benefits', 'name': 'Social Benefits', 'icon': 'comment-heart'}
+                ]
+            },
+            {
+                'id': 'employment-income',
+                'name': 'Employment Income',
+                'icon': 'briefcase',
+                'color': '#2EAD8E',
+                'subcolors': ['#A8DCC9', '#8BCCA9', '#6EC292', '#C5E6D7', '#D2EBDD', '#E0F0E4'],
+                'subcategories': [
+                    {'id': 'salary', 'name': 'Salary', 'icon': 'briefcase'}
+                ]
+            },
+            {
+                'id': 'other-income',
+                'name': 'Other Income',
+                'icon': 'gift',
+                'color': '#5CB8C4',
+                'subcolors': ['#C4E5EB', '#A9DDE4', '#8FCFDC', '#D0ECF0', '#DDEFF3', '#EAF4F6'],
+                'subcategories': [
+                    {'id': 'gifts-received', 'name': 'Gifts Received', 'icon': 'gift'}
+                ]
+            },
+            {
+                'id': 'investment-income',
+                'name': 'Investment Income',
+                'icon': 'credit-card',
+                'color': '#1E9B7E',
+                'subcolors': ['#9FD6C7', '#8BCFBD', '#6FC4A8', '#B9E3D8', '#C6E8DF', '#D3EDE6'],
+                'subcategories': [
+                    {'id': 'cashback', 'name': 'Cashback', 'icon': 'credit-card'},
+                    {'id': 'dividends-interest', 'name': 'Dividends & Interest', 'icon': 'chat-arrow-grow'}
+                ]
+            }
+        ]
+    },
+    'expenses': {
+        'id': 'expenses',
+        'name': 'EXPENSES',
+        'icon': 'apps-delete',
+        'color': '#9B7EDE',
+        'categories': [
+            {
+                'id': 'food',
+                'name': 'Food',
+                'icon': 'coffee',
+                'color': '#9B7EDE',
+                'subcolors': ['#D5C9F0', '#C7B8E8', '#B9A7E0', '#E3DBF7', '#EBE5F9', '#F3EFFB'],
+                'subcategories': [
+                    {'id': 'cafes-coffee', 'name': 'Cafes & Coffee', 'icon': 'coffee'},
+                    {'id': 'groceries', 'name': 'Groceries', 'icon': 'salad'},
+                    {'id': 'restaurants', 'name': 'Restaurants', 'icon': 'room-service'},
+                    {'id': 'sweets', 'name': 'Sweets', 'icon': 'ice-cream'}
+                ]
+            },
+            {
+                'id': 'family',
+                'name': 'Family',
+                'icon': 'kite',
+                'color': '#7B68B8',
+                'subcolors': ['#C9C1DC', '#B8ACCE', '#A697C0', '#D7D0E6', '#E5E0F0', '#F0EDF7'],
+                'subcategories': [
+                    {'id': 'sports-activities', 'name': 'Sports Activities', 'icon': 'ice-skate'},
+                    {'id': 'child-activities', 'name': "Child's Activities", 'icon': 'ferris-wheel'},
+                    {'id': 'toys-games', 'name': 'Toys & Games', 'icon': 'kite'}
+                ]
+            },
+            {
+                'id': 'housing-utilities',
+                'name': 'Housing & Utilities',
+                'icon': 'key',
+                'color': '#6A5B9B',
+                'subcolors': ['#C3BDD6', '#AFA6C9', '#9B8FBC', '#D1CDDF', '#DFDCe8', '#EDEAF3'],
+                'subcategories': [
+                    {'id': 'monthly-rent', 'name': 'Monthly Rent', 'icon': 'key'},
+                    {'id': 'internet-phone', 'name': 'Internet & Phone', 'icon': 'signal-alt-2'},
+                    {'id': 'energy-water', 'name': 'Energy & Water', 'icon': 'bulb'}
+                ]
+            },
+            {
+                'id': 'shopping',
+                'name': 'Shopping',
+                'icon': 'shopping-cart',
+                'color': '#BA8ED9',
+                'subcolors': ['#E3CFF2', '#D9BFED', '#CFAFE8', '#ECDFF7', '#F5EBF9', '#F9F3FB'],
+                'subcategories': [
+                    {'id': 'household', 'name': 'Household', 'icon': 'soap'},
+                    {'id': 'electronics', 'name': 'Electronics', 'icon': 'gamepad'},
+                    {'id': 'clothing-shoes', 'name': 'Clothing & Shoes', 'icon': 'label'},
+                    {'id': 'accessories', 'name': 'Accessories', 'icon': 'lipstick'},
+                    {'id': 'subscriptions', 'name': 'Subscriptions', 'icon': 'interactive'},
+                    {'id': 'guilty-pleasure', 'name': 'Guilty Pleasure', 'icon': 'glass-cheers'}
+                ]
+            },
+            {
+                'id': 'transport',
+                'name': 'Transport',
+                'icon': 'car',
+                'color': '#6B8FCC',
+                'subcolors': ['#C1D3EB', '#ADC4E3', '#99B5DB', '#CFE1F3', '#DDEAF7', '#EAF2FB'],
+                'subcategories': [
+                    {'id': 'fuel', 'name': 'Fuel', 'icon': 'gas-pump'},
+                    {'id': 'parking-fees', 'name': 'Parking Fees', 'icon': 'road'},
+                    {'id': 'public-transport', 'name': 'Public Transport', 'icon': 'train-side'}
+                ]
+            },
+            {
+                'id': 'health',
+                'name': 'Health',
+                'icon': 'stethoscope',
+                'color': '#7A9FD9',
+                'subcolors': ['#C9DCF2', '#B5CEEC', '#A1C0E6', '#D7E6F7', '#E5F0FB', '#F2F7FD'],
+                'subcategories': [
+                    {'id': 'pharmacy', 'name': 'Pharmacy', 'icon': 'band-aid'},
+                    {'id': 'medical-services', 'name': 'Medical Services', 'icon': 'stethoscope'},
+                    {'id': 'gym-fitness', 'name': 'Gym & Fitness', 'icon': 'gym'}
+                ]
+            }
+        ]
+    },
+    'transfers': {
+        'id': 'transfers',
+        'name': 'TRANSFERS',
+        'icon': 'apps-sort',
+        'color': '#F0C46C',
+        'categories': [
+            {
+                'id': 'account-transfers',
+                'name': 'Account Transfers',
+                'icon': 'copy-alt',
+                'color': '#F0C46C',
+                'subcolors': ['#F7E6D0', '#F4D7B5', '#F9F0E4', '#F9E1C9', '#F7D19E', '#EED1A2'],
+                'subcategories': [
+                    {'id': 'account-transfers-own', 'name': 'Between Own Accounts', 'icon': 'copy-alt'},
+                    {'id': 'account-transfers-family', 'name': 'Family Support', 'icon': 'hand-holding-heart'},
+                    {'id': 'account-transfers-reserve', 'name': 'Reserve Transfer', 'icon': 'chart-histogram'}
+                ]
+            },
+            {
+                'id': 'savings-transfer',
+                'name': 'Savings Transfer',
+                'icon': 'calculator',
+                'color': '#D4A647',
+                'subcolors': ['#F0E4C1', '#E8D5A3', '#F7EACE', '#E3C886', '#EBCF90', '#F5EAD4'],
+                'subcategories': [
+                    {'id': 'savings-transfer-main', 'name': 'Savings Transfer', 'icon': 'calculator'},
+                    {'id': 'house-savings', 'name': 'House Savings', 'icon': 'home-location-alt'}
+                ]
+            }
+        ]
+    },
+    'targets': {
+        'id': 'targets',
+        'name': 'TARGETS',
+        'icon': 'target',
+        'color': '#b54a4a',
+        'categories': [
+            {
+                'id': 'savings-targets',
+                'name': 'Savings Targets',
+                'icon': 'earnings',
+                'color': '#AE2C4C',
+                'subcolors': ['#D88FA3', '#C97586', '#BA5B6A', '#EAB5C0', '#F2D5DC', '#F8E8EC'],
+                'subcategories': []
+            },
+            {
+                'id': 'expense-limits',
+                'name': 'Expense Limits',
+                'icon': 'euro',
+                'color': '#FF6B6B',
+                'subcolors': ['#FFB5B5', '#FF9F9F', '#FF8989', '#FFD6D6', '#FFE5E5', '#FFF0F0'],
+                'subcategories': []
+            }
+        ]
+    }
+}
+
+
+# ============================================================================
+# MAIN SERVICE CLASS
+# ============================================================================
 
 class CategoryService:
-    """Service for category operations"""
+    """Consolidated service for all category operations"""
     
     def __init__(self, db: AsyncSession, user: User):
         self.db = db
         self.user = user
     
+    # ========================================================================
+    # INITIALIZATION
+    # ========================================================================
+    
+    async def initialize_default_categories(self) -> int:
+        """Create default category tree for user"""
+        created_count = 0
+        
+        for type_key, type_data in DEFAULT_CATEGORIES.items():
+            # Create main type category
+            type_category = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=None,
+                name=type_data['name'],
+                code=type_data['id'],
+                icon=type_data['icon'],
+                color=type_data['color'],
+                category_type=type_key,
+                active=True
+            )
+            self.db.add(type_category)
+            created_count += 1
+            
+            # Create child categories
+            for cat_data in type_data['categories']:
+                subcolors = cat_data.get('subcolors', [])
+                random.shuffle(subcolors)
+                
+                category = Category(
+                    id=str(uuid.uuid4()),
+                    user_id=self.user.id,
+                    parent_id=type_category.id,
+                    name=cat_data['name'],
+                    code=cat_data['id'],
+                    icon=cat_data['icon'],
+                    color=cat_data['color'],
+                    category_type=type_key,
+                    active=True
+                )
+                self.db.add(category)
+                created_count += 1
+                
+                # Create subcategories
+                for idx, subcat_data in enumerate(cat_data.get('subcategories', [])):
+                    subcolor = subcolors[idx % len(subcolors)] if subcolors else cat_data['color']
+                    
+                    subcategory = Category(
+                        id=str(uuid.uuid4()),
+                        user_id=self.user.id,
+                        parent_id=category.id,
+                        name=subcat_data['name'],
+                        code=subcat_data['id'],
+                        icon=subcat_data['icon'],
+                        color=subcolor,
+                        category_type=type_key,
+                        active=True
+                    )
+                    self.db.add(subcategory)
+                    created_count += 1
+        
+        await self.db.commit()
+        print(f"✅ Created {created_count} default categories")
+        return created_count
+    
+    async def get_or_create_uncategorized(self) -> Category:
+        """Get or create Uncategorized category"""
+        query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.code == 'uncategorized'
+            )
+        )
+        result = await self.db.execute(query)
+        uncategorized = result.scalar_one_or_none()
+        
+        if not uncategorized:
+            uncategorized = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=None,
+                name='Uncategorized',
+                code='uncategorized',
+                icon='circle-question',
+                color='#999999',
+                category_type='expense',
+                active=True
+            )
+            self.db.add(uncategorized)
+            await self.db.commit()
+            await self.db.refresh(uncategorized)
+        
+        return uncategorized
+    
+    # ========================================================================
+    # CATEGORY CRUD
+    # ========================================================================
+    
     async def get_category_tree(self) -> List[Dict[str, Any]]:
         """Get hierarchical category tree with transaction counts"""
-        
         query = select(
             Category.id,
             Category.parent_id,
@@ -36,16 +338,13 @@ class CategoryService:
         ).outerjoin(
             Transaction, Transaction.category_id == Category.id
         ).where(
-            Category.user_id == self.user.id,
-            Category.active == True
+            and_(
+                Category.user_id == self.user.id,
+                Category.active == True
+            )
         ).group_by(
-            Category.id,
-            Category.parent_id,
-            Category.name,
-            Category.code,
-            Category.icon,
-            Category.color,
-            Category.category_type
+            Category.id, Category.parent_id, Category.name, Category.code,
+            Category.icon, Category.color, Category.category_type
         ).order_by(Category.name)
         
         result = await self.db.execute(query)
@@ -79,7 +378,6 @@ class CategoryService:
     
     async def get_category_by_id(self, category_id: str) -> Optional[Category]:
         """Get single category with user verification"""
-        
         try:
             cat_uuid = uuid.UUID(category_id)
         except ValueError:
@@ -95,14 +393,10 @@ class CategoryService:
         return result.scalar_one_or_none()
     
     async def create_category(
-        self,
-        name: str,
-        parent_id: Optional[str],
-        icon: str,
-        color: Optional[str] = None
+        self, name: str, parent_id: Optional[str],
+        icon: str, color: Optional[str] = None
     ) -> Category:
         """Create new category or subcategory"""
-        
         category_type = 'expense'
         parent = None
         
@@ -130,14 +424,10 @@ class CategoryService:
         return new_category
     
     async def update_category(
-        self,
-        category_id: str,
-        name: Optional[str] = None,
-        icon: Optional[str] = None,
-        color: Optional[str] = None
+        self, category_id: str, name: Optional[str] = None,
+        icon: Optional[str] = None, color: Optional[str] = None
     ) -> Category:
         """Update category details"""
-        
         category = await self.get_category_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -151,12 +441,40 @@ class CategoryService:
         
         await self.db.commit()
         await self.db.refresh(category)
-        
         return category
+    
+    async def delete_category(self, category_id: str) -> Dict[str, Any]:
+        """Delete category and move transactions to Uncategorized"""
+        category = await self.get_category_by_id(category_id)
+        if not category:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        usage_check = await self.check_category_usage(category_id)
+        if not usage_check["can_delete"]:
+            raise HTTPException(status_code=400, detail=usage_check["warning_message"])
+        
+        uncategorized = await self.get_or_create_uncategorized()
+        cat_uuid = uuid.UUID(category_id)
+        
+        from sqlalchemy import update
+        update_query = update(Transaction).where(
+            Transaction.category_id == cat_uuid
+        ).values(category_id=uuid.UUID(uncategorized.id))
+        await self.db.execute(update_query)
+        
+        delete_query = delete(Category).where(Category.id == cat_uuid)
+        await self.db.execute(delete_query)
+        await self.db.commit()
+        
+        return {
+            "success": True,
+            "transactions_moved": usage_check["transaction_count"],
+            "moved_to": uncategorized.id,
+            "message": f"Category deleted. {usage_check['transaction_count']} transactions moved."
+        }
     
     async def check_category_usage(self, category_id: str) -> Dict[str, Any]:
         """Check if category can be deleted"""
-        
         try:
             cat_uuid = uuid.UUID(category_id)
         except ValueError:
@@ -176,55 +494,71 @@ class CategoryService:
         
         can_delete = children_count == 0
         
-        warning_message = ""
         if children_count > 0:
-            warning_message = f"Cannot delete category with {children_count} subcategories. Delete subcategories first."
+            warning = f"Cannot delete category with {children_count} subcategories."
         elif transaction_count > 0:
-            warning_message = f"This category has {transaction_count} transactions. They will be moved to 'Uncategorized'."
+            warning = f"This category has {transaction_count} transactions. They will be moved."
         else:
-            warning_message = "This category can be safely deleted."
+            warning = "This category can be safely deleted."
         
         return {
             "transaction_count": transaction_count,
             "has_children": children_count > 0,
             "can_delete": can_delete,
-            "warning_message": warning_message
+            "warning_message": warning
         }
     
-    async def delete_category(self, category_id: str) -> Dict[str, Any]:
-        """Delete category and move transactions to Uncategorized"""
+    # ========================================================================
+    # CSV MAPPING & MATCHING
+    # ========================================================================
+    
+    async def find_category_for_csv(
+        self, csv_main: str, csv_cat: str, csv_subcat: str
+    ) -> Optional[Category]:
+        """Find matching user category for CSV data"""
         
-        category = await self.get_category_by_id(category_id)
-        if not category:
-            raise HTTPException(status_code=404, detail="Category not found")
-        
-        usage_check = await self.check_category_usage(category_id)
-        if not usage_check["can_delete"]:
-            raise HTTPException(status_code=400, detail=usage_check["warning_message"])
-        
-        uncategorized = await get_or_create_uncategorized(self.user.id, self.db)
-        
-        cat_uuid = uuid.UUID(category_id)
-        
-        from sqlalchemy import update
-        update_query = update(Transaction).where(
-            Transaction.category_id == cat_uuid
-        ).values(
-            category_id=uuid.UUID(uncategorized.id)
+        # Get all categories
+        query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.active == True
+            )
         )
-        await self.db.execute(update_query)
+        result = await self.db.execute(query)
+        user_categories = result.scalars().all()
         
-        delete_query = delete(Category).where(Category.id == cat_uuid)
-        await self.db.execute(delete_query)
+        # Normalize inputs
+        csv_main = (csv_main or '').lower().strip()
+        csv_cat = (csv_cat or '').lower().strip()
+        csv_subcat = (csv_subcat or '').lower().strip()
         
-        await self.db.commit()
+        # Try exact subcategory match first
+        if csv_subcat:
+            for cat in user_categories:
+                if cat.name.lower().strip() == csv_subcat:
+                    return cat
         
-        return {
-            "success": True,
-            "transactions_moved": usage_check["transaction_count"],
-            "moved_to": uncategorized.id,
-            "message": f"Category deleted. {usage_check['transaction_count']} transactions moved to Uncategorized."
-        }
+        # Try exact category match
+        if csv_cat:
+            for cat in user_categories:
+                if cat.name.lower().strip() == csv_cat:
+                    return cat
+        
+        # Try fuzzy subcategory match
+        if csv_subcat:
+            for cat in user_categories:
+                cat_name = cat.name.lower().strip()
+                if csv_subcat in cat_name or cat_name in csv_subcat:
+                    return cat
+        
+        # Try fuzzy category match
+        if csv_cat:
+            for cat in user_categories:
+                cat_name = cat.name.lower().strip()
+                if csv_cat in cat_name or cat_name in csv_cat:
+                    return cat
+        
+        return None
     
     def _calculate_similarity(self, str1: str, str2: str) -> float:
         """Calculate similarity between two strings (0.0 to 1.0)"""
@@ -239,67 +573,270 @@ class CategoryService:
         
         return SequenceMatcher(None, s1, s2).ratio()
     
-    async def match_category(
-        self,
-        csv_main: str,
-        category: str,
-        subcategory: Optional[str] = None
+    # ========================================================================
+    # ANALYTICS & QUERIES
+    # ========================================================================
+    
+    async def get_type_summary(
+        self, category_type: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Match CSV categories to user categories"""
+        """Get summary for transaction type"""
         
-        query = select(Category).where(
+        cat_query = select(Category).where(
             and_(
+                Category.user_id == self.user.id,
+                Category.category_type == category_type,
+                Category.active == True
+            )
+        )
+        cat_result = await self.db.execute(cat_query)
+        type_categories = cat_result.scalars().all()
+        category_ids = [str(c.id) for c in type_categories]
+        
+        if not category_ids:
+            return {
+                'type': category_type,
+                'stats': {'total_count': 0, 'total_amount': 0, 'avg_amount': 0},
+                'categories': []
+            }
+        
+        trans_conditions = [Transaction.user_id == self.user.id]
+        if start_date:
+            trans_conditions.append(Transaction.posted_at >= start_date)
+        if end_date:
+            trans_conditions.append(Transaction.posted_at <= end_date)
+        trans_conditions.append(Transaction.category_id.in_(category_ids))
+        
+        stats_query = select(
+            func.count(Transaction.id).label('total_count'),
+            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount'),
+            func.coalesce(func.avg(func.abs(Transaction.amount)), 0).label('avg_amount')
+        ).where(and_(*trans_conditions))
+        
+        stats_result = await self.db.execute(stats_query)
+        stats = stats_result.first()
+        
+        parent_cats = [c for c in type_categories if c.parent_id is not None and self._is_main_category(c, type_categories)]
+        
+        category_breakdown = []
+        for cat in parent_cats:
+            child_ids = [str(c.id) for c in type_categories if c.parent_id == cat.id]
+            all_cat_ids = [str(cat.id)] + child_ids
+            
+            cat_query = select(
+                func.count(Transaction.id).label('count'),
+                func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
+            ).where(
+                and_(
+                    Transaction.user_id == self.user.id,
+                    Transaction.category_id.in_(all_cat_ids)
+                )
+            )
+            
+            cat_result = await self.db.execute(cat_query)
+            cat_data = cat_result.first()
+            
+            if cat_data and cat_data.count > 0:
+                category_breakdown.append({
+                    'id': str(cat.id),
+                    'name': cat.name,
+                    'icon': cat.icon,
+                    'count': cat_data.count,
+                    'amount': float(cat_data.amount)
+                })
+        
+        category_breakdown.sort(key=lambda x: x['amount'], reverse=True)
+        
+        return {
+            'type': category_type,
+            'stats': {
+                'total_count': stats.total_count or 0,
+                'total_amount': float(stats.total_amount),
+                'avg_amount': float(stats.avg_amount)
+            },
+            'categories': category_breakdown
+        }
+    
+    def _is_main_category(self, cat: Category, all_cats: List[Category]) -> bool:
+        """Check if category is a main category (level 2 in hierarchy)"""
+        if not cat.parent_id:
+            return False
+        
+        parent = next((c for c in all_cats if c.id == cat.parent_id), None)
+        if parent and not parent.parent_id:
+            return True
+        
+        return False
+    
+    async def get_category_summary(
+        self, category_id: str,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None
+    ) -> Dict[str, Any]:
+        """Get summary for specific category"""
+        
+        try:
+            cat_uuid = uuid.UUID(category_id)
+        except ValueError:
+            return {}
+        
+        category_query = select(Category).where(
+            and_(
+                Category.id == cat_uuid,
+                Category.user_id == self.user.id
+            )
+        )
+        category_result = await self.db.execute(category_query)
+        category = category_result.scalar_one_or_none()
+        
+        if not category:
+            return {}
+        
+        children_query = select(Category).where(
+            and_(
+                Category.parent_id == cat_uuid,
                 Category.user_id == self.user.id,
                 Category.active == True
             )
         )
-        result = await self.db.execute(query)
-        user_categories = result.scalars().all()
+        children_result = await self.db.execute(children_query)
+        children = children_result.scalars().all()
+        child_ids = [str(c.id) for c in children]
+        all_category_ids = [str(cat_uuid)] + child_ids
         
-        csv_full = f"{csv_main} {category}"
-        if subcategory:
-            csv_full = f"{csv_full} {subcategory}"
-        csv_full = csv_full.lower().strip()
+        conditions = [
+            Transaction.user_id == self.user.id,
+            Transaction.category_id.in_(all_category_ids)
+        ]
+        if start_date:
+            conditions.append(Transaction.posted_at >= start_date)
+        if end_date:
+            conditions.append(Transaction.posted_at <= end_date)
         
-        best_match = None
-        best_score = 0.0
-        suggestions = []
+        stats_query = select(
+            func.count(Transaction.id).label('total_count'),
+            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount'),
+            func.coalesce(func.avg(func.abs(Transaction.amount)), 0).label('avg_amount')
+        ).where(and_(*conditions))
         
-        for category in user_categories:
-            cat_full = category.name.lower().strip()
-            score = self._calculate_similarity(csv_full, cat_full)
+        stats_result = await self.db.execute(stats_query)
+        stats = stats_result.first()
+        
+        subcategories = []
+        for child in children:
+            sub_query = select(
+                func.count(Transaction.id).label('count'),
+                func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
+            ).where(
+                and_(
+                    Transaction.user_id == self.user.id,
+                    Transaction.category_id == str(child.id)
+                )
+            )
             
-            if score > best_score:
-                best_score = score
-                best_match = category
+            sub_result = await self.db.execute(sub_query)
+            sub_data = sub_result.first()
             
-            if score >= 0.5:
-                suggestions.append({
-                    "id": category.id,
-                    "name": category.name,
-                    "score": round(score, 2)
+            if sub_data and sub_data.count > 0:
+                subcategories.append({
+                    'id': str(child.id),
+                    'name': child.name,
+                    'icon': child.icon,
+                    'count': sub_data.count,
+                    'amount': float(sub_data.amount)
                 })
         
-        suggestions.sort(key=lambda x: x["score"], reverse=True)
-        suggestions = suggestions[:5]
+        subcategories.sort(key=lambda x: x['amount'], reverse=True)
         
-        match_type = "none"
-        category_id = None
+        merchants_query = select(
+            Transaction.merchant,
+            func.count(Transaction.id).label('count'),
+            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
+        ).where(
+            and_(*conditions, Transaction.merchant.isnot(None))
+        ).group_by(Transaction.merchant).order_by(desc('amount')).limit(5)
         
-        if best_score >= 0.95:
-            match_type = "exact"
-            category_id = best_match.id
-        elif best_score >= 0.8:
-            match_type = "similar"
-            category_id = best_match.id
+        merchants_result = await self.db.execute(merchants_query)
+        top_merchants = [
+            {
+                'name': row.merchant,
+                'count': row.count,
+                'amount': float(row.amount)
+            }
+            for row in merchants_result
+        ]
         
         return {
-            "match_type": match_type,
-            "category_id": category_id,
-            "confidence": round(best_score, 2),
-            "suggestions": suggestions
+            'category': {
+                'id': str(category.id),
+                'name': category.name,
+                'icon': category.icon or 'circle',
+                'type': category.category_type
+            },
+            'stats': {
+                'total_count': stats.total_count or 0,
+                'total_amount': float(stats.total_amount),
+                'avg_amount': float(stats.avg_amount)
+            },
+            'subcategories': subcategories,
+            'top_merchants': top_merchants
+        }
+    
+    async def get_subcategory_transactions(
+        self, subcategory_id: str, page: int = 1, limit: int = 50,
+        start_date: Optional[date] = None, end_date: Optional[date] = None
+    ) -> Dict[str, Any]:
+        """Get transactions for subcategory with pagination"""
+        
+        try:
+            subcat_uuid = uuid.UUID(subcategory_id)
+        except ValueError:
+            return {'transactions': [], 'total': 0}
+        
+        conditions = [
+            Transaction.category_id == str(subcat_uuid),
+            Transaction.user_id == self.user.id
+        ]
+        
+        if start_date:
+            conditions.append(Transaction.posted_at >= start_date)
+        if end_date:
+            conditions.append(Transaction.posted_at <= end_date)
+        
+        count_query = select(func.count(Transaction.id)).where(and_(*conditions))
+        count_result = await self.db.execute(count_query)
+        total = count_result.scalar()
+        
+        transactions_query = select(Transaction).where(
+            and_(*conditions)
+        ).order_by(desc(Transaction.posted_at)).offset((page - 1) * limit).limit(limit)
+        
+        transactions_result = await self.db.execute(transactions_query)
+        transactions = transactions_result.scalars().all()
+        
+        return {
+            'transactions': [
+                {
+                    'id': str(t.id),
+                    'posted_at': t.posted_at.isoformat(),
+                    'amount': str(t.amount),
+                    'merchant': t.merchant,
+                    'memo': t.memo,
+                    'main_category': t.main_category
+                }
+                for t in transactions
+            ],
+            'total': total,
+            'page': page,
+            'limit': limit
         }
 
+
+# ============================================================================
+# DEPENDENCY INJECTION
+# ============================================================================
 
 def get_category_service(
     current_user: User = Depends(get_current_user),
