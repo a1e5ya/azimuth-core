@@ -9,7 +9,7 @@ from ..auth.local_auth import (
     LocalAuthService, get_auth_service, get_current_user, get_current_user_optional,
     UserCreate, UserLogin, UserResponse, verify_password, get_password_hash
 )
-from ..services.category_initialization import initialize_user_categories
+from ..services.category_service import CategoryService
 
 router = APIRouter()
 
@@ -41,14 +41,14 @@ async def register_user(
         result = await auth_service.register(user_data)
         print(f"✅ Registration successful for: {user_data.email}")
         
-        # Initialize categories
+        # Initialize categories using CategoryService
         try:
-            await initialize_user_categories(result["user"].id, db)
+            category_service = CategoryService(db, result["user"])
+            await category_service.initialize_default_categories()
             print(f"✅ Categories initialized for: {user_data.email}")
         except Exception as cat_error:
             print(f"⚠️ Category initialization failed (non-fatal): {cat_error}")
             traceback.print_exc()
-            # Continue anyway - categories can be created later
         
         return AuthResponse(
             message="Registration successful",
@@ -101,7 +101,6 @@ async def get_current_user_profile(
     current_user: User = Depends(get_current_user)
 ):
     """Get current user profile"""
-    
     return UserResponse(
         id=current_user.id,
         email=current_user.email,
@@ -114,7 +113,6 @@ async def get_auth_status(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Check authentication status"""
-    
     if current_user:
         return StatusResponse(
             authenticated=True,
@@ -138,7 +136,6 @@ async def verify_token(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Verify JWT token validity"""
-    
     if current_user:
         return StatusResponse(
             authenticated=True,
@@ -163,7 +160,6 @@ async def logout_user(
     db: AsyncSession = Depends(get_db)
 ):
     """Logout user (client-side token removal)"""
-    
     if current_user:
         audit_entry = AuditLog(
             user_id=current_user.id,
@@ -176,7 +172,6 @@ async def logout_user(
         )
         db.add(audit_entry)
         await db.commit()
-        
         return {"message": "Logout successful", "success": True}
     else:
         return {"message": "No active session", "success": True}
@@ -190,7 +185,6 @@ async def change_password(
     db: AsyncSession = Depends(get_db)
 ):
     """Change user password"""
-    
     if not verify_password(current_password, current_user.password_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
@@ -216,7 +210,6 @@ async def debug_auth(
     current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """Debug endpoint for local authentication testing"""
-    
     return {
         "auth_type": "local_jwt",
         "authenticated": current_user is not None,
