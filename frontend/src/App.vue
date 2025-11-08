@@ -5,7 +5,7 @@
       <div class="login-container">
         <div class="logo-section">
           <h1 class="museo-dashboard">azimuth</h1>
-          <p class="tagline">Your Personal Finance Assistant</p>
+          <p class="tagline">Personal Finance Assistant</p>
         </div>
         
         <LoginModal :showModal="true" @close="() => {}" :isFullScreen="true" />

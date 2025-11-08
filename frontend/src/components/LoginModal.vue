@@ -130,12 +130,14 @@ export default {
 .fullscreen-input {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid rgba(255, 255, 255, 0.3);
+  margin-bottom: 2rem;
   color: #333;
 }
 
 .fullscreen-auth-btn {
   background: rgba(255, 255, 255, 0.2) !important;
   border: 2px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-button-text);
 }
 
 .toggle-text {
