@@ -110,6 +110,75 @@ async def get_transaction_summary(
     summary_data = await queries.get_transaction_summary(start_date, end_date)
     return TransactionSummary(**summary_data)
 
+@router.get("/filtered-summary")
+async def get_filtered_summary(
+    start_date: Optional[date] = Query(None),
+    end_date: Optional[date] = Query(None),
+    min_amount: Optional[float] = Query(None),
+    max_amount: Optional[float] = Query(None),
+    merchant: Optional[str] = Query(None),
+    category_id: Optional[str] = Query(None),
+    account_id: Optional[str] = Query(None),
+    main_category: Optional[str] = Query(None),
+    review_needed: Optional[bool] = Query(None),
+    owners: Optional[List[str]] = Query(None),
+    account_types: Optional[List[str]] = Query(None),
+    main_categories: Optional[List[str]] = Query(None),
+    categories: Optional[List[str]] = Query(None),
+    subcategories: Optional[List[str]] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get summary stats for filtered transactions (all pages)"""
+    
+    conditions = [Transaction.user_id == current_user.id]
+    
+    if start_date:
+        conditions.append(Transaction.posted_at >= start_date)
+    if end_date:
+        conditions.append(Transaction.posted_at <= end_date)
+    if min_amount is not None:
+        conditions.append(Transaction.amount >= min_amount)
+    if max_amount is not None:
+        conditions.append(Transaction.amount <= max_amount)
+    if merchant:
+        conditions.append(Transaction.merchant.ilike(f"%{merchant}%"))
+    if category_id:
+        conditions.append(Transaction.category_id == uuid.UUID(category_id))
+    if main_category:
+        conditions.append(Transaction.main_category == main_category)
+    if review_needed is not None:
+        conditions.append(Transaction.review_needed == review_needed)
+    if owners and len(owners) > 0:
+        conditions.append(Transaction.owner.in_(owners))
+    if account_types and len(account_types) > 0:
+        conditions.append(Transaction.bank_account_type.in_(account_types))
+    if main_categories and len(main_categories) > 0:
+        conditions.append(Transaction.main_category.in_(main_categories))
+    if categories and len(categories) > 0:
+        conditions.append(Transaction.category.in_(categories))
+    if subcategories and len(subcategories) > 0:
+        conditions.append(Transaction.subcategory.in_(subcategories))
+    
+    base_condition = and_(*conditions)
+    
+    # Total count and categorized
+    stats_query = select(
+        func.count(Transaction.id).label('total'),
+        func.count(Transaction.category_id).label('categorized'),
+        func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount')
+    ).where(base_condition)
+    
+    stats_result = await db.execute(stats_query)
+    stats = stats_result.first()
+    
+    return {
+        "filtered_count": stats.total or 0,
+        "categorized_count": stats.categorized or 0,
+        "uncategorized_count": (stats.total or 0) - (stats.categorized or 0),
+        "total_amount": float(stats.total_amount or 0)
+    }
+
 @router.post("/import")
 async def import_transactions(
     file: UploadFile = File(...),

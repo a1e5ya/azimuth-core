@@ -6,8 +6,7 @@
         <!-- Transactions Info Component -->
         <TransactionsInfo
           :summary="summary"
-          :filtered-count="filteredCount"
-          :has-active-filters="hasActiveFilters"
+          :filtered-stats="filteredStats"
           :uploads="localUploads"
         />
 
@@ -193,6 +192,48 @@ export default {
       categoryMap: {},
       subcategoryMap: {}
     })
+
+    const filteredStats = ref({
+  filtered_count: 0,
+  categorized_count: 0,
+  uncategorized_count: 0,
+  total_amount: 0
+})
+
+  const loadFilteredStats = async () => {
+    if (!props.user) return
+    
+    try {
+      const params = {
+        start_date: filters.value.startDate || undefined,
+        end_date: filters.value.endDate || undefined,
+        min_amount: filters.value.minAmount || undefined,
+        max_amount: filters.value.maxAmount || undefined,
+        merchant: filters.value.merchant || undefined,
+        owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
+        account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
+        main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
+        categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,
+        subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined
+      }
+      
+      Object.keys(params).forEach(key => {
+        if (params[key] === undefined) delete params[key]
+      })
+      
+      const response = await axios.get(`${API_BASE}/transactions/filtered-summary`, {
+        params,
+        headers: { Authorization: `Bearer ${authStore.token}` },
+        paramsSerializer: {
+          indexes: null
+        }
+      })
+      
+      filteredStats.value = response.data
+    } catch (error) {
+      console.error('Failed to load filtered stats:', error)
+    }
+  }
 
     const categoryTree = computed(() => categoryStore.categories || [])
     
@@ -473,46 +514,50 @@ export default {
     }
 
     async function loadTransactions() {
-  loading.value = true
-  
-  try {
-    const params = {
-      page: currentPage.value,
-      limit: pageSize.value,
-      sort_by: sortBy.value,
-      sort_order: sortOrder.value,
-      start_date: filters.value.startDate || undefined,
-      end_date: filters.value.endDate || undefined,
-      min_amount: filters.value.minAmount || undefined,
-      max_amount: filters.value.maxAmount || undefined,
-      merchant: filters.value.merchant || undefined,
-      owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
-      account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
-      main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
-      categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,  // ADD THIS
-      subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined  // ADD THIS
+    loading.value = true
+    
+    try {
+      const params = {
+        page: currentPage.value,
+        limit: pageSize.value,
+        sort_by: sortBy.value,
+        sort_order: sortOrder.value,
+        start_date: filters.value.startDate || undefined,
+        end_date: filters.value.endDate || undefined,
+        min_amount: filters.value.minAmount || undefined,
+        max_amount: filters.value.maxAmount || undefined,
+        merchant: filters.value.merchant || undefined,
+        owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
+        account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
+        main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
+        categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,  // ADD THIS
+        subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined  // ADD THIS
+      }
+      
+      // Remove undefined values
+      Object.keys(params).forEach(key => {
+        if (params[key] === undefined) delete params[key]
+      })
+      
+      console.log('🔍 Loading with filters:', params)
+      
+      const response = await axios.get(`${API_BASE}/transactions/list`, {
+        params,
+        headers: { Authorization: `Bearer ${authStore.token}` },
+        paramsSerializer: {
+        indexes: null 
+      }
+      })
+      
+      transactions.value = response.data
+      await loadFilteredStats()
+      console.log(`✅ Loaded ${response.data.length} transactions`)
+    } catch (error) {
+      console.error('Failed to load transactions:', error)
+    } finally {
+      loading.value = false
     }
-    
-    // Remove undefined values
-    Object.keys(params).forEach(key => {
-      if (params[key] === undefined) delete params[key]
-    })
-    
-    console.log('🔍 Loading with filters:', params)
-    
-    const response = await axios.get(`${API_BASE}/transactions/list`, {
-      params,
-      headers: { Authorization: `Bearer ${authStore.token}` }
-    })
-    
-    transactions.value = response.data
-    console.log(`✅ Loaded ${response.data.length} transactions`)
-  } catch (error) {
-    console.error('Failed to load transactions:', error)
-  } finally {
-    loading.value = false
   }
-}
 
     const refreshTransactions = async () => {
       await loadSummary()
@@ -622,6 +667,7 @@ export default {
       showFilters,
       filters,
       filterOptions,
+      filteredStats,
       categoryTree,
       groupedCategories,
       hasActiveFilters,

@@ -265,7 +265,7 @@ DEFAULT_CATEGORIES = {
             {
                 'id': 'income-goals',
                 'name': 'Income Goals',
-                'icon': 'chart-line',
+                'icon': 'target',
                 'color': '#a33333',
                 'subcolors': ['#D99999', '#CC8080', '#BF6666', '#E6CCCC', '#F0E0E0', '#F7EBEB'],
                 'subcategories': []
