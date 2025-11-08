@@ -1,7 +1,5 @@
 """
-Consolidated Transaction Service - Handles all transaction operations
-Merged from: transaction_import_service, transaction_queries, 
-             transaction_service, parts of transaction_analytics
+Consolidated Transaction Service - FIXED
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_, func, or_, desc, asc, extract
@@ -25,7 +23,7 @@ from ..auth.local_auth import get_current_user
 # ============================================================================
 
 class TransactionImportService:
-    """Handles CSV import and auto-categorization"""
+    """Handles CSV import with two modes: training (categorized) and account (uncategorized)"""
     
     def __init__(self, db: AsyncSession, user: User):
         self.db = db
@@ -38,7 +36,11 @@ class TransactionImportService:
         account_id: str = None,
         auto_categorize: bool = True
     ) -> Dict[str, Any]:
-        """Import transactions with mode selection and auto-create owners/accounts"""
+        """
+        Import transactions with two modes:
+        - training: Pre-categorized data, auto-creates categories from CSV
+        - account: Uncategorized bank data, direct to account
+        """
         
         print(f"📤 Starting import: {filename} (mode: {import_mode})")
         
@@ -63,116 +65,15 @@ class TransactionImportService:
             )
             print(f"✅ Processed {len(transactions_data)} transactions")
 
-            # Auto-create owners and accounts in training mode
-            owner_account_map = {}
-            
+            # Mode-specific handling
             if import_mode == "training":
-                owner_account_map = await self._auto_create_owners_and_accounts(transactions_data)
-                print(f"✅ Created {len(owner_account_map)} account mappings")
-            
-            elif import_mode == "account" and account_id:
-                account_query = select(Account).where(
-                    and_(Account.id == account_id, Account.user_id == self.user.id)
+                result = await self._import_training_data(
+                    transactions_data, import_batch, auto_categorize
                 )
-                account_result = await self.db.execute(account_query)
-                account = account_result.scalar_one_or_none()
-                
-                if not account:
-                    raise Exception(f"Account {account_id} not found")
-                
-                print(f"✅ Using account: {account.name}")
-
-            # Get user categories
-            user_categories_query = select(Category).where(
-                and_(Category.user_id == self.user.id, Category.active == True)
-            )
-            user_categories_result = await self.db.execute(user_categories_query)
-            user_categories = user_categories_result.scalars().all()
-            
-            categorization_stats = {'csv_exact': 0, 'none': 0}
-
-            # Insert transactions
-            for trans_data in transactions_data:
-                category_id = None
-                confidence_score = None
-                source_category = "imported"
-                
-                # Determine account
-                transaction_account_id = None
-                
-                if import_mode == "training":
-                    owner_name = trans_data.get('owner', '').strip()
-                    account_type = trans_data.get('bank_account_type', '').strip()
-                    key = (owner_name, account_type)
-                    if key in owner_account_map:
-                        transaction_account_id = str(owner_account_map[key].id)
-                
-                elif import_mode == "account" and account:
-                    transaction_account_id = str(account.id)
-                
-                # Auto-categorize with auto-creation
-                if auto_categorize:
-                    csv_main = trans_data.get('main_category', '')
-                    csv_cat = trans_data.get('category', '')
-                    csv_subcat = trans_data.get('subcategory', '')
-                    
-                    # Use ensure_categories_from_csv to auto-create if needed
-                    if csv_main:
-                        category = await self.category_service.ensure_categories_from_csv(
-                            csv_main, csv_cat, csv_subcat
-                        )
-                        
-                        if category:
-                            category_id = category.id
-                            confidence_score = 0.95
-                            source_category = 'csv_mapped'
-                            categorization_stats['csv_exact'] += 1
-                        else:
-                            categorization_stats['none'] += 1
-                    else:
-                        categorization_stats['none'] += 1
-                
-                # FIXED: Derive is_income/is_expense from main_category STRING
-                main_cat_upper = (trans_data.get('main_category') or '').upper()
-                is_income = (main_cat_upper == 'INCOME')
-                is_expense = (main_cat_upper == 'EXPENSES')
-                
-                transaction = Transaction(
-                    id=str(uuid.uuid4()),
-                    user_id=str(self.user.id),
-                    account_id=transaction_account_id,
-                    posted_at=trans_data['posted_at'],
-                    amount=trans_data['amount'],
-                    currency=trans_data.get('currency', 'EUR'),
-                    merchant=trans_data.get('merchant'),
-                    memo=trans_data.get('memo'),
-                    category_id=str(category_id) if category_id else None,
-                    import_batch_id=str(import_batch.id),
-                    hash_dedupe=trans_data['hash_dedupe'],
-                    source_category=source_category,
-                    main_category=trans_data.get('main_category'),
-                    category=trans_data.get('category'),
-                    subcategory=trans_data.get('subcategory'),
-                    bank_account=trans_data.get('bank_account'),
-                    owner=trans_data.get('owner'),
-                    bank_account_type=trans_data.get('bank_account_type'),
-                    is_expense=is_expense,  # FIXED
-                    is_income=is_income,    # FIXED
-                    year=trans_data.get('year'),
-                    month=trans_data.get('month'),
-                    year_month=trans_data.get('year_month'),
-                    weekday=trans_data.get('weekday'),
-                    transfer_pair_id=trans_data.get('transfer_pair_id'),
-                    confidence_score=confidence_score,
-                    review_needed=not category_id
+            else:  # account mode
+                result = await self._import_to_account(
+                    transactions_data, import_batch, account_id
                 )
-                
-                self.db.add(transaction)
-            
-            await self.db.commit()
-            
-            # Link transfer pairs
-            await self._link_transfer_pairs(str(import_batch.id))
             
             import_batch.rows_total = len(transactions_data)
             import_batch.rows_imported = len(transactions_data)
@@ -180,13 +81,12 @@ class TransactionImportService:
             import_batch.completed_at = datetime.utcnow()
             import_batch.summary_data = {
                 **summary,
-                "categorization": categorization_stats,
+                **result.get("stats", {}),
                 "import_mode": import_mode
             }
             
             await self.db.commit()
             
-            total_categorized = categorization_stats['csv_exact']
             print(f"✅ Import complete: {len(transactions_data)} transactions")
             
             return {
@@ -195,8 +95,7 @@ class TransactionImportService:
                 "summary": {
                     **summary,
                     "rows_inserted": len(transactions_data),
-                    "categorization": categorization_stats,
-                    "auto_categorized": total_categorized
+                    **result.get("stats", {})
                 },
                 "message": f"Imported {len(transactions_data)} transactions"
             }
@@ -212,6 +111,158 @@ class TransactionImportService:
                 "success": False,
                 "message": f"Import failed: {str(e)}"
             }
+    
+    async def _import_training_data(
+        self, transactions_data: List[Dict], import_batch: ImportBatch,
+        auto_categorize: bool
+    ) -> Dict[str, Any]:
+        """Import pre-categorized training data with auto-creation"""
+        
+        # Auto-create owners and accounts
+        owner_account_map = await self._auto_create_owners_and_accounts(transactions_data)
+        print(f"✅ Created {len(owner_account_map)} account mappings")
+        
+        categorization_stats = {'auto_created': 0, 'csv_mapped': 0, 'none': 0}
+        
+        # Insert transactions
+        for trans_data in transactions_data:
+            # Determine account
+            owner_name = trans_data.get('owner', '').strip()
+            account_type = trans_data.get('bank_account_type', '').strip()
+            key = (owner_name, account_type)
+            transaction_account_id = str(owner_account_map[key].id) if key in owner_account_map else None
+            
+            # Auto-categorize with auto-creation
+            category_id = None
+            confidence_score = None
+            source_category = "imported"
+            
+            if auto_categorize:
+                csv_main = trans_data.get('main_category', '')
+                csv_cat = trans_data.get('category', '')
+                csv_subcat = trans_data.get('subcategory', '')
+                
+                if csv_main:
+                    # Use ensure_categories_from_csv to auto-create
+                    category = await self.category_service.ensure_categories_from_csv(
+                        csv_main, csv_cat, csv_subcat
+                    )
+                    
+                    if category:
+                        category_id = category.id
+                        confidence_score = 0.95
+                        source_category = 'csv_mapped'
+                        categorization_stats['auto_created'] += 1
+                    else:
+                        categorization_stats['none'] += 1
+                else:
+                    categorization_stats['none'] += 1
+            
+            # Derive is_income/is_expense from main_category
+            main_cat_upper = (trans_data.get('main_category') or '').upper()
+            is_income = (main_cat_upper == 'INCOME')
+            is_expense = (main_cat_upper == 'EXPENSES')
+            
+            transaction = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=str(self.user.id),
+                account_id=transaction_account_id,
+                posted_at=trans_data['posted_at'],
+                amount=trans_data['amount'],
+                currency=trans_data.get('currency', 'EUR'),
+                merchant=trans_data.get('merchant'),
+                memo=trans_data.get('memo'),
+                category_id=str(category_id) if category_id else None,
+                import_batch_id=str(import_batch.id),
+                hash_dedupe=trans_data['hash_dedupe'],
+                source_category=source_category,
+                main_category=trans_data.get('main_category'),
+                category=trans_data.get('category'),
+                subcategory=trans_data.get('subcategory'),
+                bank_account=trans_data.get('bank_account'),
+                owner=trans_data.get('owner'),
+                bank_account_type=trans_data.get('bank_account_type'),
+                is_expense=is_expense,
+                is_income=is_income,
+                year=trans_data.get('year'),
+                month=trans_data.get('month'),
+                year_month=trans_data.get('year_month'),
+                weekday=trans_data.get('weekday'),
+                transfer_pair_id=trans_data.get('transfer_pair_id'),
+                confidence_score=confidence_score,
+                review_needed=not category_id
+            )
+            
+            self.db.add(transaction)
+        
+        await self.db.commit()
+        
+        return {
+            "stats": {
+                "categorization": categorization_stats,
+                "auto_categorized": categorization_stats['auto_created']
+            }
+        }
+    
+    async def _import_to_account(
+        self, transactions_data: List[Dict], import_batch: ImportBatch,
+        account_id: str
+    ) -> Dict[str, Any]:
+        """Import uncategorized bank data directly to account"""
+        
+        # Verify account
+        account_query = select(Account).where(
+            and_(Account.id == account_id, Account.user_id == self.user.id)
+        )
+        account_result = await self.db.execute(account_query)
+        account = account_result.scalar_one_or_none()
+        
+        if not account:
+            raise Exception(f"Account {account_id} not found")
+        
+        print(f"✅ Importing to account: {account.name}")
+        
+        # Insert transactions (no categorization)
+        for trans_data in transactions_data:
+            transaction = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=str(self.user.id),
+                account_id=str(account.id),
+                posted_at=trans_data['posted_at'],
+                amount=trans_data['amount'],
+                currency=trans_data.get('currency', 'EUR'),
+                merchant=trans_data.get('merchant'),
+                memo=trans_data.get('memo'),
+                category_id=None,
+                import_batch_id=str(import_batch.id),
+                hash_dedupe=trans_data['hash_dedupe'],
+                source_category='imported',
+                main_category=None,
+                category=None,
+                subcategory=None,
+                bank_account=None,
+                owner=None,
+                bank_account_type=None,
+                is_expense=trans_data['amount'] < 0,
+                is_income=trans_data['amount'] > 0,
+                year=trans_data.get('year'),
+                month=trans_data.get('month'),
+                year_month=trans_data.get('year_month'),
+                weekday=trans_data.get('weekday'),
+                transfer_pair_id=None,
+                confidence_score=None,
+                review_needed=True
+            )
+            
+            self.db.add(transaction)
+        
+        await self.db.commit()
+        
+        return {
+            "stats": {
+                "uncategorized": len(transactions_data)
+            }
+        }
     
     async def _auto_create_owners_and_accounts(self, transactions_data: List[Dict]) -> Dict:
         """Auto-create Owner and Account records from CSV data"""
@@ -280,39 +331,6 @@ class TransactionImportService:
         
         await self.db.commit()
         return owner_account_map
-    
-    async def _link_transfer_pairs(self, batch_id: str):
-        """Link transfer pairs by Transfer_Pair_ID"""
-        
-        # Get transactions with transfer_pair_id
-        query = select(Transaction).where(
-            and_(
-                Transaction.import_batch_id == batch_id,
-                Transaction.transfer_pair_id.isnot(None)
-            )
-        )
-        result = await self.db.execute(query)
-        transactions = result.scalars().all()
-        
-        # Group by transfer_pair_id
-        pairs = {}
-        for trans in transactions:
-            pair_id = trans.transfer_pair_id
-            if pair_id not in pairs:
-                pairs[pair_id] = []
-            pairs[pair_id].append(trans)
-        
-        # Verify pairs (should have 2 transactions: one positive, one negative)
-        linked_count = 0
-        for pair_id, pair_transactions in pairs.items():
-            if len(pair_transactions) == 2:
-                amounts = [float(t.amount) for t in pair_transactions]
-                # Should net to ~0
-                if abs(sum(amounts)) < 0.01:
-                    linked_count += 1
-                    print(f"✓ Linked transfer pair: {pair_id}")
-        
-        print(f"✅ Linked {linked_count} transfer pairs")
 
 
 # ============================================================================
@@ -339,6 +357,9 @@ class TransactionQueries:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
+    # In backend/app/services/transaction_service.py
+# In the get_transactions_with_filters method, around line 390-425
+
     async def get_transactions_with_filters(
         self, filters: Dict[str, Any]
     ) -> Tuple[List[Transaction], int]:
@@ -374,12 +395,16 @@ class TransactionQueries:
             conditions.append(Transaction.bank_account_type.in_(filters['account_types']))
         if filters.get('main_categories') and len(filters['main_categories']) > 0:
             conditions.append(Transaction.main_category.in_(filters['main_categories']))
+        if filters.get('categories') and len(filters['categories']) > 0:
+            conditions.append(Transaction.category.in_(filters['categories']))
+        if filters.get('subcategories') and len(filters['subcategories']) > 0:
+            conditions.append(Transaction.subcategory.in_(filters['subcategories']))
         
         if conditions:
             query = query.where(and_(*conditions))
             count_query = count_query.where(and_(*conditions))
         
-        # Get count
+        # GET COUNT - THIS WAS MISSING!
         count_result = await self.db.execute(count_query)
         total_count = count_result.scalar()
         
@@ -407,7 +432,7 @@ class TransactionQueries:
     async def get_transaction_summary(
         self, start_date: Optional[date] = None, end_date: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Get comprehensive transaction summary"""
+        """Get comprehensive transaction summary - FIXED"""
         
         base_conditions = [Transaction.user_id == self.user.id]
         if start_date:
@@ -417,10 +442,21 @@ class TransactionQueries:
         
         base_condition = and_(*base_conditions)
         
-        # Total count
-        count_query = select(func.count(Transaction.id)).where(base_condition)
+        # Total count and amount
+        count_query = select(
+            func.count(Transaction.id),
+            func.coalesce(func.sum(Transaction.amount), 0)
+        ).where(base_condition)
         count_result = await self.db.execute(count_query)
-        total_transactions = count_result.scalar()
+        total_transactions, total_amount = count_result.first()
+        
+        # Date range
+        date_query = select(
+            func.min(Transaction.posted_at),
+            func.max(Transaction.posted_at)
+        ).where(base_condition)
+        date_result = await self.db.execute(date_query)
+        earliest, latest = date_result.first()
         
         # Amounts by type
         amounts_query = select(
@@ -448,6 +484,14 @@ class TransactionQueries:
             elif trans_type == 'TRANSFERS':
                 transfer_amount = amount
         
+        # By month
+        month_query = select(
+            Transaction.year_month,
+            func.sum(func.abs(Transaction.amount))
+        ).where(base_condition).group_by(Transaction.year_month).order_by(Transaction.year_month)
+        month_result = await self.db.execute(month_query)
+        by_month = {row[0]: float(row[1] or 0) for row in month_result if row[0]}
+        
         # Categorization stats
         categorized_query = select(func.count(Transaction.id)).where(
             and_(base_condition, Transaction.category_id.isnot(None))
@@ -455,50 +499,69 @@ class TransactionQueries:
         categorized_result = await self.db.execute(categorized_query)
         categorized_count = categorized_result.scalar()
         
+        # Recent imports
+        import_query = select(
+            Transaction.import_batch_id,
+            func.count(Transaction.id)
+        ).where(base_condition).group_by(
+            Transaction.import_batch_id
+        ).order_by(desc(func.max(Transaction.created_at))).limit(5)
+        import_result = await self.db.execute(import_query)
+        recent_imports = [
+            {"batch_id": row[0], "count": row[1]} 
+            for row in import_result if row[0]
+        ]
+        
+        # Top merchants
+        merchant_query = select(
+            Transaction.merchant,
+            func.count(Transaction.id),
+            func.sum(func.abs(Transaction.amount))
+        ).where(
+            and_(base_condition, Transaction.merchant.isnot(None))
+        ).group_by(Transaction.merchant).order_by(
+            desc(func.sum(func.abs(Transaction.amount)))
+        ).limit(10)
+        merchant_result = await self.db.execute(merchant_query)
+        top_merchants = [
+            {"name": row[0], "count": row[1], "amount": float(row[2] or 0)}
+            for row in merchant_result
+        ]
+        
+        # Top categories
+        category_query = select(
+            Transaction.category,
+            func.count(Transaction.id),
+            func.sum(func.abs(Transaction.amount))
+        ).where(
+            and_(base_condition, Transaction.category.isnot(None))
+        ).group_by(Transaction.category).order_by(
+            desc(func.count(Transaction.id))
+        ).limit(10)
+        category_result = await self.db.execute(category_query)
+        top_categories = [
+            {"name": row[0], "count": row[1], "amount": float(row[2] or 0)}
+            for row in category_result
+        ]
+        
         return {
-            "total_transactions": total_transactions,
+            "total_transactions": total_transactions or 0,
+            "total_amount": float(total_amount),
             "income_amount": income_amount,
             "expense_amount": expense_amount,
             "transfer_amount": transfer_amount,
             "categorized_count": categorized_count,
             "categorization_rate": categorized_count / total_transactions if total_transactions > 0 else 0,
-            "by_type": by_type
+            "date_range": {
+                "earliest": earliest.isoformat() if earliest else None,
+                "latest": latest.isoformat() if latest else None
+            },
+            "by_type": by_type,
+            "by_month": by_month,
+            "recent_imports": recent_imports,
+            "top_merchants": top_merchants,
+            "top_categories": top_categories
         }
-    
-    async def get_spending_trends(
-        self, months: int = 12, category_id: Optional[str] = None
-    ) -> List[Dict[str, Any]]:
-        """Get spending trends over time"""
-        
-        conditions = [
-            Transaction.user_id == self.user.id,
-            Transaction.main_category == 'EXPENSES'
-        ]
-        
-        if category_id:
-            conditions.append(Transaction.category_id == uuid.UUID(category_id))
-        
-        query = select(
-            Transaction.year_month,
-            func.sum(func.abs(Transaction.amount)).label('total_amount'),
-            func.count(Transaction.id).label('transaction_count')
-        ).where(and_(*conditions)).group_by(
-            Transaction.year_month
-        ).order_by(Transaction.year_month.desc()).limit(months)
-        
-        result = await self.db.execute(query)
-        trends = []
-        
-        for row in result:
-            if row.year_month:
-                trends.append({
-                    "month": row.year_month,
-                    "amount": float(row.total_amount),
-                    "transaction_count": row.transaction_count
-                })
-        
-        trends.reverse()
-        return trends
 
 
 # ============================================================================

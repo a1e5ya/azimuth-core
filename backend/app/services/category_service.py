@@ -132,15 +132,17 @@ DEFAULT_CATEGORIES = {
                 ]
             },
             {
-                'id': 'transport',
-                'name': 'Transport',
-                'icon': 'car',
-                'color': '#6B8FCC',
-                'subcolors': ['#C1D3EB', '#ADC4E3', '#99B5DB', '#CFE1F3', '#DDEAF7', '#EAF2FB'],
+                'id': 'leisure-culture',
+                'name': 'Leisure & Culture',
+                'icon': 'ticket',
+                'color': '#8B7AC7',
+                'subcolors': ['#D0C8E8', '#BEB4DD', '#ACA0D2', '#DDD8F0', '#E9E5F7', '#F4F2FB'],
                 'subcategories': [
-                    {'id': 'fuel', 'name': 'Fuel', 'icon': 'gas-pump'},
-                    {'id': 'parking-fees', 'name': 'Parking Fees', 'icon': 'road'},
-                    {'id': 'public-transport', 'name': 'Public Transport', 'icon': 'train-side'}
+                    {'id': 'music', 'name': 'Music', 'icon': 'guitar'},
+                    {'id': 'social-activities', 'name': 'Social Activities', 'icon': 'ticket'},
+                    {'id': 'education', 'name': 'Education', 'icon': 'graduation-cap'},
+                    {'id': 'books-media', 'name': 'Books & Media', 'icon': 'book-alt'},
+                    {'id': 'hobbies-crafts', 'name': 'Hobbies & Crafts', 'icon': 'palette'}
                 ]
             },
             {
@@ -152,7 +154,57 @@ DEFAULT_CATEGORIES = {
                 'subcategories': [
                     {'id': 'pharmacy', 'name': 'Pharmacy', 'icon': 'band-aid'},
                     {'id': 'medical-services', 'name': 'Medical Services', 'icon': 'stethoscope'},
+                    {'id': 'dental-care', 'name': 'Dental Care', 'icon': 'tooth'},
                     {'id': 'gym-fitness', 'name': 'Gym & Fitness', 'icon': 'gym'}
+                ]
+            },
+            {
+                'id': 'transport',
+                'name': 'Transport',
+                'icon': 'car',
+                'color': '#6B8FCC',
+                'subcolors': ['#C1D3EB', '#ADC4E3', '#99B5DB', '#CFE1F3', '#DDEAF7', '#EAF2FB'],
+                'subcategories': [
+                    {'id': 'vehicle-registration', 'name': 'Vehicle Registration & Tax', 'icon': 'car'},
+                    {'id': 'maintenance-repairs', 'name': 'Maintenance & Repairs', 'icon': 'dashboard'},
+                    {'id': 'fuel', 'name': 'Fuel', 'icon': 'gas-pump'},
+                    {'id': 'parking-fees', 'name': 'Parking Fees', 'icon': 'road'},
+                    {'id': 'public-transport', 'name': 'Public Transport', 'icon': 'train-side'}
+                ]
+            },
+            {
+                'id': 'insurance',
+                'name': 'Insurance',
+                'icon': 'document-signed',
+                'color': '#5A7EB8',
+                'subcolors': ['#B8C8E0', '#A3B8D6', '#8EA8CC', '#CCD8EA', '#DEE5F3', '#EDF1F9'],
+                'subcategories': [
+                    {'id': 'health-insurance', 'name': 'Health Insurance', 'icon': 'syringe'},
+                    {'id': 'home-insurance', 'name': 'Home Insurance', 'icon': 'document-signed'},
+                    {'id': 'vehicle-insurance', 'name': 'Vehicle Insurance', 'icon': 'document-signed'}
+                ]
+            },
+            {
+                'id': 'financial-management',
+                'name': 'Financial Management',
+                'icon': 'diploma',
+                'color': '#4A6DA3',
+                'subcolors': ['#B0C2DE', '#9BB0D4', '#869ECA', '#C8D4E8', '#D9E3F0', '#E8EEF7'],
+                'subcategories': [
+                    {'id': 'bureaucracy', 'name': 'Bureaucracy', 'icon': 'diploma'},
+                    {'id': 'investment-accounts', 'name': 'Investment Accounts', 'icon': 'earnings'}
+                ]
+            },
+            {
+                'id': 'financial-services',
+                'name': 'Financial Services',
+                'icon': 'bank',
+                'color': '#3A5C8F',
+                'subcolors': ['#A8BBD9', '#93A8CF', '#7E95C5', '#BECEE5', '#D0DCF0', '#E0E9F7'],
+                'subcategories': [
+                    {'id': 'withdrawal', 'name': 'Withdrawal', 'icon': 'euro'},
+                    {'id': 'payment-provider', 'name': 'Payment Provider', 'icon': 'shopping-cart'},
+                    {'id': 'bank-services', 'name': 'Bank Services', 'icon': 'bank'}
                 ]
             }
         ]
@@ -209,10 +261,30 @@ DEFAULT_CATEGORIES = {
                 'color': '#FF6B6B',
                 'subcolors': ['#FFB5B5', '#FF9F9F', '#FF8989', '#FFD6D6', '#FFE5E5', '#FFF0F0'],
                 'subcategories': []
+            },
+            {
+                'id': 'income-goals',
+                'name': 'Income Goals',
+                'icon': 'chart-line',
+                'color': '#a33333',
+                'subcolors': ['#D99999', '#CC8080', '#BF6666', '#E6CCCC', '#F0E0E0', '#F7EBEB'],
+                'subcategories': []
             }
         ]
     }
 }
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 # ============================================================================

@@ -1,5 +1,6 @@
 <template>
-  <div class="filters-panel-compact" v-if="show">
+  <transition name="slide-down">
+    <div class="filters-panel-compact" v-if="show">
     <!-- First Row: Date Range & Amounts -->
     <div class="filters-row">
       <div class="filter-group-compact">
@@ -8,7 +9,7 @@
           type="date" 
           v-model="localFilters.startDate"
           class="form-input filter-input-compact"
-          @change="emitFilters"
+          @change="applyFilters"
         >
       </div>
       
@@ -18,7 +19,7 @@
           type="date" 
           v-model="localFilters.endDate"
           class="form-input filter-input-compact"
-          @change="emitFilters"
+          @change="applyFilters"
         >
       </div>
       
@@ -28,10 +29,11 @@
           type="number" 
           v-model.number="localFilters.minAmount"
           class="form-input filter-input-compact"
-          placeholder="0.00"
-          step="0.01"
-          @change="emitFilters"
+          placeholder="-1000 (expenses)"
+          step="any"
+          @change="applyFilters"
         >
+        <small class="hint-text">Negative for expenses</small>
       </div>
       
       <div class="filter-group-compact">
@@ -40,14 +42,15 @@
           type="number" 
           v-model.number="localFilters.maxAmount"
           class="form-input filter-input-compact"
-          placeholder="1000.00"
-          step="0.01"
-          @change="emitFilters"
+          placeholder="-50 (expenses)"
+          step="any"
+          @change="applyFilters"
         >
+        <small class="hint-text">Negative for expenses</small>
       </div>
     </div>
     
-    <!-- Second Row: Subcategories & Search -->
+    <!-- Second Row: Categories -->
     <div class="filters-row filters-row-actions">
       <div class="filter-group-compact">
         <label>Type</label>
@@ -96,7 +99,7 @@
           multiple
           size="3"
           :disabled="localFilters.categories.length === 0"
-          @change="emitFilters"
+          @change="applyFilters"
         >
           <option 
             v-for="subcategory in availableSubcategories" 
@@ -137,7 +140,7 @@
           class="form-input filter-input-compact"
           multiple
           size="3"
-          @change="handleAccountTypeChange"
+          @change="applyFilters"
         >
           <option 
             v-for="type in availableAccountTypes" 
@@ -156,16 +159,18 @@
           v-model="localFilters.merchant"
           class="form-input filter-input-compact"
           placeholder="Search merchant, message..."
-          @input="emitFilters"
+          @input="debounceSearch"
         >
-      </div>
-
-      <div class="filter-actions-compact">
+              <div class="filter-actions-compact">
         <button class="btn btn-small" @click="clearAllFilters">Clear</button>
         <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
       </div>
+      </div>
+
+
     </div>
   </div>
+  </transition>
 </template>
 
 <script>
@@ -187,7 +192,7 @@ export default {
       required: true
     }
   },
-  emits: ['update:modelValue', 'update:show'],
+  emits: ['update:modelValue', 'update:show', 'apply'],
   setup(props, { emit }) {
     const localFilters = ref({
       startDate: '',
@@ -201,6 +206,8 @@ export default {
       categories: [],
       subcategories: []
     })
+
+    let searchTimeout = null
 
     watch(() => props.modelValue, (newVal) => {
       localFilters.value = { ...newVal }
@@ -263,8 +270,16 @@ export default {
       return Array.from(subcategories).sort()
     })
 
-    const emitFilters = () => {
+    const applyFilters = () => {
       emit('update:modelValue', { ...localFilters.value })
+      emit('apply')
+    }
+
+    const debounceSearch = () => {
+      if (searchTimeout) clearTimeout(searchTimeout)
+      searchTimeout = setTimeout(() => {
+        applyFilters()
+      }, 500)
     }
 
     const handleOwnerChange = () => {
@@ -272,11 +287,7 @@ export default {
       localFilters.value.accountTypes = localFilters.value.accountTypes.filter(
         type => validTypes.includes(type)
       )
-      emitFilters()
-    }
-
-    const handleAccountTypeChange = () => {
-      emitFilters()
+      applyFilters()
     }
 
     const handleTypeChange = () => {
@@ -290,7 +301,7 @@ export default {
         sub => validSubcategories.includes(sub)
       )
       
-      emitFilters()
+      applyFilters()
     }
 
     const handleCategoryChange = () => {
@@ -299,7 +310,7 @@ export default {
         sub => validSubcategories.includes(sub)
       )
       
-      emitFilters()
+      applyFilters()
     }
 
     const clearAllFilters = () => {
@@ -315,7 +326,7 @@ export default {
         categories: [],
         subcategories: []
       }
-      emitFilters()
+      applyFilters()
     }
 
     return {
@@ -325,9 +336,9 @@ export default {
       availableTypes,
       availableCategories,
       availableSubcategories,
-      emitFilters,
+      applyFilters,
+      debounceSearch,
       handleOwnerChange,
-      handleAccountTypeChange,
       handleTypeChange,
       handleCategoryChange,
       clearAllFilters
@@ -376,6 +387,13 @@ export default {
   color: var(--color-text-light);
 }
 
+.hint-text {
+  font-size: 0.65rem;
+  color: var(--color-text-muted);
+  font-style: italic;
+  margin-top: -0.125rem;
+}
+
 .filter-input-compact {
   padding: 0.375rem var(--gap-small);
   font-size: var(--text-small);
@@ -398,16 +416,36 @@ export default {
 
 .filter-search-compact {
   flex: 1;
+  justify-content: space-between;
 }
 
 .filter-actions-compact {
   display: flex;
   gap: var(--gap-small);
   align-items: flex-start;
-  justify-content: center;
+  justify-content: flex-end;
 }
 
 .filter-actions-compact .btn-small {
   margin: 0;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-down-enter-active {
+  animation: slideDown 0.3s ease;
+}
+
+.slide-down-leave-active {
+  animation: slideDown 0.2s ease reverse;
 }
 </style>

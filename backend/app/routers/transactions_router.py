@@ -1,8 +1,8 @@
 """
-Main transactions router with CRUD operations - FIXED IMPORTS
+Main transactions router with CRUD operations - FIXED
 """
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, distinct
 from typing import List, Optional
@@ -13,8 +13,10 @@ from ..models.database import get_db, User, Transaction, Category, AuditLog
 from ..services.transaction_service import (
     TransactionService, 
     TransactionQueries,
+    TransactionImportService,
     get_transaction_service,
-    get_transaction_queries
+    get_transaction_queries,
+    get_import_service
 )
 from .transaction_models import (
     TransactionResponse, TransactionSummary, DeleteResponse,
@@ -40,6 +42,8 @@ async def list_transactions(
     owners: Optional[List[str]] = Query(None),
     account_types: Optional[List[str]] = Query(None),
     main_categories: Optional[List[str]] = Query(None),
+    categories: Optional[List[str]] = Query(None),  
+    subcategories: Optional[List[str]] = Query(None),  
     sort_by: str = Query("posted_at", regex="^(posted_at|amount|merchant|created_at)$"),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
     current_user: User = Depends(get_current_user),
@@ -52,11 +56,13 @@ async def list_transactions(
         'min_amount': min_amount, 'max_amount': max_amount, 'merchant': merchant,
         'category_id': category_id, 'account_id': account_id, 'main_category': main_category,
         'review_needed': review_needed, 'owners': owners or [], 'account_types': account_types or [],
-        'main_categories': main_categories or [], 'sort_by': sort_by, 'sort_order': sort_order
+        'main_categories': main_categories or [], 
+        'categories': categories or [],  
+        'subcategories': subcategories or [],  
+        'sort_by': sort_by, 'sort_order': sort_order
     }
     
-    transactions, total_count = await queries.get_transactions_with_filters(filters)
-    
+    transactions, total_count = await queries.get_transactions_with_filters(filters)    
     response_data = []
     for transaction in transactions:
         response_data.append(TransactionResponse(
@@ -104,6 +110,58 @@ async def get_transaction_summary(
     summary_data = await queries.get_transaction_summary(start_date, end_date)
     return TransactionSummary(**summary_data)
 
+@router.post("/import")
+async def import_transactions(
+    file: UploadFile = File(...),
+    import_mode: str = Form("training"),
+    account_id: Optional[str] = Form(None),
+    auto_categorize: bool = Form(True),
+    current_user: User = Depends(get_current_user),
+    import_service: TransactionImportService = Depends(get_import_service)
+):
+    """
+    Import transactions from CSV/XLSX file
+    
+    Modes:
+    - training: Pre-categorized data with auto-category creation
+    - account: Uncategorized bank data to specific account
+    """
+    
+    # Validate file
+    if not file.filename.lower().endswith(('.csv', '.xlsx')):
+        raise HTTPException(status_code=400, detail="Only CSV and XLSX files supported")
+    
+    if file.size and file.size > 10 * 1024 * 1024:
+        raise HTTPException(status_code=400, detail="File too large (max 10MB)")
+    
+    # Validate mode
+    if import_mode not in ['training', 'account']:
+        raise HTTPException(status_code=400, detail="Invalid import_mode. Use 'training' or 'account'")
+    
+    # For account mode, account_id is required
+    if import_mode == 'account' and not account_id:
+        raise HTTPException(status_code=400, detail="account_id required for account mode")
+    
+    # Read file
+    try:
+        file_content = await file.read()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
+    
+    # Import
+    result = await import_service.import_from_csv(
+        file_content=file_content,
+        filename=file.filename,
+        import_mode=import_mode,
+        account_id=account_id,
+        auto_categorize=auto_categorize
+    )
+    
+    if not result["success"]:
+        raise HTTPException(status_code=500, detail=result["message"])
+    
+    return result
+
 @router.post("/categorize/{transaction_id}")
 async def categorize_transaction(
     transaction_id: str,
@@ -124,7 +182,6 @@ async def bulk_categorize_transactions(
     service: TransactionService = Depends(get_transaction_service)
 ):
     """Bulk categorize multiple transactions"""
-    # Note: bulk_categorize not in merged service - needs adding if used
     return BulkOperationResponse(success=False, message="Not implemented yet", updated_count=0)
 
 @router.delete("/{transaction_id}", response_model=DeleteResponse)
@@ -168,22 +225,23 @@ async def get_filter_metadata(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get unique values for filter dropdowns"""
+    """Get unique values for filter dropdowns - FIXED"""
     
-    # Get unique owners and their account types
-    owner_account_map = {}
-    
+    # Get unique owners and account types
     owner_account_query = select(
-        distinct(Transaction.owner, Transaction.bank_account_type)
+        Transaction.owner,
+        Transaction.bank_account_type
     ).where(
         and_(
             Transaction.user_id == current_user.id,
             Transaction.owner.isnot(None),
             Transaction.bank_account_type.isnot(None)
         )
-    )
+    ).distinct()
+    
     owner_account_result = await db.execute(owner_account_query)
     
+    owner_account_map = {}
     for owner, account_type in owner_account_result:
         if owner not in owner_account_map:
             owner_account_map[owner] = []
@@ -194,11 +252,18 @@ async def get_filter_metadata(
     for owner in owner_account_map:
         owner_account_map[owner].sort()
     
-    # Get unique main categories and build category/subcategory maps
-    main_categories = set()
-    category_map = {}
-    subcategory_map = {}
+    # Get unique main categories
+    main_cat_query = select(Transaction.main_category).where(
+        and_(
+            Transaction.user_id == current_user.id,
+            Transaction.main_category.isnot(None)
+        )
+    ).distinct()
     
+    main_cat_result = await db.execute(main_cat_query)
+    main_categories = sorted([row[0] for row in main_cat_result])
+    
+    # Build category/subcategory maps
     category_query = select(
         Transaction.main_category,
         Transaction.category,
@@ -212,10 +277,11 @@ async def get_filter_metadata(
     
     category_result = await db.execute(category_query)
     
+    category_map = {}
+    subcategory_map = {}
+    
     for main_cat, cat, subcat in category_result:
         if main_cat:
-            main_categories.add(main_cat)
-            
             if cat:
                 if main_cat not in category_map:
                     category_map[main_cat] = set()
@@ -238,7 +304,7 @@ async def get_filter_metadata(
     
     return {
         "ownerAccountMap": owner_account_map,
-        "mainCategories": sorted(list(main_categories)),
+        "mainCategories": main_categories,
         "categoryMap": category_map_list,
         "subcategoryMap": subcategory_map_list
     }

@@ -73,10 +73,11 @@
       
       <!-- Filters Component -->
       <TransactionsFilters
-        v-model="filters"
-        v-model:show="showFilters"
-        :filter-options="filterOptions"
-      />
+      v-model:show="showFilters"
+      v-model="filters"
+      :filter-options="filterOptions"
+      @apply="loadTransactions"
+    />
 
       <!-- Transactions Table Component -->
       <TransactionsTable
@@ -471,67 +472,47 @@ export default {
       }
     }
 
-    const loadTransactions = async () => {
-      if (!props.user) return
-      
-      loading.value = true
-      try {
-        const token = authStore.token
-        
-        const params = {
-          page: currentPage.value,
-          limit: pageSize.value,
-          sort_by: sortBy.value,
-          sort_order: sortOrder.value
-        }
-        
-        if (filters.value.startDate) params.start_date = filters.value.startDate
-        if (filters.value.endDate) params.end_date = filters.value.endDate
-        if (filters.value.merchant) params.merchant = filters.value.merchant
-        if (filters.value.minAmount !== null && filters.value.minAmount !== undefined) {
-          params.min_amount = filters.value.minAmount
-        }
-        if (filters.value.maxAmount !== null && filters.value.maxAmount !== undefined) {
-          params.max_amount = filters.value.maxAmount
-        }
-        
-        if (filters.value.owners && filters.value.owners.length > 0) {
-          params.owners = filters.value.owners
-        }
-        if (filters.value.accountTypes && filters.value.accountTypes.length > 0) {
-          params.account_types = filters.value.accountTypes
-        }
-        if (filters.value.types && filters.value.types.length > 0) {
-          params.main_categories = filters.value.types
-        }
-        
-        console.log('🔍 Filters:', JSON.stringify(params, null, 2))
-        console.log('🔍 Filter values:', filters.value)
-        
-        const response = await axios.get(`${API_BASE}/transactions/list`, {
-          params,
-          headers: { 'Authorization': `Bearer ${token}` },
-          paramsSerializer: {
-            indexes: null
-          }
-        })
-        
-        console.log('🔍 Got', response.data.length, 'transactions')
-        
-        transactions.value = response.data
-        
-        if (hasActiveFilters.value) {
-          filteredCount.value = response.data.length
-        } else {
-          filteredCount.value = summary.value?.total_transactions || 0
-        }
-        
-      } catch (error) {
-        console.error('Failed to load transactions:', error)
-      } finally {
-        loading.value = false
-      }
+    async function loadTransactions() {
+  loading.value = true
+  
+  try {
+    const params = {
+      page: currentPage.value,
+      limit: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      start_date: filters.value.startDate || undefined,
+      end_date: filters.value.endDate || undefined,
+      min_amount: filters.value.minAmount || undefined,
+      max_amount: filters.value.maxAmount || undefined,
+      merchant: filters.value.merchant || undefined,
+      owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
+      account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
+      main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
+      categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,  // ADD THIS
+      subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined  // ADD THIS
     }
+    
+    // Remove undefined values
+    Object.keys(params).forEach(key => {
+      if (params[key] === undefined) delete params[key]
+    })
+    
+    console.log('🔍 Loading with filters:', params)
+    
+    const response = await axios.get(`${API_BASE}/transactions/list`, {
+      params,
+      headers: { Authorization: `Bearer ${authStore.token}` }
+    })
+    
+    transactions.value = response.data
+    console.log(`✅ Loaded ${response.data.length} transactions`)
+  } catch (error) {
+    console.error('Failed to load transactions:', error)
+  } finally {
+    loading.value = false
+  }
+}
 
     const refreshTransactions = async () => {
       await loadSummary()

@@ -185,28 +185,28 @@ export const categoriesData = [
   id: 'targets',
   name: 'TARGETS',
   code: 'targets',
-  icon: 'bullseye',
+  icon: 'target',
   color: '#b54a4a',
   category_type: 'target',
   categories: [
     {
       id: 'savings-targets',
       name: 'Savings Targets',
-      icon: 'piggy-bank',
+      icon: 'target',
       color: '#AE2C4C',
       children: []
     },
     {
       id: 'expense-limits',
       name: 'Expense Limits',
-      icon: 'hand-holding-usd',
+      icon: 'target',
       color: '#FF6B6B',
       children: []
     },
     {
       id: 'income-goals',
       name: 'Income Goals',
-      icon: 'chart-line',
+      icon: 'target',
       color: '#a33333',
       children: []
     }
