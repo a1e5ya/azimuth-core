@@ -8,7 +8,7 @@
       <div class="hover-info-header">
         <h4>{{ formatDate(hoveredData.date) }}</h4>
         <button class="btn btn-icon hover-close-btn" @click="$emit('unpin')">
-          <AppIcon name="times" size="small" />
+          <AppIcon name="cross" size="small" />
         </button>
       </div>
       
