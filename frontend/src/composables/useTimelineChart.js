@@ -24,10 +24,6 @@ export function useTimelineChart(
   const isPinned = ref(false)
   
   const {
-    visibleTypes,
-    visibleCategories,
-    visibleSubcategories,
-    expandedCategories,
     isTypeVisible,
     isCategoryVisible,
     isSubcategoryVisible,
@@ -238,10 +234,10 @@ export function useTimelineChart(
           key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
         }
         
-        incomeByCategory[displayName].set(
-          key,
-          (incomeByCategory[displayName].get(key) || 0) + amount
-        )
+          incomeByCategory[displayName].set(
+            key,
+            (incomeByCategory[displayName].get(key) || 0) + Math.abs(amount)  // Force positive
+          )
       })
     
     return incomeByCategory
@@ -341,183 +337,159 @@ export function useTimelineChart(
    * FIXED: Alphabetical order for predictable stacking
    * FIXED: Gradient fill for fade-out effect from zero line
    */
-  const chartSeries = computed(() => {
-    if (!timelineData.value.length) return []
+const chartSeries = computed(() => {
+  if (!timelineData.value.length) return []
+  
+  const series = []
+  
+  // ========== BUILD NEGATIVE STACK ==========
+  const expenseSeries = []
+  const negativeTransferSeries = []
+  
+  // 1. Build expenses
+  if (isTypeVisible('expenses')) {
+    const expensesByCategory = buildExpensesByCategory()
     
-    const series = []
-    
-    // CRITICAL: Order matters for stacking!
-    // Stack from zero line OUTWARD in ALPHABETICAL order
-    
-    // ========== NEGATIVE STACK (below zero line) ==========
-    // Build arrays first, then SORT ALPHABETICALLY
-    
-    const expenseSeries = []
-    const negativeTransferSeries = []
-    
-    // 1. Collect EXPENSES (always negative)
-    if (isTypeVisible('expenses')) {
-      const expensesByCategory = buildExpensesByCategory()
+    Object.entries(expensesByCategory).forEach(([categoryName, dateMap]) => {
+      const color = getCategoryColor(categoryStore.categories, categoryName)
       
-      Object.entries(expensesByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const data = timelineData.value.map(d => ({
-          x: d.date,
-          y: -(dateMap.get(d.date) || 0)
-        }))
-        
-        expenseSeries.push({
-          name: categoryName,
+      const data = timelineData.value.map(d => ({
+        x: d.date,
+        y: -(dateMap.get(d.date) || 0)
+      }))
+      
+      expenseSeries.push({
+        name: categoryName,
+        type: 'area',
+        data: data,
+        color: color,
+        fillColor: {
+          type: 'gradient',
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.9,
+            opacityTo: 0.3,
+            stops: [0, 100]
+          }
+        }
+      })
+    })
+  }
+  
+  // 2. Build NEGATIVE transfers BEFORE sorting
+  if (isTypeVisible('transfers')) {
+    const transfersByCategory = buildTransfersByCategory()
+    
+    Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
+      const color = getCategoryColor(categoryStore.categories, categoryName)
+      
+      const negativeData = timelineData.value.map(d => {
+        const value = dateMap.get(d.date) || 0
+        return { x: d.date, y: value < 0 ? value : 0 }
+      })
+      
+      if (negativeData.some(p => p.y < 0)) {
+        negativeTransferSeries.push({
+          name: `${categoryName} (Out)`,
           type: 'area',
-          data: data,
+          data: negativeData,
           color: color,
           fillColor: {
             type: 'gradient',
             gradient: {
               shadeIntensity: 1,
-              opacityFrom: 0.9,  // More opaque at the edge
-              opacityTo: 0.3,    // Fade out toward zero line
+              opacityFrom: 0.9,
+              opacityTo: 0.3,
               stops: [0, 100]
             }
           }
         })
-      })
-    }
+      }
+    })
+  }
+  
+  // 3. NOW sort and add to series
+  expenseSeries.sort((a, b) => a.name.localeCompare(b.name))
+  negativeTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
+  
+  series.push(...expenseSeries)
+  series.push(...negativeTransferSeries)
+  
+  // ========== BUILD POSITIVE STACK ==========
+  const incomeSeries = []
+  const positiveTransferSeries = []
+  
+  // 4. Build income
+  if (isTypeVisible('income')) {
+    const incomeByCategory = buildIncomeByCategory()
     
-    // 2. Collect NEGATIVE TRANSFERS (stack with expenses)
-    if (isTypeVisible('transfers')) {
-      const transfersByCategory = buildTransfersByCategory()
+    Object.entries(incomeByCategory).forEach(([categoryName, dateMap]) => {
+      const color = getCategoryColor(categoryStore.categories, categoryName)
       
-      Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        // Only include NEGATIVE values in this series
-        const data = timelineData.value.map(d => {
-          const value = dateMap.get(d.date) || 0
-          return {
-            x: d.date,
-            y: value < 0 ? value : 0  // Only negative transfers
+      const data = timelineData.value.map(d => ({
+        x: d.date,
+        y: Math.abs(dateMap.get(d.date) || 0)
+      }))
+      
+      incomeSeries.push({
+        name: categoryName,
+        type: 'area',
+        data: data,
+        color: color,
+        fillColor: {
+          type: 'gradient',
+          gradient: {
+            shadeIntensity: 1,
+            opacityFrom: 0.9,
+            opacityTo: 0.3,
+            stops: [0, 100]
           }
-        })
-        
-        // Only add if there are any negative values
-        const hasNegativeValues = data.some(point => point.y < 0)
-        if (hasNegativeValues) {
-          negativeTransferSeries.push({
-            name: `${categoryName} (Out)`,
-            type: 'area',
-            data: data,
-            color: color,
-            fillColor: {
-              type: 'gradient',
-              gradient: {
-                shadeIntensity: 1,
-                opacityFrom: 0.9,
-                opacityTo: 0.3,
-                stops: [0, 100]
-              }
-            }
-          })
         }
       })
-    }
+    })
+  }
+  
+  // 5. Build POSITIVE transfers BEFORE sorting
+  if (isTypeVisible('transfers')) {
+    const transfersByCategory = buildTransfersByCategory()
     
-    // Sort ALPHABETICALLY (A-Z) so closest to zero is 'A', furthest is 'Z'
-    expenseSeries.sort((a, b) => a.name.localeCompare(b.name))
-    negativeTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
-    
-    series.push(...expenseSeries)
-    series.push(...negativeTransferSeries)
-    
-    // ========== POSITIVE STACK (above zero line) ==========
-    // Build arrays first, then SORT ALPHABETICALLY
-    
-    const incomeSeries = []
-    const positiveTransferSeries = []
-    
-    // 3. Collect INCOME (always positive)
-    if (isTypeVisible('income')) {
-      const incomeByCategory = buildIncomeByCategory()
+    Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
+      const color = getCategoryColor(categoryStore.categories, categoryName)
       
-      Object.entries(incomeByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const data = timelineData.value.map(d => ({
-          x: d.date,
-          y: Math.abs(dateMap.get(d.date) || 0)  // CRITICAL: Force positive for income
-        }))
-        
-        incomeSeries.push({
-          name: categoryName,
+      const positiveData = timelineData.value.map(d => {
+        const value = dateMap.get(d.date) || 0
+        return { x: d.date, y: value > 0 ? value : 0 }
+      })
+      
+      if (positiveData.some(p => p.y > 0)) {
+        positiveTransferSeries.push({
+          name: `${categoryName} (In)`,
           type: 'area',
-          data: data,
+          data: positiveData,
           color: color,
           fillColor: {
             type: 'gradient',
             gradient: {
               shadeIntensity: 1,
-              opacityFrom: 0.9,  // More opaque at the edge
-              opacityTo: 0.3,    // Fade out toward zero line
+              opacityFrom: 0.9,
+              opacityTo: 0.3,
               stops: [0, 100]
             }
           }
         })
-      })
-    }
-    
-    // 4. Collect POSITIVE TRANSFERS (stack with income)
-    if (isTypeVisible('transfers')) {
-      const transfersByCategory = buildTransfersByCategory()
-      
-      Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        // Only include POSITIVE values in this series
-        const data = timelineData.value.map(d => {
-          const value = dateMap.get(d.date) || 0
-          return {
-            x: d.date,
-            y: value > 0 ? value : 0  // Only positive transfers
-          }
-        })
-        
-        // Only add if there are any positive values
-        const hasPositiveValues = data.some(point => point.y > 0)
-        if (hasPositiveValues) {
-          positiveTransferSeries.push({
-            name: `${categoryName} (In)`,
-            type: 'area',
-            data: data,
-            color: color,
-            fillColor: {
-              type: 'gradient',
-              gradient: {
-                shadeIntensity: 1,
-                opacityFrom: 0.9,
-                opacityTo: 0.3,
-                stops: [0, 100]
-              }
-            }
-          })
-        }
-      })
-    }
-    
-    // Sort ALPHABETICALLY (A-Z) so closest to zero is 'A', furthest is 'Z'
-    incomeSeries.sort((a, b) => a.name.localeCompare(b.name))
-    positiveTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
-    
-    series.push(...incomeSeries)
-    series.push(...positiveTransferSeries)
-    
-    // TODO: Add targets visualization here when target data becomes available
-    if (isTypeVisible('targets')) {
-      // Future implementation for targets visualization
-    }
-    
-    return series
-  })
+      }
+    })
+  }
+  
+  // 6. NOW sort and add to series
+  incomeSeries.sort((a, b) => a.name.localeCompare(b.name))
+  positiveTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
+  
+  series.push(...incomeSeries)
+  series.push(...positiveTransferSeries)
+  
+  return series
+})
   
   /**
    * Calculate max Y-axis value with dynamic zero-line positioning
