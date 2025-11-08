@@ -110,21 +110,25 @@ class TransactionImportService:
                 elif import_mode == "account" and account:
                     transaction_account_id = str(account.id)
                 
-                # Auto-categorize
+                # Auto-categorize with auto-creation
                 if auto_categorize:
                     csv_main = trans_data.get('main_category', '')
                     csv_cat = trans_data.get('category', '')
                     csv_subcat = trans_data.get('subcategory', '')
                     
-                    category = await self.category_service.find_category_for_csv(
-                        csv_main, csv_cat, csv_subcat
-                    )
-                    
-                    if category:
-                        category_id = category.id
-                        confidence_score = 0.95
-                        source_category = 'csv_mapped'
-                        categorization_stats['csv_exact'] += 1
+                    # Use ensure_categories_from_csv to auto-create if needed
+                    if csv_main:
+                        category = await self.category_service.ensure_categories_from_csv(
+                            csv_main, csv_cat, csv_subcat
+                        )
+                        
+                        if category:
+                            category_id = category.id
+                            confidence_score = 0.95
+                            source_category = 'csv_mapped'
+                            categorization_stats['csv_exact'] += 1
+                        else:
+                            categorization_stats['none'] += 1
                     else:
                         categorization_stats['none'] += 1
                 

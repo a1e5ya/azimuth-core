@@ -9,6 +9,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import date
 import uuid
 import random
+import hashlib
 from difflib import SequenceMatcher
 from collections import defaultdict
 from fastapi import Depends, HTTPException
@@ -509,8 +510,170 @@ class CategoryService:
         }
     
     # ========================================================================
-    # CSV MAPPING & MATCHING
+    # CSV MAPPING & AUTO-CREATION
     # ========================================================================
+    
+    async def ensure_categories_from_csv(
+        self, main_category: str, category: str = None, subcategory: str = None
+    ) -> Optional[Category]:
+        """
+        Ensure categories exist from CSV data, creating them if needed.
+        Returns the most specific category (subcategory > category > main_category).
+        """
+        if not main_category:
+            return None
+        
+        # Map CSV main categories to our type system
+        type_map = {
+            'INCOME': 'income',
+            'EXPENSES': 'expenses', 
+            'TRANSFERS': 'transfers',
+            'TARGETS': 'targets'
+        }
+        
+        category_type = type_map.get(main_category.upper(), 'expenses')
+        
+        # Get or create main type category
+        type_query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.category_type == category_type,
+                Category.parent_id.is_(None)
+            )
+        )
+        type_result = await self.db.execute(type_query)
+        type_category = type_result.scalar_one_or_none()
+        
+        if not type_category:
+            # Create main type category if missing
+            type_data = DEFAULT_CATEGORIES.get(category_type)
+            if type_data:
+                color = type_data.get('color', '#94a3b8')
+                icon = type_data.get('icon', 'apps-sort')
+            else:
+                color = '#94a3b8'
+                icon = 'apps-sort'
+            
+            type_category = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=None,
+                name=main_category.upper(),
+                code=category_type,
+                icon=icon,
+                color=color,
+                category_type=category_type,
+                active=True
+            )
+            self.db.add(type_category)
+            await self.db.flush()
+        
+        if not category:
+            return type_category
+        
+        # Get or create mid-level category
+        mid_query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.parent_id == type_category.id,
+                Category.name == category
+            )
+        )
+        mid_result = await self.db.execute(mid_query)
+        mid_category = mid_result.scalar_one_or_none()
+        
+        if not mid_category:
+            # Try to find a matching default category for better icon/color
+            default_cat = None
+            if category_type in DEFAULT_CATEGORIES:
+                for cat_data in DEFAULT_CATEGORIES[category_type].get('categories', []):
+                    if cat_data['name'].lower() == category.lower():
+                        default_cat = cat_data
+                        break
+            
+            if default_cat:
+                color = default_cat.get('color', '#94a3b8')
+                icon = default_cat.get('icon', 'circle')
+            else:
+                # Auto-generate color based on category name hash
+                color_hash = int(hashlib.md5(category.encode()).hexdigest()[:6], 16)
+                color = f"#{format(color_hash % 0xFFFFFF, '06x')}"
+                icon = 'circle'
+            
+            mid_category = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=type_category.id,
+                name=category,
+                icon=icon,
+                color=color,
+                category_type=category_type,
+                active=True
+            )
+            self.db.add(mid_category)
+            await self.db.flush()
+        
+        if not subcategory:
+            return mid_category
+        
+        # Get or create subcategory
+        sub_query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.parent_id == mid_category.id,
+                Category.name == subcategory
+            )
+        )
+        sub_result = await self.db.execute(sub_query)
+        sub_category = sub_result.scalar_one_or_none()
+        
+        if not sub_category:
+            # Try to find matching default subcategory
+            default_subcat = None
+            if category_type in DEFAULT_CATEGORIES:
+                for cat_data in DEFAULT_CATEGORIES[category_type].get('categories', []):
+                    if cat_data['name'].lower() == category.lower():
+                        for subcat_data in cat_data.get('subcategories', []):
+                            if subcat_data['name'].lower() == subcategory.lower():
+                                default_subcat = subcat_data
+                                break
+                        break
+            
+            if default_subcat:
+                icon = default_subcat.get('icon', 'circle')
+                # Use a lighter shade of parent color
+                parent_color = mid_category.color or '#94a3b8'
+                if parent_color.startswith('#'):
+                    r = int(parent_color[1:3], 16)
+                    g = int(parent_color[3:5], 16)
+                    b = int(parent_color[5:7], 16)
+                    # Lighten by mixing with white
+                    r = min(255, r + (255 - r) // 2)
+                    g = min(255, g + (255 - g) // 2)
+                    b = min(255, b + (255 - b) // 2)
+                    color = f"#{r:02x}{g:02x}{b:02x}"
+                else:
+                    color = parent_color
+            else:
+                # Lighter color for subcategory
+                color_hash = int(hashlib.md5(subcategory.encode()).hexdigest()[:6], 16)
+                color = f"#{format((color_hash % 0xFFFFFF) | 0x808080, '06x')}"
+                icon = 'circle'
+            
+            sub_category = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=mid_category.id,
+                name=subcategory,
+                icon=icon,
+                color=color,
+                category_type=category_type,
+                active=True
+            )
+            self.db.add(sub_category)
+            await self.db.flush()
+        
+        return sub_category
     
     async def find_category_for_csv(
         self, csv_main: str, csv_cat: str, csv_subcat: str

@@ -4,7 +4,7 @@ Main transactions router with CRUD operations - FIXED IMPORTS
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, distinct
 from typing import List, Optional
 from datetime import date, datetime
 import uuid
@@ -169,21 +169,76 @@ async def get_filter_metadata(
     db: AsyncSession = Depends(get_db)
 ):
     """Get unique values for filter dropdowns"""
-    from sqlalchemy import distinct
     
-    owners_query = select(distinct(Transaction.owner)).where(
-        and_(Transaction.user_id == current_user.id, Transaction.owner.isnot(None))
-    )
-    owners_result = await db.execute(owners_query)
-    unique_owners = [row[0] for row in owners_result]
+    # Get unique owners and their account types
+    owner_account_map = {}
     
-    account_types_query = select(distinct(Transaction.bank_account_type)).where(
-        and_(Transaction.user_id == current_user.id, Transaction.bank_account_type.isnot(None))
+    owner_account_query = select(
+        distinct(Transaction.owner, Transaction.bank_account_type)
+    ).where(
+        and_(
+            Transaction.user_id == current_user.id,
+            Transaction.owner.isnot(None),
+            Transaction.bank_account_type.isnot(None)
+        )
     )
-    account_types_result = await db.execute(account_types_query)
-    unique_account_types = [row[0] for row in account_types_result]
+    owner_account_result = await db.execute(owner_account_query)
+    
+    for owner, account_type in owner_account_result:
+        if owner not in owner_account_map:
+            owner_account_map[owner] = []
+        if account_type not in owner_account_map[owner]:
+            owner_account_map[owner].append(account_type)
+    
+    # Sort account types for each owner
+    for owner in owner_account_map:
+        owner_account_map[owner].sort()
+    
+    # Get unique main categories and build category/subcategory maps
+    main_categories = set()
+    category_map = {}
+    subcategory_map = {}
+    
+    category_query = select(
+        Transaction.main_category,
+        Transaction.category,
+        Transaction.subcategory
+    ).where(
+        and_(
+            Transaction.user_id == current_user.id,
+            Transaction.main_category.isnot(None)
+        )
+    ).distinct()
+    
+    category_result = await db.execute(category_query)
+    
+    for main_cat, cat, subcat in category_result:
+        if main_cat:
+            main_categories.add(main_cat)
+            
+            if cat:
+                if main_cat not in category_map:
+                    category_map[main_cat] = set()
+                category_map[main_cat].add(cat)
+                
+                if subcat:
+                    key = f"{main_cat}|{cat}"
+                    if key not in subcategory_map:
+                        subcategory_map[key] = set()
+                    subcategory_map[key].add(subcat)
+    
+    # Convert sets to sorted lists
+    category_map_list = {}
+    for main_cat, cats in category_map.items():
+        category_map_list[main_cat] = sorted(list(cats))
+    
+    subcategory_map_list = {}
+    for key, subcats in subcategory_map.items():
+        subcategory_map_list[key] = sorted(list(subcats))
     
     return {
-        "owners": unique_owners,
-        "account_types": unique_account_types
+        "ownerAccountMap": owner_account_map,
+        "mainCategories": sorted(list(main_categories)),
+        "categoryMap": category_map_list,
+        "subcategoryMap": subcategory_map_list
     }
