@@ -6,7 +6,7 @@
       <div class="zoom-controls">
         <button 
           class="btn btn-icon"
-          :disabled="currentZoomLevel <= 0"
+          :disabled="currentZoomLevel <= -1"
           @click="$emit('zoom-out')"
           title="Zoom Out"
         >
@@ -15,7 +15,7 @@
         
         <button 
           class="btn btn-icon"
-          :disabled="currentZoomLevel >= 2"
+          :disabled="currentZoomLevel >= 1"
           @click="$emit('zoom-in')"
           title="Zoom In"
         >

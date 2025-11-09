@@ -46,11 +46,12 @@
         </div>
         
         <!-- 3. Scrollbar BELOW the chart -->
-        <TimelineScrollbar
+        <TimelineYearSelector
           :full-range-start="fullRangeStart"
           :full-range-end="fullRangeEnd"
           :visible-range-start="visibleRangeStart"
           :visible-range-end="visibleRangeEnd"
+          :current-zoom-level="currentZoomLevel"
           @scroll-to="handleScrollTo"
         />
         
@@ -74,7 +75,7 @@ import { useTimelineChart } from '@/composables/useTimelineChart'
 import TimelineCategoryLegend from './TimelineCategoryLegend.vue'
 import TimelineChart from './TimelineChart.vue'
 import TimelineControls from './TimelineControls.vue'
-import TimelineScrollbar from './TimelineScrollbar.vue'
+import TimelineYearSelector from './TimelineYearSelector.vue'
 import TimelineHoverInfo from './TimelineHoverInfo.vue'
 
 export default {
@@ -83,7 +84,7 @@ export default {
     TimelineCategoryLegend,
     TimelineChart,
     TimelineControls,
-    TimelineScrollbar,
+    TimelineYearSelector,
     TimelineHoverInfo
   },
   setup() {
@@ -237,30 +238,7 @@ export default {
     watch(() => currentZoomLevel.value, (newLevel) => {
       console.log('Zoom level:', newLevel)
       unpinHoverData()
-      
-      // Set appropriate visible range based on zoom level
-      if (!dateRange.value.end) {
-        customVisibleRange.value = null
-        return
-      }
-      
-      const end = new Date(dateRange.value.end)
-      let start
-      
-      if (newLevel === 0) {
-        // Quarter view - show all data
-        customVisibleRange.value = null
-      } else if (newLevel === 1) {
-        // Month view - show last 12 months
-        start = new Date(end)
-        start.setFullYear(start.getFullYear() - 1)
-        customVisibleRange.value = { start, end }
-      } else if (newLevel === 2) {
-        // Day view - show last 90 days
-        start = new Date(end)
-        start.setDate(start.getDate() - 90)
-        customVisibleRange.value = { start, end }
-      }
+      customVisibleRange.value = null // Reset custom range on zoom change
     })
     
     watch(() => currentMode.value, (newMode) => {

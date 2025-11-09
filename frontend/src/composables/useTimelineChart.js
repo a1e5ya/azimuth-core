@@ -14,8 +14,8 @@ import {
 function getPeriodName(date, grouping) {
   const d = new Date(date)
   
-  if (grouping === 'day') {
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  if (grouping === 'year') {
+    return d.getFullYear().toString()
   } else if (grouping === 'month') {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   } else if (grouping === 'quarter') {
@@ -49,6 +49,11 @@ export function useTimelineChart(
 ) {
   const hoveredData = ref(null)
   const isPinned = ref(false)
+  const yAxisValues = ref({ maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false })
+  
+  // Memoization for expensive category builds
+  const memoizedCategoryData = ref(null)
+  const lastVisibilityHash = ref('')
   
   const {
     isTypeVisible,
@@ -96,269 +101,165 @@ export function useTimelineChart(
   
   // Get current grouping
   const currentGrouping = computed(() => {
-    if (!timelineData.value[0] || !timelineData.value[1]) return 'day'
+    if (!timelineData.value[0] || !timelineData.value[1]) return 'quarter'
     const diff = timelineData.value[1]?.date - timelineData.value[0]?.date
+    if (diff > 86400000 * 300) return 'year' // More than ~300 days = year
     if (diff > 86400000 * 60) return 'quarter'
-    if (diff > 86400000 * 25) return 'month'
-    return 'day'
+    return 'month'
   })
   
   /**
-   * Build expenses by category for chart series
+   * Create hash of current visibility state for memoization
    */
-  function buildExpensesByCategory() {
+  function getVisibilityHash() {
+    return JSON.stringify({
+      types: visibilityState.visibleTypes.value.slice().sort(),
+      cats: visibilityState.visibleCategories.value.slice().sort(),
+      subcats: visibilityState.visibleSubcategories.value.slice().sort(),
+      expanded: visibilityState.expandedCategories.value.slice().sort()
+    })
+  }
+  
+  /**
+   * OPTIMIZED: Single-pass category builder
+   * Processes all transactions once instead of 3 separate loops
+   */
+  function buildAllCategoriesSinglePass() {
+    const currentVisibilityHash = getVisibilityHash()
+    
+    // Return memoized data if visibility hasn't changed
+    if (memoizedCategoryData.value && lastVisibilityHash.value === currentVisibilityHash) {
+      return memoizedCategoryData.value
+    }
+    
     const expensesByCategory = {}
-    const currentGroupingValue = currentGrouping.value
-    
-    transactions.value
-      .filter(t => {
-        const mainCat = (t.main_category || '').toUpperCase()
-        return mainCat === 'EXPENSES'
-      })
-      .forEach(t => {
-        const subcategoryName = t.subcategory
-        const categoryName = t.category || 'Uncategorized'
-        const amount = Math.abs(parseFloat(t.amount))
-        
-        const allCategories = [
-          ...expenseCategories.value,
-          ...incomeCategories.value,
-          ...transferCategories.value,
-          ...targetCategories.value
-        ]
-        
-        const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
-        
-        let displayName = categoryName
-        let shouldInclude = true
-        
-        if (parentCategory) {
-          if (!isCategoryVisible(parentCategory.id)) {
-            shouldInclude = false
-          } else {
-            if (isCategoryExpanded(parentCategory.id)) {
-              if (subcategoryName) {
-                const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
-                if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
-                  displayName = subcategoryName
-                } else {
-                  shouldInclude = false
-                }
-              } else {
-                displayName = categoryName
-              }
-            } else {
-              displayName = parentCategory.name
-            }
-          }
-        } else {
-          const categoryId = findCategoryId(categoryStore.categories, categoryName)
-          if (categoryId && isCategoryVisible(categoryId)) {
-            displayName = categoryName
-          } else {
-            shouldInclude = false
-          }
-        }
-        
-        if (!shouldInclude) return
-        
-        if (!expensesByCategory[displayName]) {
-          expensesByCategory[displayName] = new Map()
-        }
-        
-        const date = new Date(t.posted_at)
-        let key
-        
-        if (currentGroupingValue === 'quarter') {
-          const quarter = Math.floor(date.getMonth() / 3)
-          const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
-          key = quarterStart.getTime()
-        } else if (currentGroupingValue === 'month') {
-          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
-          key = monthStart.getTime()
-        } else {
-          key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-        }
-        
-        expensesByCategory[displayName].set(
-          key, 
-          (expensesByCategory[displayName].get(key) || 0) + amount
-        )
-      })
-    
-    return expensesByCategory
-  }
-  
-  /**
-   * Build income by category for chart series
-   */
-  function buildIncomeByCategory() {
     const incomeByCategory = {}
-    const currentGroupingValue = currentGrouping.value
-    
-    transactions.value
-      .filter(t => {
-        const mainCat = (t.main_category || '').toUpperCase()
-        return mainCat === 'INCOME'
-      })
-      .forEach(t => {
-        const subcategoryName = t.subcategory
-        const categoryName = t.category || 'Income'
-        const amount = Math.abs(parseFloat(t.amount))
-        
-        const allCategories = [
-          ...expenseCategories.value,
-          ...incomeCategories.value,
-          ...transferCategories.value,
-          ...targetCategories.value
-        ]
-        
-        const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
-        
-        let displayName = categoryName
-        let shouldInclude = true
-        
-        if (parentCategory) {
-          if (!isCategoryVisible(parentCategory.id)) {
-            shouldInclude = false
-          } else {
-            if (isCategoryExpanded(parentCategory.id)) {
-              if (subcategoryName) {
-                const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
-                if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
-                  displayName = subcategoryName
-                } else {
-                  shouldInclude = false
-                }
-              } else {
-                displayName = categoryName
-              }
-            } else {
-              displayName = parentCategory.name
-            }
-          }
-        } else {
-          const categoryId = findCategoryId(categoryStore.categories, categoryName)
-          if (categoryId && isCategoryVisible(categoryId)) {
-            displayName = categoryName
-          } else {
-            shouldInclude = false
-          }
-        }
-        
-        if (!shouldInclude) return
-        
-        if (!incomeByCategory[displayName]) {
-          incomeByCategory[displayName] = new Map()
-        }
-        
-        const date = new Date(t.posted_at)
-        let key
-        
-        if (currentGroupingValue === 'quarter') {
-          const quarter = Math.floor(date.getMonth() / 3)
-          const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
-          key = quarterStart.getTime()
-        } else if (currentGroupingValue === 'month') {
-          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
-          key = monthStart.getTime()
-        } else {
-          key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-        }
-        
-        incomeByCategory[displayName].set(
-          key,
-          (incomeByCategory[displayName].get(key) || 0) + Math.abs(amount)
-        )
-      })
-    
-    return incomeByCategory
-  }
-  
-  /**
-   * Build transfers by category for chart series
-   */
-  function buildTransfersByCategory() {
     const transfersByCategory = {}
     const currentGroupingValue = currentGrouping.value
     
-    transactions.value
-      .filter(t => {
-        const mainCat = (t.main_category || '').toUpperCase()
-        return mainCat === 'TRANSFERS'
-      })
-      .forEach(t => {
-        const subcategoryName = t.subcategory
-        const categoryName = t.category || 'Transfer'
-        const amount = parseFloat(t.amount)
-        
-        const allCategories = [
-          ...expenseCategories.value,
-          ...incomeCategories.value,
-          ...transferCategories.value,
-          ...targetCategories.value
-        ]
-        
-        const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
-        
-        let displayName = categoryName
-        let shouldInclude = true
-        
-        if (parentCategory) {
-          if (!isCategoryVisible(parentCategory.id)) {
-            shouldInclude = false
-          } else {
-            if (isCategoryExpanded(parentCategory.id)) {
-              if (subcategoryName) {
-                const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
-                if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
-                  displayName = subcategoryName
-                } else {
-                  shouldInclude = false
-                }
+    const allCategories = [
+      ...expenseCategories.value,
+      ...incomeCategories.value,
+      ...transferCategories.value,
+      ...targetCategories.value
+    ]
+    
+    // SINGLE PASS through all transactions
+    transactions.value.forEach(t => {
+      const mainCat = (t.main_category || '').toUpperCase()
+      const subcategoryName = t.subcategory
+      const categoryName = t.category || 'Uncategorized'
+      const amount = Math.abs(parseFloat(t.amount))
+      const rawAmount = parseFloat(t.amount)
+      
+      // Determine display name and visibility
+      const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
+      let displayName = categoryName
+      let shouldInclude = true
+      
+      if (parentCategory) {
+        if (!isCategoryVisible(parentCategory.id)) {
+          shouldInclude = false
+        } else {
+          if (isCategoryExpanded(parentCategory.id)) {
+            if (subcategoryName) {
+              const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
+              if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
+                displayName = subcategoryName
               } else {
-                displayName = categoryName
+                shouldInclude = false
               }
             } else {
-              displayName = parentCategory.name
+              displayName = categoryName
             }
-          }
-        } else {
-          const categoryId = findCategoryId(categoryStore.categories, categoryName)
-          if (categoryId && isCategoryVisible(categoryId)) {
-            displayName = categoryName
           } else {
-            shouldInclude = false
+            displayName = parentCategory.name
           }
         }
-        
-        if (!shouldInclude) return
-        
+      } else {
+        const categoryId = findCategoryId(categoryStore.categories, categoryName)
+        if (categoryId && isCategoryVisible(categoryId)) {
+          displayName = categoryName
+        } else {
+          shouldInclude = false
+        }
+      }
+      
+      if (!shouldInclude) return
+      
+      // Calculate date key once
+      const date = new Date(t.posted_at)
+      let key
+      
+      if (currentGroupingValue === 'year') {
+        const yearStart = new Date(date.getFullYear(), 0, 1)
+        key = yearStart.getTime()
+      } else if (currentGroupingValue === 'quarter') {
+        const quarter = Math.floor(date.getMonth() / 3)
+        const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
+        key = quarterStart.getTime()
+      } else if (currentGroupingValue === 'month') {
+        const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
+        key = monthStart.getTime()
+      } else {
+        key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
+      }
+      
+      // Add to appropriate category map
+      if (mainCat === 'EXPENSES') {
+        if (!expensesByCategory[displayName]) {
+          expensesByCategory[displayName] = new Map()
+        }
+        expensesByCategory[displayName].set(
+          key,
+          (expensesByCategory[displayName].get(key) || 0) + amount
+        )
+      } else if (mainCat === 'INCOME') {
+        if (!incomeByCategory[displayName]) {
+          incomeByCategory[displayName] = new Map()
+        }
+        incomeByCategory[displayName].set(
+          key,
+          (incomeByCategory[displayName].get(key) || 0) + amount
+        )
+      } else if (mainCat === 'TRANSFERS') {
         if (!transfersByCategory[displayName]) {
           transfersByCategory[displayName] = new Map()
         }
-        
-        const date = new Date(t.posted_at)
-        let key
-        
-        if (currentGroupingValue === 'quarter') {
-          const quarter = Math.floor(date.getMonth() / 3)
-          const quarterStart = new Date(date.getFullYear(), quarter * 3, 1)
-          key = quarterStart.getTime()
-        } else if (currentGroupingValue === 'month') {
-          const monthStart = new Date(date.getFullYear(), date.getMonth(), 1)
-          key = monthStart.getTime()
-        } else {
-          key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
-        }
-        
         transfersByCategory[displayName].set(
           key,
-          (transfersByCategory[displayName].get(key) || 0) + amount
+          (transfersByCategory[displayName].get(key) || 0) + rawAmount
         )
-      })
+      }
+    })
     
-    return transfersByCategory
+    // Memoize result
+    const result = { expensesByCategory, incomeByCategory, transfersByCategory }
+    memoizedCategoryData.value = result
+    lastVisibilityHash.value = currentVisibilityHash
+    
+    return result
+  }
+  
+  /**
+   * Build expenses by category for chart series (DEPRECATED - now uses single pass)
+   */
+  function buildExpensesByCategory() {
+    return buildAllCategoriesSinglePass().expensesByCategory
+  }
+  
+  /**
+   * Build income by category for chart series (DEPRECATED - now uses single pass)
+   */
+  function buildIncomeByCategory() {
+    return buildAllCategoriesSinglePass().incomeByCategory
+  }
+  
+  /**
+   * Build transfers by category for chart series (DEPRECATED - now uses single pass)
+   */
+  function buildTransfersByCategory() {
+    return buildAllCategoriesSinglePass().transfersByCategory
   }
   
   /**
@@ -477,9 +378,10 @@ export function useTimelineChart(
   })
   
   /**
-   * Calculate max Y-axis values
+   * Calculate max Y-axis values from chart series
+   * For level 1, only calculate from visible date range
    */
-  const yAxisMax = computed(() => {
+  function calculateYAxisMax() {
     if (!chartSeries.value.length || !timelineData.value.length) {
       return { maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false }
     }
@@ -489,12 +391,25 @@ export function useTimelineChart(
     let hasPositive = false
     let hasNegative = false
     
-    timelineData.value.forEach((dataPoint, index) => {
+    // Filter to visible range if on level 1
+    const visibleRange = visibleDateRange.value
+    const dataToAnalyze = (currentZoomLevel.value === 1 && visibleRange)
+      ? timelineData.value.filter(d => {
+          const date = d.date
+          return date >= visibleRange.start.getTime() && date <= visibleRange.end.getTime()
+        })
+      : timelineData.value
+    
+    dataToAnalyze.forEach((dataPoint, index) => {
+      // Find actual index in full timeline for series lookup
+      const actualIndex = timelineData.value.findIndex(d => d.date === dataPoint.date)
+      if (actualIndex === -1) return
+      
       let cumulativePositive = 0
       let cumulativeNegative = 0
       
       chartSeries.value.forEach(series => {
-        const point = series.data[index]
+        const point = series.data[actualIndex]
         if (point && point.y) {
           if (point.y > 0) {
             cumulativePositive += point.y
@@ -523,7 +438,7 @@ export function useTimelineChart(
       hasPositive,
       hasNegative
     }
-  })
+  }
   
   /**
    * Handle chart hover event
@@ -604,12 +519,69 @@ export function useTimelineChart(
     }
   })
   
+  // Debounced visibility watcher - only recalculate after 50ms of no changes
+  let visibilityDebounceTimer = null
+  watch([
+    () => visibilityState.visibleCategories.value,
+    () => visibilityState.visibleSubcategories.value,
+    () => visibilityState.expandedCategories.value
+  ], () => {
+    if (visibilityDebounceTimer) {
+      clearTimeout(visibilityDebounceTimer)
+    }
+    visibilityDebounceTimer = setTimeout(() => {
+      // Invalidate memoization cache
+      memoizedCategoryData.value = null
+      yAxisValues.value = calculateYAxisMax()
+      console.log('📏 Y-axis recalculated after visibility change')
+    }, 50)
+  }, { deep: true })
+  
+  // Recalculate Y-axis ONLY on zoom (immediate, no debounce)
+  watch(currentZoomLevel, () => {
+    memoizedCategoryData.value = null // Invalidate cache
+    yAxisValues.value = calculateYAxisMax()
+    console.log('📏 Y-axis recalculated on zoom')
+  })
+  
+  // Update X-axis range via updateOptions when scrollbar changes (no rebuild)
+  watch(() => visibleDateRange.value, (newRange, oldRange) => {
+    const chart = chartRef?.value?.chart
+    if (!chart || !newRange) return
+    
+    // On level 1, recalculate Y-axis for the visible range whenever it changes
+    if (currentZoomLevel.value === 1) {
+      // Force recalculation by invalidating cache
+      memoizedCategoryData.value = null
+      yAxisValues.value = calculateYAxisMax()
+      console.log('📏 Y-axis recalculated for year range:', yAxisValues.value)
+    }
+    
+    // Update x-axis without animation
+    chart.updateOptions({
+      xaxis: {
+        min: newRange.start.getTime(),
+        max: newRange.end.getTime()
+      },
+      yaxis: {
+        min: yAxisValues.value.hasPositive && yAxisValues.value.hasNegative 
+          ? -Math.max(yAxisValues.value.maxPositive, yAxisValues.value.maxNegative)
+          : yAxisValues.value.hasPositive ? 0 : -yAxisValues.value.maxNegative,
+        max: yAxisValues.value.hasPositive && yAxisValues.value.hasNegative
+          ? Math.max(yAxisValues.value.maxPositive, yAxisValues.value.maxNegative)
+          : yAxisValues.value.hasPositive ? yAxisValues.value.maxPositive : 0
+      }
+    }, false, false) // false = no redraw, false = no animation
+    
+    console.log('📊 X-axis and Y-axis updated')
+  }, { deep: true })
+  
   /**
    * Build chart options - TWO Y-AXES VERSION
    */
 const chartOptions = computed(() => {
   const range = visibleDateRange.value
-  const yAxis = yAxisMax.value
+  const yAxis = yAxisValues.value
   
   // Dynamic zero-line positioning
   let yMin, yMax
@@ -643,14 +615,16 @@ const chartOptions = computed(() => {
         enabled: false
       },
       animations: {
-        enabled: true,
-        easing: 'easeinout',
-        speed: 200,
+        enabled: false,
+        easing: 'linear',
+        speed: 0,
         animateGradually: {
-          enabled: false
+          enabled: false,
+          delay: 0
         },
         dynamicAnimation: {
-          enabled: false
+          enabled: false,
+          speed: 0
         }
       },
       events: {
@@ -775,10 +749,6 @@ const chartOptions = computed(() => {
     }
   }
 })
-  
-  watch(() => visibleDateRange.value, (newRange) => {
-    console.log('📊 Chart visible range updated:', newRange)
-  }, { deep: true })
   
   return {
     hoveredData,

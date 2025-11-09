@@ -12,7 +12,7 @@ export function useTimelineData() {
   
   const loading = ref(false)
   const transactions = ref([])
-  const currentZoomLevel = ref(0)
+  const currentZoomLevel = ref(0) // Start at quarter view
   
   const dateRange = ref({
     start: null,
@@ -87,24 +87,26 @@ export function useTimelineData() {
   
   /**
    * Zoom in (increase detail level)
+   * -1: Year → 0: Quarter → 1: Month
    */
   function zoomIn() {
-    if (currentZoomLevel.value < 2) {
+    if (currentZoomLevel.value < 1) {
       currentZoomLevel.value++
     }
   }
   
   /**
    * Zoom out (decrease detail level)
+   * 1: Month → 0: Quarter → -1: Year
    */
   function zoomOut() {
-    if (currentZoomLevel.value > 0) {
+    if (currentZoomLevel.value > -1) {
       currentZoomLevel.value--
     }
   }
   
   /**
-   * Reset zoom to default level
+   * Reset zoom to default level (quarter view)
    */
   function resetZoom() {
     currentZoomLevel.value = 0
