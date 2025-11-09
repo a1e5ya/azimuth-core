@@ -9,6 +9,32 @@ import {
 } from '@/utils/timelineHelpers'
 
 /**
+ * Get period name from date and grouping
+ */
+function getPeriodName(date, grouping) {
+  const d = new Date(date)
+  
+  if (grouping === 'day') {
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+  } else if (grouping === 'month') {
+    return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+  } else if (grouping === 'quarter') {
+    // Show month range instead of Q1
+    const quarter = Math.floor(d.getMonth() / 3)
+    const startMonth = quarter * 3
+    const endMonth = startMonth + 2
+    const startDate = new Date(d.getFullYear(), startMonth, 1)
+    const endDate = new Date(d.getFullYear(), endMonth + 1, 0)
+    
+    const start = startDate.toLocaleDateString('en-US', { month: 'short' })
+    const end = endDate.toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
+    return `${start} - ${end}`
+  }
+  
+  return d.toLocaleDateString()
+}
+
+/**
  * Composable for managing timeline chart configuration and series
  */
 export function useTimelineChart(
@@ -18,7 +44,8 @@ export function useTimelineChart(
   currentZoomLevel,
   categoryStore,
   visibilityState,
-  customVisibleRange = null
+  customVisibleRange = null,
+  chartRef = null
 ) {
   const hoveredData = ref(null)
   const isPinned = ref(false)
@@ -67,14 +94,21 @@ export function useTimelineChart(
     )
   })
   
+  // Get current grouping
+  const currentGrouping = computed(() => {
+    if (!timelineData.value[0] || !timelineData.value[1]) return 'day'
+    const diff = timelineData.value[1]?.date - timelineData.value[0]?.date
+    if (diff > 86400000 * 60) return 'quarter'
+    if (diff > 86400000 * 25) return 'month'
+    return 'day'
+  })
+  
   /**
    * Build expenses by category for chart series
    */
   function buildExpensesByCategory() {
     const expensesByCategory = {}
-    const currentGroupingValue = timelineData.value[0] ? 
-      (timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 60 ? 'quarter' : 
-       timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 25 ? 'month' : 'day') : 'day'
+    const currentGroupingValue = currentGrouping.value
     
     transactions.value
       .filter(t => {
@@ -160,9 +194,7 @@ export function useTimelineChart(
    */
   function buildIncomeByCategory() {
     const incomeByCategory = {}
-    const currentGroupingValue = timelineData.value[0] ? 
-      (timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 60 ? 'quarter' : 
-       timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 25 ? 'month' : 'day') : 'day'
+    const currentGroupingValue = currentGrouping.value
     
     transactions.value
       .filter(t => {
@@ -248,9 +280,7 @@ export function useTimelineChart(
    */
   function buildTransfersByCategory() {
     const transfersByCategory = {}
-    const currentGroupingValue = timelineData.value[0] ? 
-      (timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 60 ? 'quarter' : 
-       timelineData.value[1]?.date - timelineData.value[0]?.date > 86400000 * 25 ? 'month' : 'day') : 'day'
+    const currentGroupingValue = currentGrouping.value
     
     transactions.value
       .filter(t => {
@@ -506,6 +536,7 @@ export function useTimelineChart(
     
     hoveredData.value = {
       date: dataPoint.date,
+      periodName: getPeriodName(dataPoint.date, currentGrouping.value),
       income: dataPoint.income,
       expenses: dataPoint.expenses,
       transfers: dataPoint.transfers,
@@ -514,6 +545,37 @@ export function useTimelineChart(
       expensesByCategory: dataPoint.expensesByCategory,
       transfersByCategory: dataPoint.transfersByCategory
     }
+    
+    // Update line annotation without rebuilding entire chart
+    updateLineAnnotation()
+  }
+  
+  /**
+   * Update vertical line annotation
+   */
+  function updateLineAnnotation() {
+    // Direct annotation update is faster than recomputing entire chartOptions
+    const chart = chartRef?.value?.chart
+    if (!chart || !hoveredData.value) return
+    
+    chart.clearAnnotations()
+    
+    // Add horizontal line at zero
+    chart.addYaxisAnnotation({
+      y: 0,
+      borderColor: '#374151',
+      borderWidth: 2,
+      opacity: 0.8
+    })
+    
+    // Add vertical line at hovered position
+    chart.addXaxisAnnotation({
+      x: hoveredData.value.date,
+      borderColor: isPinned.value ? '#3a3a3aff' : '#4b5563',
+      strokeDashArray: isPinned.value ? 0 : 5,
+      borderWidth: isPinned.value ? 3 : 2,
+      opacity: isPinned.value ? 1 : 0.6
+    })
   }
   
   /**
@@ -522,7 +584,25 @@ export function useTimelineChart(
   function unpinHoverData() {
     isPinned.value = false
     hoveredData.value = null
+    
+    const chart = chartRef?.value?.chart
+    if (chart) {
+      chart.clearAnnotations()
+      chart.addYaxisAnnotation({
+        y: 0,
+        borderColor: '#374151',
+        borderWidth: 2,
+        opacity: 0.8
+      })
+    }
   }
+  
+  // Watch for pin state changes
+  watch(() => isPinned.value, () => {
+    if (hoveredData.value) {
+      updateLineAnnotation()
+    }
+  })
   
   /**
    * Build chart options - TWO Y-AXES VERSION
@@ -552,7 +632,7 @@ const chartOptions = computed(() => {
   return {
     chart: {
       id: 'timeline-main',
-      type: 'bar',  // CHANGED TO BAR
+      type: 'bar',
       height: 500,
       stacked: true,
       stackType: 'normal',
@@ -565,9 +645,25 @@ const chartOptions = computed(() => {
       animations: {
         enabled: true,
         easing: 'easeinout',
-        speed: 500
+        speed: 200,
+        animateGradually: {
+          enabled: false
+        },
+        dynamicAnimation: {
+          enabled: false
+        }
       },
       events: {
+        dataPointSelection: (event, chartContext, config) => {
+          if (config.dataPointIndex >= 0) {
+            isPinned.value = !isPinned.value
+            if (isPinned.value) {
+              handleChartHover(config)
+            } else {
+              hoveredData.value = null
+            }
+          }
+        },
         mouseMove: (event, chartContext, config) => {
           if (config.dataPointIndex >= 0) {
             handleChartHover(config)
@@ -577,40 +673,50 @@ const chartOptions = computed(() => {
           if (!isPinned.value) {
             hoveredData.value = null
           }
-        },
-        click: (event, chartContext, config) => {
-          if (config.dataPointIndex >= 0) {
-            isPinned.value = !isPinned.value
-            if (isPinned.value) {
-              handleChartHover(config)
-            } else {
-              hoveredData.value = null
-            }
-          }
+        }
+      },
+      selection: {
+        enabled: false
+      }
+    },
+    states: {
+      normal: {
+        filter: {
+          type: 'none'
+        }
+      },
+      hover: {
+        filter: {
+          type: 'none'
+        }
+      },
+      active: {
+        filter: {
+          type: 'none'
         }
       }
     },
-          fill: {
-  opacity: 1,  // Full opacity for solid colors
-  type: 'solid'  // Solid fill, no gradient
-},
+    fill: {
+      opacity: 1,
+      type: 'solid'
+    },
     plotOptions: {
-  bar: {
-    horizontal: false,
-    columnWidth: '98%',
-    borderRadius: 0,
-    borderRadiusApplication: 'end',
-    borderRadiusWhenStacked: 'last',
-    dataLabels: {
-      position: 'center'
-    }
-  }
-},
-stroke: {
-  show: true,
-  width: 0,  // Border width - change this (0 for no border, 1-3 recommended)
-  colors: ['transparent']  // Makes borders invisible but separates bars
-},
+      bar: {
+        horizontal: false,
+        columnWidth: '98%',
+        borderRadius: 0,
+        borderRadiusApplication: 'end',
+        borderRadiusWhenStacked: 'last',
+        dataLabels: {
+          position: 'center'
+        }
+      }
+    },
+    stroke: {
+      show: true,
+      width: 0,
+      colors: ['transparent']
+    },
     dataLabels: {
       enabled: false
     },
@@ -668,14 +774,6 @@ stroke: {
     },
     tooltip: {
       enabled: false
-    },
-    annotations: {
-      yaxis: [{
-        y: 0,
-        borderColor: '#374151',
-        borderWidth: 2,
-        opacity: 0.8
-      }]
     }
   }
 })

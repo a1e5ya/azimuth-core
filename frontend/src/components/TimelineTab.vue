@@ -37,6 +37,7 @@
         <!-- 2. Chart in the MIDDLE -->
         <div class="chart-wrapper" :class="cursorClass">
           <TimelineChart
+            ref="chartComponentRef"
             :loading="loading"
             :has-data="hasData"
             :chart-options="chartOptions"
@@ -91,6 +92,7 @@ export default {
     
     const currentMode = ref('view')
     const customVisibleRange = ref(null)
+    const chartComponentRef = ref(null)
     
     const {
       loading,
@@ -164,6 +166,9 @@ export default {
       }
     )
     
+    // Get chartRef from child component
+    const chartRef = computed(() => chartComponentRef.value?.chartRef)
+    
     const {
       hoveredData,
       isPinned,
@@ -190,7 +195,8 @@ export default {
         isSubcategoryVisible: (subcategoryId) => visibleSubcategories.value.includes(subcategoryId),
         isCategoryExpanded: (categoryId) => expandedCategories.value.includes(categoryId)
       },
-      customVisibleRange
+      customVisibleRange,
+      chartRef
     )
     
     function setMode(mode) {
@@ -253,6 +259,7 @@ export default {
     })
     
     return {
+      chartComponentRef,
       loading,
       hasData,
       currentZoomLevel,
