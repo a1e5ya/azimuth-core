@@ -265,7 +265,7 @@ button * {
   border: none !important;
   color: var(--color-text-light);
   font-weight: 400;
-  font-size: var(--text-large);
+  font-size: var(--text-medium);
 }
 
 .btn-link:hover {

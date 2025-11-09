@@ -564,16 +564,16 @@ export function useTimelineChart(
     chart.addYaxisAnnotation({
       y: 0,
       borderColor: '#374151',
-      borderWidth: 2,
+      borderWidth: 0,
       opacity: 0.8
     })
     
     // Add vertical line at hovered position
     chart.addXaxisAnnotation({
       x: hoveredData.value.date,
-      borderColor: isPinned.value ? '#3a3a3aff' : '#4b5563',
+      borderColor: isPinned.value ? '#3a3a3aff' : '#5b636eff',
       strokeDashArray: isPinned.value ? 0 : 5,
-      borderWidth: isPinned.value ? 3 : 2,
+      borderWidth: isPinned.value ? 2 : 1,
       opacity: isPinned.value ? 1 : 0.6
     })
   }
@@ -656,16 +656,14 @@ const chartOptions = computed(() => {
       events: {
         dataPointSelection: (event, chartContext, config) => {
           if (config.dataPointIndex >= 0) {
-            isPinned.value = !isPinned.value
-            if (isPinned.value) {
-              handleChartHover(config)
-            } else {
-              hoveredData.value = null
-            }
+            // Pin to new position
+            isPinned.value = true
+            handleChartHover(config)
           }
         },
         mouseMove: (event, chartContext, config) => {
-          if (config.dataPointIndex >= 0) {
+          // Only update hover if not pinned
+          if (!isPinned.value && config.dataPointIndex >= 0) {
             handleChartHover(config)
           }
         },

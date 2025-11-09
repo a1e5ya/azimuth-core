@@ -365,7 +365,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0 0.25rem 1.25rem;
+  padding: 0.5rem 0 0.25rem 1.25rem;
   font-size: 0.75rem;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   font-weight: 500;
@@ -375,7 +375,7 @@ export default {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0 0.5rem 2.5rem;
+  padding: 0.5rem 0 0.25rem 2.5rem;
   font-size: 0.6875rem;
   opacity: 0.85;
 }
