@@ -115,6 +115,7 @@
             </td>
             
             <td class="col-category">
+              
               <div class="category-primary" v-if="transaction.category">
                 {{ transaction.category }}
               </div>

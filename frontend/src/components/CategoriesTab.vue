@@ -1,133 +1,121 @@
 <template>
-  <div class="tab-content">
-    <!-- Type Tabs -->
-    <div class="type-tabs">
-      <div class="tabs-left"></div>
-      <div class="tabs-left">
-        <button
-          v-for="type in categories"
-          :key="type.id"
-          class="type-tab"
-          :class="{ active: selectedTypeId === type.id }"
-          :style="{ '--tab-hover-color': type.color }"
-          @click="selectedTypeId = type.id"
-        >
-          <AppIcon :name="type.icon" size="medium" />
-          {{ type.name }}
-        </button>
-      </div>
-      
-      <div class="tabs-right">
-        <ActionsMenu
-          class="always-visible"
-          :show-add="true"
-          :show-edit="false"
-          :show-delete="false"
-          :show-check="false"
-          menu-title="Category Actions"
-          @add="addNewCategory"
-        />
-      </div>
+  <div class="categories-layout">
+    <!-- Vertical Type Tabs - Left Side -->
+    <div class="vertical-tabs">
+      <button
+        v-for="type in categories"
+        :key="type.id"
+        class="vertical-tab"
+        :class="{ active: activeTypeId === type.id }"
+        :style="{ '--tab-color': type.color }"
+        @click="scrollToType(type.id)"
+      >
+        <span class="vertical-text">{{ type.name }}</span>
+        <AppIcon :name="type.icon" size="medium" />
+      </button>
     </div>
 
-    <div class="container">
+    <!-- Scrollable Content - All Categories -->
+    <div class="categories-scroll-container" ref="scrollContainer">
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
         <div>Loading categories...</div>
       </div>
 
-      <!-- Categories Compact Grid -->
-      <div 
-        v-else-if="currentType" 
-        class="categories-compact-grid"
-      >
-        <div
-          v-for="mainCat in currentType.children"
-          :key="mainCat.id"
-          class="category-container"
-          :style="{ backgroundColor: hexToRgba(mainCat.color, 0.1) }"
+      <!-- All Type Sections -->
+      <div v-else class="all-categories">
+        <section
+          v-for="type in categories"
+          :key="type.id"
+          :id="`type-${type.id}`"
+          class="type-section"
         >
-          <!-- Main Category Header - Compact -->
-          <div class="category-header-compact">
-            <div class="category-title-compact">
-              <AppIcon 
-                :name="mainCat.icon" 
-                size="medium"
-                class="category-icon"
-                :style="{ '--icon-hover-color': mainCat.color }"
-              />
-              <h4>{{ mainCat.name }}</h4>
-            </div>
-            <ActionsMenu
-              :show-add="true"
-              :show-edit="true"
-              :show-delete="true"
-              @edit="editCategory(mainCat)"
-              @add="addSubcategory(mainCat)"
-              @delete="deleteCategory(mainCat)"
-            />
-          </div>
-
-          <!-- Subcategories Compact -->
-          <div v-if="mainCat.children && mainCat.children.length > 0" class="subcats-compact">
+          <div class="categories-grid">
             <div
-              v-for="subcat in mainCat.children"
-              :key="subcat.id"
-              class="subcat-compact"
-              :style="{ backgroundColor: hexToRgba(subcat.color, 0.1) }"
+              v-for="mainCat in type.children"
+              :key="mainCat.id"
+              class="category-card"
+              :style="{ backgroundColor: hexToRgba(mainCat.color, 0.1) }"
             >
-              <div class="subcat-top">
-                <div class="subcat-name-icon">
+              <div class="category-header">
+                <div class="category-title">
                   <AppIcon 
-                    :name="subcat.icon" 
-                    size="small"
-                    class="subcat-icon"
-                    :style="{ '--icon-hover-color': subcat.color }"
+                    :name="mainCat.icon" 
+                    size="medium"
+                    :style="{ '--icon-hover-color': mainCat.color }"
                   />
-                  <span>{{ subcat.name }}</span>
+                  <h4>{{ mainCat.name }}</h4>
                 </div>
                 <ActionsMenu
-                  :show-add="false"
+                  :show-add="true"
                   :show-edit="true"
                   :show-delete="true"
-                  @edit="editCategory(subcat)"
-                  @delete="deleteCategory(subcat)"
+                  @edit="editCategory(mainCat)"
+                  @add="addSubcategory(mainCat)"
+                  @delete="deleteCategory(mainCat)"
                 />
               </div>
 
-              <input
-                type="text"
-                class="keyword-input-compact"
-                placeholder="keywords..."
-                :value="getKeywords(subcat.id)"
-                @change="updateKeywords(subcat.id, $event.target.value)"
-              >
+              <div v-if="mainCat.children && mainCat.children.length > 0" class="subcategories">
+                <div
+                  v-for="subcat in mainCat.children"
+                  :key="subcat.id"
+                  class="subcategory"
+                  :style="{ backgroundColor: hexToRgba(subcat.color, 0.1) }"
+                >
+                  <div class="subcat-header">
+                    <div class="subcat-title">
+                      <AppIcon 
+                        :name="subcat.icon" 
+                        size="small"
+                        :style="{ '--icon-hover-color': subcat.color }"
+                      />
+                      <span>{{ subcat.name }}</span>
+                    </div>
+                    <ActionsMenu
+                      :show-add="false"
+                      :show-edit="true"
+                      :show-delete="true"
+                      @edit="editCategory(subcat)"
+                      @delete="deleteCategory(subcat)"
+                    />
+                  </div>
 
-              <div class="merchant-tags-compact">
-                <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag-micro">
-                  {{ merchant }}
-                </span>
-                <span v-if="!getMerchants(subcat.id).length" class="text-micro-muted">
-                  No merchants
-                </span>
+                  <input
+                    type="text"
+                    class="keyword-input"
+                    placeholder="keywords..."
+                    :value="getKeywords(subcat.id)"
+                    @change="updateKeywords(subcat.id, $event.target.value)"
+                  >
+
+                  <div class="merchant-tags">
+                    <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag">
+                      {{ merchant }}
+                    </span>
+                    <span v-if="!getMerchants(subcat.id).length" class="text-muted">
+                      No merchants
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div v-else class="no-subcategories">
+                <button class="btn btn-small" @click="addSubcategory(mainCat)">
+                  Add Subcategory
+                </button>
               </div>
             </div>
           </div>
-
-          <div v-else class="no-subcats-compact">
-            <button class="btn btn-small" @click="addSubcategory(mainCat)">
-              Add Subcategory
-            </button>
-          </div>
-        </div>
+        </section>
       </div>
     </div>
   </div>
 </template>
 
 <script>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
@@ -140,7 +128,9 @@ export default {
   },
   setup() {
     const categoryStore = useCategoryStore()
-    const selectedTypeId = ref(null)
+    const activeTypeId = ref(null)
+    const scrollContainer = ref(null)
+    let scrollTimeout = null
 
     const categories = computed(() => {
       const cats = categoryStore.categories || []
@@ -155,11 +145,6 @@ export default {
     
     const loading = computed(() => categoryStore.loading)
 
-    const currentType = computed(() => {
-      if (!selectedTypeId.value || !categories.value) return null
-      return categories.value.find(t => t.id === selectedTypeId.value)
-    })
-
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
       const r = parseInt(hex.slice(1, 3), 16)
@@ -168,10 +153,48 @@ export default {
       return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
 
+    function scrollToType(typeId) {
+      const section = document.getElementById(`type-${typeId}`)
+      if (section) {
+        section.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+      }
+      activeTypeId.value = typeId
+    }
+
+    function handleScroll() {
+      console.log('🔄 Scroll detected!')
+      if (scrollTimeout) clearTimeout(scrollTimeout)
+      
+      scrollTimeout = setTimeout(() => {
+        const sections = document.querySelectorAll('.type-section')
+        console.log('📍 Sections found:', sections.length)
+        
+        let currentSection = null
+        
+        sections.forEach(section => {
+          const rect = section.getBoundingClientRect()
+          console.log(section.id, 'rect.top:', rect.top, 'rect.bottom:', rect.bottom)
+          // If section top is above middle of screen and bottom is below top bar
+          if (rect.top <= window.innerHeight / 2 && rect.bottom > 100) {
+            currentSection = section.id.replace('type-', '')
+            console.log('✅ Active section:', currentSection)
+          }
+        })
+
+        if (currentSection && currentSection !== activeTypeId.value) {
+          console.log('🎯 Setting active:', currentSection)
+          activeTypeId.value = currentSection
+        }
+      }, 100)
+    }
+
     async function refreshCategories() {
       await categoryStore.loadCategories()
-      if (categories.value && categories.value.length > 0 && !selectedTypeId.value) {
-        selectedTypeId.value = categories.value[0].id
+      if (categories.value && categories.value.length > 0 && !activeTypeId.value) {
+        activeTypeId.value = categories.value[0].id
       }
     }
 
@@ -187,8 +210,8 @@ export default {
       console.log('Add subcategory to:', parent.name)
     }
 
-    function addNewCategory() {
-      console.log('Add new main category to:', currentType.value?.name)
+    function addNewCategory(type) {
+      console.log('Add new main category to:', type.name)
     }
 
     function getKeywords(categoryId) {
@@ -205,14 +228,22 @@ export default {
 
     onMounted(async () => {
       await refreshCategories()
+      window.addEventListener('scroll', handleScroll)
+    })
+
+    onUnmounted(() => {
+      if (scrollTimeout) clearTimeout(scrollTimeout)
+      window.removeEventListener('scroll', handleScroll)
     })
 
     return {
       categories,
       loading,
-      selectedTypeId,
-      currentType,
+      activeTypeId,
+      scrollContainer,
       hexToRgba,
+      scrollToType,
+      handleScroll,
       refreshCategories,
       editCategory,
       deleteCategory,
@@ -227,73 +258,106 @@ export default {
 </script>
 
 <style scoped>
-/* Type Tabs - CategoriesTab specific */
-.type-tabs {
+.categories-layout {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--gap-standard);
-  margin-bottom: var(--gap-standard);
-  border-bottom: 2px solid var(--color-background-dark);
+  min-height: 100%;
 }
 
-.tabs-left {
+/* Vertical Tabs - Left Sidebar */
+.vertical-tabs {
+  position: fixed;
+  left: 0;
+  top: 80px;
+  height: 100vh;
+  width: 4rem;
+  background: var(--color-background);
+  border-right: 2px solid var(--color-background-dark);
   display: flex;
+  flex-direction: column;
+  justify-content: space-evenly;
+  padding: 0 0 150px;
+  gap: var(--gap-large);
+  z-index: 10;
+}
+
+.vertical-tab {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   gap: var(--gap-small);
-}
-
-.tabs-right {
-  display: flex;
-  align-items: center;
-  margin-bottom: -2px;
-}
-
-.type-tab {
-  display: flex;
-  align-items: center;
-  gap: var(--gap-small);
-  padding: 0.5rem var(--gap-large);
+  padding: var(--gap-standard);
   background: none;
   border: none;
-  border-bottom: 2px solid transparent;
-  margin-bottom: -2px;
+  border-left: 3px solid transparent;
   cursor: pointer;
   color: var(--color-text-light);
+  transition: all 0.3s;
+  position: relative;
+}
+
+.vertical-tab:hover {
+  color: var(--color-text);
+  background: var(--color-background-light);
+}
+
+.vertical-tab:hover :deep(.icon-wrapper) {
+  color: var(--tab-color);
+}
+
+.vertical-tab.active {
+  color: var(--color-text);
+  border-left-color: var(--tab-color);
+  background: var(--color-background-light);
+}
+
+.vertical-tab.active :deep(.icon-wrapper) {
+  color: var(--tab-color);
+}
+
+.vertical-text {
+  writing-mode: vertical-lr;
+  text-orientation: mixed;
+  font-size: var(--text-small);
   font-weight: 500;
-  transition: all 0.2s;
+  letter-spacing: 0.05em;
+  transform: rotate(180deg);
 }
 
-.type-tab:hover {
-  color: var(--color-text);
+/* Scrollable Container */
+.categories-scroll-container {
+  flex: 1;
+  padding: var(--gap-large);
+  margin-left: 4rem;
 }
 
-.type-tab:hover :deep(.icon-wrapper) {
-  color: var(--tab-hover-color);
+.all-categories {
+  margin: 0 auto;
 }
 
-.type-tab.active {
-  color: var(--color-text);
-  border-bottom-color: var(--color-text);
-  font-weight: 600;
+/* Type Section */
+.type-section {
+  margin-bottom: 3rem;
+  scroll-margin-top: 20px;
 }
 
-/* Categories Grid Layout */
-.categories-compact-grid {
+/* Categories Grid */
+.categories-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(6, 1fr);
   gap: var(--gap-standard);
-  align-items: start;
+  grid-auto-flow: dense;
 }
 
-.category-container {
+.category-card {
   padding: 0.75rem;
   border-radius: var(--radius);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  break-inside: avoid;
 }
 
-.category-header-compact {
+.category-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -301,31 +365,31 @@ export default {
   border-bottom: 1px solid var(--color-background-dark);
 }
 
-.category-title-compact {
+.category-title {
   display: flex;
   align-items: center;
   gap: 0.375rem;
 }
 
-.category-title-compact h4 {
+.category-title h4 {
   margin: 0;
   font-size: var(--text-small);
   font-weight: 600;
 }
 
-.category-title-compact .category-icon:hover :deep(.icon-wrapper) {
+.category-title :deep(.icon-wrapper):hover {
   color: var(--icon-hover-color);
   transition: color 0.2s;
 }
 
 /* Subcategories */
-.subcats-compact {
+.subcategories {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
 
-.subcat-compact {
+.subcategory {
   padding: 0.5rem;
   border-radius: var(--radius);
   display: flex;
@@ -333,13 +397,13 @@ export default {
   gap: 0.375rem;
 }
 
-.subcat-top {
+.subcat-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-.subcat-name-icon {
+.subcat-title {
   display: flex;
   align-items: center;
   gap: 0.375rem;
@@ -347,12 +411,12 @@ export default {
   font-weight: 500;
 }
 
-.subcat-name-icon .subcat-icon:hover :deep(.icon-wrapper) {
+.subcat-title :deep(.icon-wrapper):hover {
   color: var(--icon-hover-color);
   transition: color 0.2s;
 }
 
-.keyword-input-compact {
+.keyword-input {
   width: 100%;
   padding: 0.25rem 0.375rem;
   border: 1px solid var(--color-background-dark);
@@ -361,24 +425,24 @@ export default {
   font-family: inherit;
 }
 
-.keyword-input-compact:focus {
+.keyword-input:focus {
   outline: none;
   border-color: var(--color-text-light);
 }
 
-.keyword-input-compact::placeholder {
+.keyword-input::placeholder {
   color: var(--color-text-muted);
   font-style: italic;
 }
 
-.merchant-tags-compact {
+.merchant-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 0.25rem;
   min-height: 1.25rem;
 }
 
-.tag-micro {
+.tag {
   background: var(--color-background-light);
   padding: 0.125rem 0.375rem;
   border-radius: 0.25rem;
@@ -386,14 +450,35 @@ export default {
   color: var(--color-text);
 }
 
-.text-micro-muted {
+.text-muted {
   color: var(--color-text-muted);
   font-size: 0.6875rem;
   font-style: italic;
 }
 
-.no-subcats-compact {
+.no-subcategories {
   text-align: center;
   padding: 0.5rem;
+}
+
+/* Loading State */
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 50vh;
+  gap: var(--gap-standard);
+  color: var(--color-text-light);
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 </style>
