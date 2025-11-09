@@ -167,6 +167,15 @@ button * {
   font-size: var(--text-large) !important;
   font-weight: 600 !important;
   font-style: italic !important;
+  display: flex !important;
+  flex-direction: row;
+    align-items: center;
+    flex-direction: row;
+    justify-content: center;
+}
+
+.logo {
+  margin-left: 0.5rem;
 }
 
 /* ==============================================

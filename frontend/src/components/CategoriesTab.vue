@@ -154,15 +154,20 @@ export default {
     }
 
     function scrollToType(typeId) {
-      const section = document.getElementById(`type-${typeId}`)
-      if (section) {
-        section.scrollIntoView({
-          behavior: 'smooth',
-          block: 'start'
-        })
-      }
-      activeTypeId.value = typeId
-    }
+  const section = document.getElementById(`type-${typeId}`)
+  if (section) {
+    section.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start'
+    })
+  }
+  activeTypeId.value = typeId
+  
+  // Clear active state after scroll animation
+  setTimeout(() => {
+    activeTypeId.value = null
+  }, 1000)
+}
 
     function handleScroll() {
       console.log('🔄 Scroll detected!')
@@ -226,15 +231,15 @@ export default {
       return []
     }
 
-    onMounted(async () => {
-      await refreshCategories()
-      window.addEventListener('scroll', handleScroll)
-    })
+onMounted(async () => {
+  await refreshCategories()
+  scrollContainer.value?.addEventListener('scroll', handleScroll)
+})
 
-    onUnmounted(() => {
-      if (scrollTimeout) clearTimeout(scrollTimeout)
-      window.removeEventListener('scroll', handleScroll)
-    })
+onUnmounted(() => {
+  if (scrollTimeout) clearTimeout(scrollTimeout)
+  scrollContainer.value?.removeEventListener('scroll', handleScroll)
+})
 
     return {
       categories,

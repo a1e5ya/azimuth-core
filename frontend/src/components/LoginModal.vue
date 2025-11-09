@@ -8,14 +8,14 @@
         <input v-if="!isLogin" v-model="displayName" type="text" placeholder="Display Name (optional)" :class="inputClasses" />
         <input v-model="password" type="password" placeholder="Password" required :class="inputClasses" />
         <button type="submit" :class="authBtnClasses" :disabled="loading">
-          {{ loading ? 'Loading...' : (isLogin ? 'Sign In' : 'Sign Up') }}
+          {{ loading ? 'Loading...' : (isLogin ? 'Log In' : 'Sign Up') }}
         </button>
       </form>
       
       <p :class="toggleTextClasses">
         {{ isLogin ? "Don't have an account?" : "Already have an account?" }}
         <button @click="isLogin = !isLogin" class="toggle-btn">
-          {{ isLogin ? 'Sign Up' : 'Sign In' }}
+          {{ isLogin ? 'Sign Up' : 'Log In' }}
         </button>
       </p>
       
@@ -130,7 +130,7 @@ export default {
 .fullscreen-input {
   background: rgba(255, 255, 255, 0.9);
   border: 2px solid rgba(255, 255, 255, 0.3);
-  margin-bottom: 2rem;
+  margin-bottom: 1.5rem;
   color: #333;
 }
 
