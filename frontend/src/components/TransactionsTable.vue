@@ -74,6 +74,7 @@
             <th class="col-owner">Owner</th>
             <th class="col-category">Category</th>
             <th class="col-type">Type</th>
+            <th class="col-indicator"></th>
             <th class="col-actions"></th>
           </tr>
         </thead>
@@ -129,7 +130,11 @@
               </div>
               <div v-else class="text-muted">-</div>
             </td>
-            
+            <td class="col-indicator"><div 
+                  v-if="getCategoryColor(transaction)"
+                  class="type-indicator"
+                  v-html="getTypeShape(transaction)"
+                ></div></td>
             <td class="col-actions">
               <div class="actions-cell">
                 <ActionsMenu
@@ -140,11 +145,7 @@
                   @edit="$emit('edit', transaction)"
                   @delete="$emit('delete', transaction)"
                 />
-                <div 
-                  v-if="getCategoryColor(transaction)"
-                  class="color-indicator"
-                  :style="{ backgroundColor: getCategoryColor(transaction) }"
-                ></div>
+                
               </div>
             </td>
           </tr>
@@ -258,6 +259,26 @@ export default {
       return category?.color || null
     }
 
+    const getTypeShape = (transaction) => {
+      const color = getCategoryColor(transaction)
+      if (!color) return ''
+      
+      const amount = parseFloat(transaction.amount)
+      
+      // Income - up arrow
+      if (amount > 0) {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858 1000" fill="${color}"><path d="M0,995.3C142.08,666.06,284.15,336.82,429.5,0c144.66,336.09,286.58,665.83,428.5,995.57-.95,1.48-1.9,2.95-2.85,4.43-136.09-78.77-269.66-161.99-404.48-243.08-15.79-9.62-28.28-9.41-44.01.15-134.05,80.88-267.52,162.59-402.48,241.8-1.4-1.19-2.79-2.38-4.19-3.57Z"/></svg>`
+      }
+      // Expense - down arrow  
+      else if (amount < 0) {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858.01 1000" fill="${color}"><path d="M858,4.7c-142.08,329.24-284.15,658.48-429.5,995.3C283.84,663.91,141.92,334.17,0,4.43.95,2.95,1.9,1.48,2.85,0c136.09,78.77,269.66,161.99,404.48,243.08,15.79,9.62,28.28,9.41,44.01-.15C585.39,162.05,718.86,80.34,853.82,1.13c1.4,1.19,2.79,2.38,4.19,3.57h-.01Z"/></svg>`
+      }
+      // Transfer - right arrow
+      else {
+        return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 858.01" fill="${color}"><path d="M4.7.01c329.24,142.08,658.48,284.15,995.3,429.5C663.91,574.17,334.17,716.09,4.43,858.01c-1.48-.95-2.95-1.9-4.43-2.85,78.77-136.09,161.99-269.66,243.08-404.48,9.62-15.79,9.41-28.28-.15-44.01C162.05,272.62,80.34,139.15,1.13,4.19,2.32,2.79,3.51,1.4,4.7,0h0Z"/></svg>`
+      }
+    }
+
     const formatDate = (dateString) => {
       return new Date(dateString).toLocaleDateString('en-EU', {
         day: '2-digit',
@@ -312,6 +333,7 @@ export default {
       clearSelection,
       handleBulkCategorize,
       getCategoryColor,
+      getTypeShape,
       formatDate,
       formatAmount,
       getAmountClass,
@@ -384,7 +406,7 @@ export default {
 .transactions-table td {
   padding: var(--gap-standard);
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-  vertical-align: top;
+  vertical-align: center;
 }
 
 .transaction-row {
@@ -419,20 +441,27 @@ export default {
 }
 
 .col-owner {
-  width: 8rem;
+  width: 6rem;
 }
 
 .col-category {
-  width: 12rem;
+  width: 10rem;
 }
 
 .col-type {
-  width: 8rem;
+  width: 6rem;
+}
+.col-indicator {
+  width: 2rem;
+  text-align: center;
+
 }
 
+
 .col-actions {
-  width: 4rem;
+  width: 2rem;
   text-align: center;
+  
 }
 
 .date-primary {
@@ -509,10 +538,19 @@ export default {
   gap: 0.25rem;
 }
 
-.color-indicator {
-  width: 12px;
-  height: 12px;
-  border-radius: 2px;
-  flex-shrink: 0;
+.type-indicator {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 1;
+  filter: drop-shadow(0 1px 2px rgba(179, 179, 179, 0.2));
+}
+
+.type-indicator svg {
+  width: 100%;
+  height: 100%;
+  opacity: 1;
 }
 </style>

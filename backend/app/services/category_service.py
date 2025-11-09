@@ -34,7 +34,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Benefits & Support',
                 'icon': 'comment-check',
                 'color': '#4DB8B8',
-                'subcolors': ['#B8E3E3', '#A3DBDB', '#8AD0D0', '#C9E8E8', '#D9F0F0', '#E3F4F4'],
+                'subcolors': ['#3DA8A8', '#34A0A0', '#2B9898', '#42B0B0', '#4FB8B8', '#5CC0C0'],
                 'subcategories': [
                     {'id': 'unemployment-benefits', 'name': 'Unemployment Benefits', 'icon': 'comment-check'},
                     {'id': 'social-benefits', 'name': 'Social Benefits', 'icon': 'comment-heart'}
@@ -45,7 +45,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Employment Income',
                 'icon': 'briefcase',
                 'color': '#2EAD8E',
-                'subcolors': ['#A8DCC9', '#8BCCA9', '#6EC292', '#C5E6D7', '#D2EBDD', '#E0F0E4'],
+                'subcolors': ['#25A584', '#1F9D7A', '#199570', '#2FAE8F', '#3CB69A', '#49BEA5'],
                 'subcategories': [
                     {'id': 'salary', 'name': 'Salary', 'icon': 'briefcase'}
                 ]
@@ -55,7 +55,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Other Income',
                 'icon': 'gift',
                 'color': '#5CB8C4',
-                'subcolors': ['#C4E5EB', '#A9DDE4', '#8FCFDC', '#D0ECF0', '#DDEFF3', '#EAF4F6'],
+                'subcolors': ['#4AACB8', '#3FA4B0', '#349CA8', '#51B0BC', '#5EB8C4', '#6BC0CC'],
                 'subcategories': [
                     {'id': 'gifts-received', 'name': 'Gifts Received', 'icon': 'gift'}
                 ]
@@ -65,7 +65,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Investment Income',
                 'icon': 'credit-card',
                 'color': '#1E9B7E',
-                'subcolors': ['#9FD6C7', '#8BCFBD', '#6FC4A8', '#B9E3D8', '#C6E8DF', '#D3EDE6'],
+                'subcolors': ['#189373', '#148B68', '#10835D', '#1C977A', '#28A386', '#34AF92'],
                 'subcategories': [
                     {'id': 'cashback', 'name': 'Cashback', 'icon': 'credit-card'},
                     {'id': 'dividends-interest', 'name': 'Dividends & Interest', 'icon': 'chat-arrow-grow'}
@@ -84,7 +84,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Food',
                 'icon': 'coffee',
                 'color': '#9B7EDE',
-                'subcolors': ['#D5C9F0', '#C7B8E8', '#B9A7E0', '#E3DBF7', '#EBE5F9', '#F3EFFB'],
+                'subcolors': ['#8B6ED4', '#825FCC', '#7950C4', '#9477D8', '#9D80DC', '#A689E0'],
                 'subcategories': [
                     {'id': 'cafes-coffee', 'name': 'Cafes & Coffee', 'icon': 'coffee'},
                     {'id': 'groceries', 'name': 'Groceries', 'icon': 'salad'},
@@ -97,7 +97,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Family',
                 'icon': 'kite',
                 'color': '#7B68B8',
-                'subcolors': ['#C9C1DC', '#B8ACCE', '#A697C0', '#D7D0E6', '#E5E0F0', '#F0EDF7'],
+                'subcolors': ['#6B58A8', '#6250A0', '#594898', '#7460B0', '#7D68B8', '#8670C0'],
                 'subcategories': [
                     {'id': 'sports-activities', 'name': 'Sports Activities', 'icon': 'ice-skate'},
                     {'id': 'child-activities', 'name': "Child's Activities", 'icon': 'ferris-wheel'},
@@ -109,7 +109,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Housing & Utilities',
                 'icon': 'key',
                 'color': '#6A5B9B',
-                'subcolors': ['#C3BDD6', '#AFA6C9', '#9B8FBC', '#D1CDDF', '#DFDCe8', '#EDEAF3'],
+                'subcolors': ['#5A4B8B', '#524383', '#4A3B7B', '#625393', '#6A5B9B', '#7263A3'],
                 'subcategories': [
                     {'id': 'monthly-rent', 'name': 'Monthly Rent', 'icon': 'key'},
                     {'id': 'internet-phone', 'name': 'Internet & Phone', 'icon': 'signal-alt-2'},
@@ -121,7 +121,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Shopping',
                 'icon': 'shopping-cart',
                 'color': '#BA8ED9',
-                'subcolors': ['#E3CFF2', '#D9BFED', '#CFAFE8', '#ECDFF7', '#F5EBF9', '#F9F3FB'],
+                'subcolors': ['#AA7EC9', '#A270C1', '#9A62B9', '#B284D1', '#BA8CD9', '#C294E1'],
                 'subcategories': [
                     {'id': 'household', 'name': 'Household', 'icon': 'soap'},
                     {'id': 'electronics', 'name': 'Electronics', 'icon': 'gamepad'},
@@ -136,7 +136,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Leisure & Culture',
                 'icon': 'ticket',
                 'color': '#8B7AC7',
-                'subcolors': ['#D0C8E8', '#BEB4DD', '#ACA0D2', '#DDD8F0', '#E9E5F7', '#F4F2FB'],
+                'subcolors': ['#7B6AB7', '#735FAF', '#6B54A7', '#8372BF', '#8B7AC7', '#9382CF'],
                 'subcategories': [
                     {'id': 'music', 'name': 'Music', 'icon': 'guitar'},
                     {'id': 'social-activities', 'name': 'Social Activities', 'icon': 'ticket'},
@@ -150,7 +150,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Health',
                 'icon': 'stethoscope',
                 'color': '#7A9FD9',
-                'subcolors': ['#C9DCF2', '#B5CEEC', '#A1C0E6', '#D7E6F7', '#E5F0FB', '#F2F7FD'],
+                'subcolors': ['#6A8FC9', '#6087C1', '#567FB9', '#7497D1', '#7E9FD9', '#88A7E1'],
                 'subcategories': [
                     {'id': 'pharmacy', 'name': 'Pharmacy', 'icon': 'band-aid'},
                     {'id': 'medical-services', 'name': 'Medical Services', 'icon': 'stethoscope'},
@@ -163,7 +163,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Transport',
                 'icon': 'car',
                 'color': '#6B8FCC',
-                'subcolors': ['#C1D3EB', '#ADC4E3', '#99B5DB', '#CFE1F3', '#DDEAF7', '#EAF2FB'],
+                'subcolors': ['#5B7FBC', '#5377B4', '#4B6FAC', '#6587C4', '#6F8FCC', '#7997D4'],
                 'subcategories': [
                     {'id': 'vehicle-registration', 'name': 'Vehicle Registration & Tax', 'icon': 'car'},
                     {'id': 'maintenance-repairs', 'name': 'Maintenance & Repairs', 'icon': 'dashboard'},
@@ -177,7 +177,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Insurance',
                 'icon': 'document-signed',
                 'color': '#5A7EB8',
-                'subcolors': ['#B8C8E0', '#A3B8D6', '#8EA8CC', '#CCD8EA', '#DEE5F3', '#EDF1F9'],
+                'subcolors': ['#4A6EA8', '#4266A0', '#3A5E98', '#5476B0', '#5E7EB8', '#6886C0'],
                 'subcategories': [
                     {'id': 'health-insurance', 'name': 'Health Insurance', 'icon': 'syringe'},
                     {'id': 'home-insurance', 'name': 'Home Insurance', 'icon': 'document-signed'},
@@ -189,7 +189,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Financial Management',
                 'icon': 'diploma',
                 'color': '#4A6DA3',
-                'subcolors': ['#B0C2DE', '#9BB0D4', '#869ECA', '#C8D4E8', '#D9E3F0', '#E8EEF7'],
+                'subcolors': ['#3A5D93', '#32558B', '#2A4D83', '#42659B', '#4A6DA3', '#5275AB'],
                 'subcategories': [
                     {'id': 'bureaucracy', 'name': 'Bureaucracy', 'icon': 'diploma'},
                     {'id': 'investment-accounts', 'name': 'Investment Accounts', 'icon': 'earnings'}
@@ -200,7 +200,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Financial Services',
                 'icon': 'bank',
                 'color': '#3A5C8F',
-                'subcolors': ['#A8BBD9', '#93A8CF', '#7E95C5', '#BECEE5', '#D0DCF0', '#E0E9F7'],
+                'subcolors': ['#2A4C7F', '#224477', '#1A3C6F', '#325487', '#3A5C8F', '#426497'],
                 'subcategories': [
                     {'id': 'withdrawal', 'name': 'Withdrawal', 'icon': 'euro'},
                     {'id': 'payment-provider', 'name': 'Payment Provider', 'icon': 'shopping-cart'},
@@ -213,14 +213,14 @@ DEFAULT_CATEGORIES = {
         'id': 'transfers',
         'name': 'TRANSFERS',
         'icon': 'apps-sort',
-        'color': '#F0C46C',
+        'color': "#46330F",
         'categories': [
             {
                 'id': 'account-transfers',
                 'name': 'Account Transfers',
                 'icon': 'copy-alt',
                 'color': '#F0C46C',
-                'subcolors': ['#F7E6D0', '#F4D7B5', '#F9F0E4', '#F9E1C9', '#F7D19E', '#EED1A2'],
+                'subcolors': ['#D4A840', '#CCA038', '#C49830', '#DCB048', '#E4B850', '#ECC058'],
                 'subcategories': [
                     {'id': 'account-transfers-own', 'name': 'Between Own Accounts', 'icon': 'copy-alt'},
                     {'id': 'account-transfers-family', 'name': 'Family Support', 'icon': 'hand-holding-heart'},
@@ -232,7 +232,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Savings Transfer',
                 'icon': 'calculator',
                 'color': '#D4A647',
-                'subcolors': ['#F0E4C1', '#E8D5A3', '#F7EACE', '#E3C886', '#EBCF90', '#F5EAD4'],
+                'subcolors': ['#BC9030', '#B48828', '#AC8020', '#C49838', '#CCA040', '#D4A848'],
                 'subcategories': [
                     {'id': 'savings-transfer-main', 'name': 'Savings Transfer', 'icon': 'calculator'},
                     {'id': 'house-savings', 'name': 'House Savings', 'icon': 'home-location-alt'}
@@ -251,7 +251,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Savings Targets',
                 'icon': 'earnings',
                 'color': '#AE2C4C',
-                'subcolors': ['#D88FA3', '#C97586', '#BA5B6A', '#EAB5C0', '#F2D5DC', '#F8E8EC'],
+                'subcolors': ['#9E1C3C', '#961434', '#8E0C2C', '#A62444', '#AE2C4C', '#B63454'],
                 'subcategories': []
             },
             {
@@ -259,7 +259,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Expense Limits',
                 'icon': 'euro',
                 'color': '#FF6B6B',
-                'subcolors': ['#FFB5B5', '#FF9F9F', '#FF8989', '#FFD6D6', '#FFE5E5', '#FFF0F0'],
+                'subcolors': ['#EF5B5B', '#E75353', '#DF4B4B', '#F76363', '#FF6B6B', '#FF7373'],
                 'subcategories': []
             },
             {
@@ -267,7 +267,7 @@ DEFAULT_CATEGORIES = {
                 'name': 'Income Goals',
                 'icon': 'target',
                 'color': '#a33333',
-                'subcolors': ['#D99999', '#CC8080', '#BF6666', '#E6CCCC', '#F0E0E0', '#F7EBEB'],
+                'subcolors': ['#932323', '#8B1B1B', '#831313', '#9B2B2B', '#A33333', '#AB3B3B'],
                 'subcategories': []
             }
         ]
