@@ -115,7 +115,7 @@ export default {
     const fullRangeEnd = computed(() => {
       if (!dateRange.value.end) return new Date()
       const futureDate = new Date(dateRange.value.end)
-      futureDate.setFullYear(futureDate.getFullYear() + 1)
+      futureDate.setFullYear(futureDate.getFullYear() + 2)
       return futureDate
     })
     
@@ -234,10 +234,33 @@ export default {
       { deep: true }
     )
     
-    watch(() => currentZoomLevel.value, () => {
-      console.log('Zoom level:', currentZoomLevel.value)
+    watch(() => currentZoomLevel.value, (newLevel) => {
+      console.log('Zoom level:', newLevel)
       unpinHoverData()
-      customVisibleRange.value = null
+      
+      // Set appropriate visible range based on zoom level
+      if (!dateRange.value.end) {
+        customVisibleRange.value = null
+        return
+      }
+      
+      const end = new Date(dateRange.value.end)
+      let start
+      
+      if (newLevel === 0) {
+        // Quarter view - show all data
+        customVisibleRange.value = null
+      } else if (newLevel === 1) {
+        // Month view - show last 12 months
+        start = new Date(end)
+        start.setFullYear(start.getFullYear() - 1)
+        customVisibleRange.value = { start, end }
+      } else if (newLevel === 2) {
+        // Day view - show last 90 days
+        start = new Date(end)
+        start.setDate(start.getDate() - 90)
+        customVisibleRange.value = { start, end }
+      }
     })
     
     watch(() => currentMode.value, (newMode) => {

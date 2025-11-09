@@ -67,14 +67,24 @@ export default {
       
       const rect = event.currentTarget.getBoundingClientRect()
       const clickX = event.clientX - rect.left
-      const clickPercent = clickX / rect.width
+      const clickPercent = Math.max(0, Math.min(1, clickX / rect.width))
       
       const fullRange = props.fullRangeEnd.getTime() - props.fullRangeStart.getTime()
       const visibleRange = props.visibleRangeEnd.getTime() - props.visibleRangeStart.getTime()
       
       const targetCenter = props.fullRangeStart.getTime() + (fullRange * clickPercent)
-      const newStart = new Date(targetCenter - (visibleRange / 2))
-      const newEnd = new Date(targetCenter + (visibleRange / 2))
+      let newStart = new Date(targetCenter - (visibleRange / 2))
+      let newEnd = new Date(targetCenter + (visibleRange / 2))
+      
+      // Clamp to full range
+      if (newStart.getTime() < props.fullRangeStart.getTime()) {
+        newStart = new Date(props.fullRangeStart)
+        newEnd = new Date(newStart.getTime() + visibleRange)
+      }
+      if (newEnd.getTime() > props.fullRangeEnd.getTime()) {
+        newEnd = new Date(props.fullRangeEnd)
+        newStart = new Date(newEnd.getTime() - visibleRange)
+      }
       
       emit('scroll-to', { start: newStart, end: newEnd })
     }
@@ -110,8 +120,18 @@ export default {
       const fullRange = props.fullRangeEnd.getTime() - props.fullRangeStart.getTime()
       const visibleRange = props.visibleRangeEnd.getTime() - props.visibleRangeStart.getTime()
       
-      const newStart = new Date(props.fullRangeStart.getTime() + (fullRange * leftDecimal))
-      const newEnd = new Date(newStart.getTime() + visibleRange)
+      let newStart = new Date(props.fullRangeStart.getTime() + (fullRange * leftDecimal))
+      let newEnd = new Date(newStart.getTime() + visibleRange)
+      
+      // Clamp to full range
+      if (newStart.getTime() < props.fullRangeStart.getTime()) {
+        newStart = new Date(props.fullRangeStart)
+        newEnd = new Date(newStart.getTime() + visibleRange)
+      }
+      if (newEnd.getTime() > props.fullRangeEnd.getTime()) {
+        newEnd = new Date(props.fullRangeEnd)
+        newStart = new Date(newEnd.getTime() - visibleRange)
+      }
       
       emit('scroll-to', { start: newStart, end: newEnd })
     }

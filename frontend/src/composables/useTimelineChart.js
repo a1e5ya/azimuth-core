@@ -564,8 +564,8 @@ export function useTimelineChart(
     chart.addYaxisAnnotation({
       y: 0,
       borderColor: '#374151',
-      borderWidth: 0,
-      opacity: 0.8
+      borderWidth: 0.5,
+      opacity: 0.2
     })
     
     // Add vertical line at hovered position
