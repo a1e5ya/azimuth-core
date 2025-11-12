@@ -6,6 +6,15 @@
 
     <div v-if="chartData.length === 0" class="empty-state">
       <div>No data for selected period</div>
+      <div class="add-data">Add data here
+                  <button 
+            class="btn btn-icon" 
+            @click="showImportModal = true"
+            title="Import Transactions"
+          >
+            <AppIcon name="file-add" size="medium" />
+                  </button>
+      </div>
     </div>
 
     <div v-else class="chart-container">
@@ -22,10 +31,12 @@
 <script>
 import { computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
+import AppIcon from './AppIcon.vue'
 
 export default {
   name: 'DashboardIncomeExpensesChart',
   components: {
+    AppIcon,
     apexchart: VueApexCharts
   },
   props: {
@@ -210,6 +221,14 @@ export default {
 </script>
 
 <style scoped>
+.add-data {
+  margin-top: 1rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.5rem;
+
+}
 .chart-header {
   display: flex;
   justify-content: space-between;

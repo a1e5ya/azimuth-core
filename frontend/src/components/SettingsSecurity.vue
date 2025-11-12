@@ -1,100 +1,13 @@
 <!-- Settings Security - NO custom styles, uses global -->
 <template>
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">Security & Sessions</div>
-    </div>
-    
-    <div class="form-row">
-      <label>Auto-logout Timeout</label>
-      <select v-model="securitySettings.autoLogoutTimeout" @change="saveSecuritySettings" class="form-select">
-        <option value="15">15 minutes</option>
-        <option value="30">30 minutes</option>
-        <option value="60">1 hour</option>
-        <option value="120">2 hours</option>
-        <option value="240">4 hours</option>
-        <option value="0">Never</option>
-      </select>
-    </div>
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Current Session</div>
-        <div class="setting-desc">Started {{ sessionStartTime }}</div>
-      </div>
-      <button @click="logout" class="btn btn-danger">Logout</button>
-    </div>
-    
-    <button @click="viewLoginHistory" class="btn btn-secondary" style="width: 100%; margin-bottom: 0.75rem;">
-      View Login History
-    </button>
-    
-    <hr class="divider">
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Activity Log Entries</div>
-      </div>
-      <span class="setting-value">{{ formatNumber(activityLogCount) }}</span>
-    </div>
-    
-    <button @click="viewActivityLog" class="btn btn-secondary" style="width: 100%;">
-      View Activity Log
-    </button>
+  <div class="card settings-card">
 
-    <!-- Login History Modal -->
-    <div v-if="showLoginHistory" class="modal-overlay" @click="showLoginHistory = false">
-      <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
-          <h3>Login History</h3>
-          <button class="close-btn" @click="showLoginHistory = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="activity-list">
-            <div v-for="login in loginHistory" :key="login.id" class="activity-item">
-              <div class="activity-icon">🔐</div>
-              <div class="activity-details">
-                <div class="activity-action">{{ login.action }}</div>
-                <div class="activity-meta">{{ login.created_at }} • {{ login.ip_address }}</div>
-              </div>
-            </div>
-            <div v-if="loginHistory.length === 0" class="empty-state">
-              No login history found
-            </div>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button @click="showLoginHistory = false" class="btn btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
+    
 
-    <!-- Activity Log Modal -->
-    <div v-if="showActivityLog" class="modal-overlay" @click="showActivityLog = false">
-      <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
-          <h3>Activity Log</h3>
-          <button class="close-btn" @click="showActivityLog = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="activity-list">
-            <div v-for="log in activityLogs" :key="log.id" class="activity-item">
-              <div class="activity-icon">{{ getActivityIcon(log.entity) }}</div>
-              <div class="activity-details">
-                <div class="activity-action">{{ log.action }} • {{ log.entity }}</div>
-                <div class="activity-meta">{{ log.created_at }}</div>
-              </div>
-            </div>
-            <div v-if="activityLogs.length === 0" class="empty-state">
-              No activity logs found
-            </div>
-          </div>
-        </div>
-        <div class="modal-actions">
-          <button @click="showActivityLog = false" class="btn btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
+    
+    
+      Activity Log
+
   </div>
 </template>
 

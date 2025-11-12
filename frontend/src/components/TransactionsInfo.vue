@@ -15,10 +15,7 @@
 
     <!-- Column 2: Categorization -->
     <div class="info-column">
-      <div class="info-item">
-        <span class="info-label">Categorized</span>
-        <span class="info-value">{{ filteredStats?.categorized_count?.toLocaleString() || 0 }}</span>
-      </div>
+
 
       <div class="info-item">
         <span class="info-label">Total Volume</span>

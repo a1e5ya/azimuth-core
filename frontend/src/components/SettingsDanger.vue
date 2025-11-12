@@ -1,15 +1,15 @@
 <template>
-  <div class="card">
+  <div class="card settings-card">
     <div class="card-header">
       <div class="card-title">Danger Zone</div>
     </div>
     
     <div class="setting-row">
       <div class="setting-info">
-        <div class="setting-label">Reset Categories to Default</div>
-        <div class="setting-desc">Restore default category structure</div>
+        <div class="setting-label">Current Session</div>
+        <div class="setting-desc">Started {{ sessionStartTime }}</div>
       </div>
-      <button @click="confirmAction('reset-categories')" class="btn btn-danger">Reset</button>
+      <button @click="logout" class="btn btn-danger">Logout</button>
     </div>
     
     <div class="setting-row">
@@ -17,7 +17,7 @@
         <div class="setting-label">Clear All Chat History</div>
         <div class="setting-desc">Delete all AI chat messages</div>
       </div>
-      <button @click="confirmAction('clear-chat')" class="btn btn-danger">Clear</button>
+      <button @click="confirmAction('clear-chat')" class="btn btn-danger">Clear Chat</button>
     </div>
     
     <div class="setting-row">
@@ -25,13 +25,13 @@
         <div class="setting-label">Delete All Transactions</div>
         <div class="setting-desc">Permanently delete all transaction data</div>
       </div>
-      <button @click="confirmAction('delete-transactions')" class="btn btn-danger">Delete</button>
+      <button @click="confirmAction('delete-transactions')" class="btn btn-danger">Delete Transactions</button>
     </div>
     
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Delete Account</div>
-        <div class="setting-desc">Permanently delete your account and all data</div>
+        <div class="setting-desc">Permanently delete account and all data</div>
       </div>
       <button @click="confirmAction('delete-account')" class="btn btn-danger">Delete Account</button>
     </div>

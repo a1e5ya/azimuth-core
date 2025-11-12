@@ -1,8 +1,5 @@
 <template>
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">AI Assistant</div>
-    </div>
+  <div class="card settings-card">
     
     <div class="setting-row">
       <div class="setting-info">
@@ -14,28 +11,8 @@
       </span>
     </div>
     
-    <div class="form-row">
-      <label>Model</label>
-      <select v-model="aiSettings.model" @change="saveAISettings" class="form-select">
-        <option value="llama3.2:3b">llama3.2:3b</option>
-        <option value="llama3.2:1b">llama3.2:1b</option>
-        <option value="llama3.1:8b">llama3.1:8b</option>
-        <option value="mistral:7b">mistral:7b</option>
-        <option value="phi3:mini">phi3:mini</option>
-        <option value="qwen2.5:3b">qwen2.5:3b</option>
-      </select>
-    </div>
-    
-    <div class="form-column">
-      <label>Custom Instructions (Optional)</label>
-      <textarea 
-        v-model="aiSettings.customInstructions"
-        placeholder="Tell the AI how you want it to behave..."
-        class="custom-textarea"
-        @blur="saveAISettings"
-      ></textarea>
-    </div>
-    
+
+
     <div class="btn-row">
       <button @click="testConnection" class="btn btn-primary" :disabled="testing">
         {{ testing ? 'Testing...' : 'Test Connection' }}

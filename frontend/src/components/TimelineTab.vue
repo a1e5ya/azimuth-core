@@ -298,7 +298,7 @@ export default {
 
 <style scoped>
 .timeline-container {
-  padding: var(--gap-standard);
+  padding: 0;
 }
 
 .timeline-main-content {

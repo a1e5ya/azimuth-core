@@ -1,23 +1,15 @@
 <template>
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">Data & Privacy</div>
-    </div>
+  <div class="card settings-card">
     
     <div class="setting-row">
       <div class="setting-info">
-        <div class="setting-label">Automatic Backups</div>
-        <div class="setting-desc">Backup database daily</div>
+        <div class="setting-label">Auto Backup</div>
       </div>
-      <div :class="['toggle', autoBackup ? 'active' : '']" @click="toggleAutoBackup"></div>
-    </div>
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Database Location</div>
-        <div class="setting-desc">{{ databasePath }}</div>
-      </div>
-      <button class="btn btn-secondary" @click="openDatabaseFolder">Open</button>
+      <label class="switch">
+        <input type="checkbox" v-model="autoBackup" @change="toggleAutoBackup">
+        <span class="slider round"></span>
+      </label>
+
     </div>
     
     <div class="btn-row">
@@ -25,41 +17,16 @@
         {{ backingUp ? 'Backing up...' : 'Backup Now' }}
       </button>
       <button @click="restoreData" class="btn btn-secondary">Restore</button>
+    </div>
+        <div class="btn-row">
       <button @click="triggerImport" class="btn btn-primary">Import CSV</button>
       <button @click="exportData" class="btn btn-secondary" :disabled="exporting">
         {{ exporting ? 'Exporting...' : 'Export All' }}
       </button>
     </div>
     
-    <div class="btn-row">
-      <button @click="viewHistory" class="btn btn-secondary" style="flex: 1;">View Import History</button>
-    </div>
-    
-    <hr class="divider">
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Data Stored</div>
-      </div>
-      <span class="setting-value">{{ dataStats.databaseSize }}</span>
-    </div>
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Last Backup</div>
-      </div>
-      <span class="setting-value">{{ dataStats.lastBackup }}</span>
-    </div>
-    
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Total Transactions</div>
-      </div>
-      <span class="setting-value">{{ formatNumber(dataStats.totalTransactions) }}</span>
-    </div>
 
-    <input ref="restoreFileInput" type="file" accept=".db,.sqlite,.sqlite3" style="display: none" @change="handleRestoreFile">
-    <input ref="importFileInput" type="file" accept=".csv" style="display: none" @change="handleImportFile">
+    
   </div>
 </template>
 

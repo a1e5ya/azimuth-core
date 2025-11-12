@@ -1,8 +1,5 @@
 <template>
-  <div class="card">
-    <div class="card-header">
-      <div class="card-title">User Account</div>
-    </div>
+  <div class="card settings-card">
     
     <div class="form-row">
       <label>Display Name</label>
@@ -11,12 +8,8 @@
     
     <div class="form-row">
       <label>Email</label>
-      <input v-model="userProfile.email" type="email" placeholder="your.email@example.com" disabled class="form-input">
+      <input v-model="userProfile.email" type="email" placeholder="your.email@example.com" class="form-input">
     </div>
-    
-    <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
-      {{ saving ? 'Saving...' : 'Save Profile' }}
-    </button>
     
     <hr class="divider">
     
@@ -35,8 +28,8 @@
       <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" class="form-input">
     </div>
     
-    <button @click="changePassword" class="btn btn-primary" :disabled="changingPassword">
-      {{ changingPassword ? 'Changing...' : 'Change Password' }}
+    <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
+      {{ saving ? 'Saving...' : 'Save Profile' }}
     </button>
   </div>
 </template>
@@ -182,4 +175,3 @@ export default {
 }
 </script>
 
-<!-- NO STYLES - Uses global .card, .form-row, .form-input, .btn, .divider -->

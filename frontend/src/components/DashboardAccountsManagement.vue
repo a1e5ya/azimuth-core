@@ -2,7 +2,7 @@
   <div class="container">
     <div class="header-with-action">
       <h3>Account Owners & Accounts</h3>
-      <button class="btn btn-small btn-plus" @click="showAddOwnerModal = true">
+      <button class=" btn-plus" @click="showAddOwnerModal = true">
         <AppIcon name="plus" size="medium" />
       </button>
     </div>
@@ -134,28 +134,12 @@
               type="text" 
               v-model="ownerForm.name"
               class="form-input"
-              placeholder="e.g., Egor, Alex, Lila"
+              placeholder=""
               maxlength="50"
             >
           </div>
           
-          <div class="form-group">
-            <label>Color (Optional)</label>
-            <div class="color-picker">
-              <input 
-                type="color" 
-                v-model="ownerForm.color"
-                class="color-input"
-              >
-              <input 
-                type="text" 
-                v-model="ownerForm.color"
-                class="form-input"
-                placeholder="#3b82f6"
-                maxlength="7"
-              >
-            </div>
-          </div>
+          
         </div>
         
         <div class="modal-actions">
@@ -197,21 +181,12 @@
             <select v-model="accountForm.account_type" class="form-input">
               <option value="">Select type...</option>
               <option value="Main">Main</option>
-              <option value="Kopio">Kopio</option>
+              <option value="Kopio">Kopilka</option>
               <option value="Reserv">Reserv</option>
               <option value="BSP">BSP</option>
             </select>
           </div>
-          
-          <div class="form-group">
-            <label>Institution (Optional)</label>
-            <input 
-              type="text" 
-              v-model="accountForm.institution"
-              class="form-input"
-              placeholder="e.g., Bank Name"
-            >
-          </div>
+        
           
           <div class="form-group">
             <label>Current Balance (Optional)</label>
@@ -844,6 +819,7 @@ export default {
 .btn-plus {
   margin: 0;
   background-color: transparent;
+  border: none;
 }
 
 .btn-icon:hover {

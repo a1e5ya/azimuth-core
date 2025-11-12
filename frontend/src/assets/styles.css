@@ -312,8 +312,9 @@ button * {
 }
 
 .btn-danger {
-  background: #ffdddd;
+  background: #ffffff;
   color: rgb(0, 0, 0);
+  border: #ff9797 0.025rem solid;
 }
 
 .btn-danger:hover {
@@ -1073,7 +1074,7 @@ textarea.form-input {
 /* Stats grid for system status */
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: var(--gap-small);
   margin-top: var(--gap-small);
 }

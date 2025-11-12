@@ -15,10 +15,8 @@
       <SettingsSecurity />
       
       <!-- System Status -->
-      <div class="card">
-        <div class="card-header">
-          <div class="card-title">System Status</div>
-        </div>
+      <div class="card settings-card">
+
         
         <div class="stats-grid">
           <div class="stat-box">
@@ -39,15 +37,10 @@
             </div>
             <div class="stat-label">Ollama</div>
           </div>
-          <div class="stat-box">
-            <div class="stat-value status-info">{{ formatShortNumber(systemStatus.transactions) }}</div>
-            <div class="stat-label">Transactions</div>
-          </div>
+
         </div>
         
-        <button @click="viewSystemDetails" class="btn btn-secondary" style="width: 100%; margin-top: 0.625rem;">
-          View Details
-        </button>
+
       </div>
       
       <!-- Danger Zone -->
@@ -58,87 +51,7 @@
       
     </div>
 
-    <!-- System Details Modal -->
-    <div v-if="showSystemDetails" class="modal-overlay" @click="showSystemDetails = false">
-      <div class="modal-content modal-large" @click.stop>
-        <div class="modal-header">
-          <h3>System Details</h3>
-          <button class="close-btn" @click="showSystemDetails = false">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="detail-section">
-            <h4>Database</h4>
-            <div class="detail-row">
-              <span>Status:</span>
-              <span :class="systemStatus.database ? 'status-ok' : 'status-error'">
-                {{ systemStatus.database ? 'Connected' : 'Error' }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <span>Location:</span>
-              <span>/data/finance.db</span>
-            </div>
-            <div class="detail-row">
-              <span>Size:</span>
-              <span>{{ systemDetails.databaseSize }}</span>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <h4>API Server</h4>
-            <div class="detail-row">
-              <span>Status:</span>
-              <span :class="systemStatus.api ? 'status-ok' : 'status-error'">
-                {{ systemStatus.api ? 'Running' : 'Offline' }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <span>Endpoint:</span>
-              <span>http://localhost:8001</span>
-            </div>
-            <div class="detail-row">
-              <span>Uptime:</span>
-              <span>{{ systemDetails.uptime }}</span>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <h4>Ollama AI</h4>
-            <div class="detail-row">
-              <span>Status:</span>
-              <span :class="systemStatus.ollama ? 'status-ok' : 'status-error'">
-                {{ systemStatus.ollama ? 'Running' : 'Offline' }}
-              </span>
-            </div>
-            <div class="detail-row">
-              <span>Model:</span>
-              <span>{{ systemDetails.aiModel }}</span>
-            </div>
-          </div>
-
-          <div class="detail-section">
-            <h4>Data</h4>
-            <div class="detail-row">
-              <span>Transactions:</span>
-              <span>{{ formatNumber(systemStatus.transactions) }}</span>
-            </div>
-            <div class="detail-row">
-              <span>Categories:</span>
-              <span>{{ formatNumber(systemDetails.categories) }}</span>
-            </div>
-            <div class="detail-row">
-              <span>Accounts:</span>
-              <span>{{ formatNumber(systemDetails.accounts) }}</span>
-            </div>
-          </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button @click="showSystemDetails = false" class="btn btn-secondary">Close</button>
-        </div>
-      </div>
-    </div>
+    
   </div>
 </template>
 
@@ -293,8 +206,12 @@ export default {
 }
 
 .settings-masonry {
-  column-count: 3;
+  column-count: 4;
   column-gap: var(--gap-standard);
   padding: var(--gap-standard);
+}
+
+.settings-card {
+  margin: 0 0 var(--gap-standard);
 }
 </style>
