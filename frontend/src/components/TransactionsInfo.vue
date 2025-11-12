@@ -21,14 +21,6 @@
       </div>
 
       <div class="info-item">
-        <span class="info-label">Uncategorized</span>
-        <span class="info-value">{{ uncategorizedCount }}</span>
-      </div>
-    </div>
-
-    <!-- Column 3: Amounts -->
-    <div class="info-column">
-      <div class="info-item">
         <span class="info-label">Total Volume</span>
         <span class="info-value">{{ formatCurrency(filteredStats?.total_amount) }}</span>
       </div>
