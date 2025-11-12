@@ -3,9 +3,7 @@
     <div class="grid grid-4">
       <!-- Spending Card -->
       <div 
-        class="container stat-card"
-        :style="{ backgroundColor: hexToRgba(getTypeColor('expenses'), 0.1) }"
-      >
+        class="container stat-card card-expenses">
         <div class="stat-label">Total Spending</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalSpending) }}</div>
         <div class="stat-detail">
@@ -15,9 +13,7 @@
 
       <!-- Income Card -->
       <div 
-        class="container stat-card"
-        :style="{ backgroundColor: hexToRgba(getTypeColor('income'), 0.1) }"
-      >
+        class="container stat-card card-income">
         <div class="stat-label">Total Income</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalIncome) }}</div>
         <div class="stat-detail">
@@ -27,9 +23,7 @@
 
       <!-- Transfers Card -->
       <div 
-        class="container stat-card"
-        :style="{ backgroundColor: hexToRgba(getTypeColor('transfers'), 0.1) }"
-      >
+        class="container stat-card card-transfers">
         <div class="stat-label">Total Transfers</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalTransfers) }}</div>
         <div class="stat-detail">
@@ -39,8 +33,8 @@
 
       <!-- Net Savings Card -->
       <div 
-        class="container stat-card"
-        :style="{ backgroundColor: kpis.netSavings >= 0 ? 'rgba(34, 197, 94, 0.1)' : 'rgba(239, 68, 68, 0.1)' }"
+        class="container stat-card "
+        :style="{ backgroundColor: kpis.netSavings >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)' }"
       >
         <div class="stat-label">Net Savings</div>
         <div class="stat-value">
@@ -164,6 +158,17 @@ export default {
   height: 145px;
   width: 12rem;
   box-shadow: none;
+}
+
+.card-expenses {
+  background-color: rgba(197, 145, 232, 0.5)
+;
+}
+.card-income {
+  background-color: rgba(24, 234, 184, 0.5);
+} 
+.card-transfers {
+  background-color: rgba(240, 196, 108, 0.5);
 }
 
 .stat-label {

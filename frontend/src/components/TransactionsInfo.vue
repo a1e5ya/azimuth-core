@@ -22,7 +22,7 @@
 
       <div class="info-item">
         <span class="info-label">Uncategorized</span>
-        <span class="info-value">{{ filteredStats?.uncategorized_count?.toLocaleString() || 0 }}</span>
+        <span class="info-value">{{ uncategorizedCount }}</span>
       </div>
     </div>
 
@@ -60,6 +60,10 @@ export default {
     filteredStats: {
       type: Object,
       default: null
+    },
+    uncategorizedCount: {
+      type: Number,
+      default: 0
     },
     uploads: {
       type: Array,

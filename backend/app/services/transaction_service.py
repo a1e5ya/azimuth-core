@@ -138,9 +138,17 @@ class TransactionImportService:
             source_category = "imported"
             
             if auto_categorize:
-                csv_main = trans_data.get('main_category', '')
-                csv_cat = trans_data.get('category', '')
-                csv_subcat = trans_data.get('subcategory', '')
+                csv_main = trans_data.get('main_category', '').strip()
+                csv_cat = trans_data.get('category', '').strip()
+                csv_subcat = trans_data.get('subcategory', '').strip()
+                
+                # Treat "-" as empty
+                if csv_main == '-':
+                    csv_main = ''
+                if csv_cat == '-':
+                    csv_cat = ''
+                if csv_subcat == '-':
+                    csv_subcat = ''
                 
                 if csv_main:
                     # Use ensure_categories_from_csv to auto-create
@@ -154,8 +162,16 @@ class TransactionImportService:
                         source_category = 'csv_mapped'
                         categorization_stats['auto_created'] += 1
                     else:
+                        # If category creation failed, mark as Uncategorized
+                        uncategorized = await self.category_service.get_or_create_uncategorized()
+                        category_id = uncategorized.id
+                        source_category = 'imported'
                         categorization_stats['none'] += 1
                 else:
+                    # If CSV has empty categories, mark as Uncategorized
+                    uncategorized = await self.category_service.get_or_create_uncategorized()
+                    category_id = uncategorized.id
+                    source_category = 'imported'
                     categorization_stats['none'] += 1
             
             # Derive is_income/is_expense from main_category
@@ -380,7 +396,13 @@ class TransactionQueries:
         if filters.get('max_amount') is not None:
             conditions.append(Transaction.amount <= filters['max_amount'])
         if filters.get('merchant'):
-            conditions.append(Transaction.merchant.ilike(f"%{filters['merchant']}%"))
+            search_term = f"%{filters['merchant']}%"
+            conditions.append(
+                or_(
+                    Transaction.merchant.ilike(search_term),
+                    Transaction.memo.ilike(search_term)
+                )
+            )
         if filters.get('category_id'):
             conditions.append(Transaction.category_id == uuid.UUID(filters['category_id']))
         if filters.get('main_category'):
