@@ -162,6 +162,8 @@
           @input="debounceSearch"
         >
               <div class="filter-actions-compact">
+        <button class="btn btn-small" @click="filterUncategorized">Uncategorized</button>
+        <div></div>
         <button class="btn btn-small" @click="clearAllFilters">Clear</button>
         <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
       </div>
@@ -329,6 +331,11 @@ export default {
       applyFilters()
     }
 
+    const filterUncategorized = () => {
+      localFilters.value.categories = ['Uncategorized']
+      applyFilters()
+    }
+
     return {
       localFilters,
       availableOwners,
@@ -341,7 +348,8 @@ export default {
       handleOwnerChange,
       handleTypeChange,
       handleCategoryChange,
-      clearAllFilters
+      clearAllFilters,
+      filterUncategorized
     }
   }
 }
@@ -423,7 +431,7 @@ export default {
   display: flex;
   gap: var(--gap-small);
   align-items: flex-start;
-  justify-content: flex-end;
+  justify-content: space-evenly;
 }
 
 .filter-actions-compact .btn-small {

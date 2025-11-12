@@ -439,9 +439,9 @@ class EnhancedCSVProcessor:
                     'source_category': 'imported',
                     
                     # Categories (direct from CSV, no csv_ prefix)
-                    'main_category': safe_get('main_category'),
-                    'category': safe_get('category'),
-                    'subcategory': safe_get('subcategory'),
+                    'main_category': safe_get('main_category') or 'Uncategorized',
+                    'category': safe_get('category') or 'Uncategorized',
+                    'subcategory': safe_get('subcategory') or 'Uncategorized',
                     
                     # Account info (renamed from csv_*)
                     'bank_account': safe_get('account'),

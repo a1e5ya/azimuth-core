@@ -172,10 +172,17 @@ async def get_filtered_summary(
     stats_result = await db.execute(stats_query)
     stats = stats_result.first()
     
+    # Count transactions with category = "-" (uncategorized in CSV)
+    uncategorized_query = select(func.count(Transaction.id)).where(
+        and_(base_condition, Transaction.category == "Uncategorized")
+    )
+    uncategorized_result = await db.execute(uncategorized_query)
+    uncategorized_count = uncategorized_result.scalar() or 0
+    
     return {
         "filtered_count": stats.total or 0,
         "categorized_count": stats.categorized or 0,
-        "uncategorized_count": (stats.total or 0) - (stats.categorized or 0),
+        "uncategorized_count": uncategorized_count,
         "total_amount": float(stats.total_amount or 0)
     }
 
