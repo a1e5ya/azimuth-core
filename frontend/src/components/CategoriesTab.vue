@@ -20,9 +20,28 @@
     <!-- Scrollable Content - All Categories -->
     <div class="categories-scroll-container" ref="scrollContainer">
       <div class="add-category-button" style="margin-bottom: 1rem;">
-        <button class="btn-plus" @click="handleAddMainCategory">
+        <button class="btn btn-icon" @click="showCreateMenu = !showCreateMenu">
           <AppIcon name="plus" size="medium" />
         </button>
+        
+        <!-- Create Menu Dropdown -->
+        <div v-if="showCreateMenu" class="create-dropdown">
+          <button class="create-option" @click="handleCreateType">
+            <AppIcon name="apps-add" size="small" />
+            <span>Add Type</span>
+          </button>
+          <button class="create-option" @click="handleEditTypes">
+            <AppIcon name="pencil" size="small" />
+            <span>Edit Types</span>
+          </button>
+          <button class="create-option" @click="handleAddMainCategory">
+            <AppIcon name="folder-add" size="small" />
+            <span>Add Category</span>
+          </button>
+        </div>
+        
+        <!-- Backdrop to close menu -->
+        <div v-if="showCreateMenu" class="menu-backdrop" @click="showCreateMenu = false"></div>
       </div>
       
       <!-- Loading State -->
@@ -120,6 +139,34 @@
       </div>
     </div>
     
+    <!-- Edit Types Modal -->
+    <div v-if="showEditTypesModal" class="modal-overlay" @click="showEditTypesModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>Edit Types</h3>
+          <button class="close-btn" @click="showEditTypesModal = false">×</button>
+        </div>
+        
+        <div class="modal-body">
+          <div class="types-list">
+            <div 
+              v-for="type in sortedCategories" 
+              :key="type.id"
+              class="type-row"
+            >
+              <div class="type-info">
+                <AppIcon :name="type.icon" size="medium" :style="{ color: type.color }" />
+                <span>{{ type.name }}</span>
+              </div>
+              <button class="btn btn-small" @click="handleEdit(type); showEditTypesModal = false">
+                Edit
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
     <!-- CRUD Component -->
     <CategoriesCRUD
       ref="crudComponent"
@@ -132,7 +179,8 @@
 
 <script>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { useCategoryStore } from '@/stores/categories'
+import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
 import CategoriesCRUD from './CategoriesCRUD.vue'
@@ -146,14 +194,20 @@ export default {
   },
   emits: ['add-chat-message'],
   setup(props, { emit }) {
-    const categoryStore = useCategoryStore()
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+    const authStore = useAuthStore()
+    
+    const categories = ref([])
+    const loading = ref(false)
     const activeTypeId = ref(null)
     const scrollContainer = ref(null)
     const crudComponent = ref(null)
+    const showCreateMenu = ref(false)
+    const showEditTypesModal = ref(false)
     let scrollTimeout = null
 
-    const categories = computed(() => {
-      const cats = categoryStore.categories || []
+    const sortedCategories = computed(() => {
+      const cats = categories.value || []
       const order = ['income', 'expenses', 'transfers', 'targets']
       
       return [...cats].sort((a, b) => {
@@ -162,8 +216,6 @@ export default {
         return aIndex - bIndex
       })
     })
-    
-    const loading = computed(() => categoryStore.loading)
 
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
@@ -208,10 +260,29 @@ export default {
       }, 100)
     }
 
-    async function refreshCategories() {
-      await categoryStore.loadCategories()
-      if (categories.value && categories.value.length > 0 && !activeTypeId.value) {
-        activeTypeId.value = categories.value[0].id
+    async function loadCategories() {
+      loading.value = true
+      
+      try {
+        const response = await axios.get(`${API_BASE}/categories/tree`, {
+          headers: { Authorization: `Bearer ${authStore.token}` }
+        })
+        
+        categories.value = response.data.tree || []
+        console.log('✅ Categories loaded:', categories.value.length)
+        
+        if (categories.value.length > 0 && !activeTypeId.value) {
+          activeTypeId.value = categories.value[0].id
+        }
+        
+      } catch (error) {
+        console.error('❌ Failed to load categories:', error)
+        
+        if (error.response?.status === 401) {
+          await authStore.verifyToken()
+        }
+      } finally {
+        loading.value = false
       }
     }
 
@@ -228,19 +299,27 @@ export default {
     }
 
     function handleAddMainCategory() {
-      // Find the currently visible type or use first type
-      const currentType = categories.value.find(t => t.id === activeTypeId.value) || categories.value[0]
-      if (currentType) {
-        crudComponent.value.createCategory(currentType)
-      }
+      crudComponent.value.createCategory(null, true)
+      showCreateMenu.value = false
+    }
+
+    function handleCreateType() {
+      crudComponent.value.createCategory(null)
+      showCreateMenu.value = false
+    }
+
+    function handleEditTypes() {
+      // Show modal with list of all types to edit
+      showEditTypesModal.value = true
+      showCreateMenu.value = false
     }
 
     async function handleCategoryUpdated() {
-      await refreshCategories()
+      await loadCategories()
     }
 
     async function handleCategoryDeleted() {
-      await refreshCategories()
+      await loadCategories()
     }
 
     function addChatMessage(messageData) {
@@ -260,7 +339,7 @@ export default {
     }
 
     onMounted(async () => {
-      await refreshCategories()
+      await loadCategories()
       scrollContainer.value?.addEventListener('scroll', handleScroll)
     })
 
@@ -270,19 +349,23 @@ export default {
     })
 
     return {
-      categories,
+      categories: sortedCategories,
       loading,
       activeTypeId,
       scrollContainer,
       crudComponent,
+      showCreateMenu,
+      showEditTypesModal,
       hexToRgba,
       scrollToType,
       handleScroll,
-      refreshCategories,
+      loadCategories,
       handleEdit,
       handleDelete,
       handleAdd,
       handleAddMainCategory,
+      handleCreateType,
+      handleEditTypes,
       handleCategoryUpdated,
       handleCategoryDeleted,
       addChatMessage,
@@ -299,13 +382,76 @@ export default {
   display: flex;
   justify-content: flex-end;
   margin-bottom: -30px !important;
+  position: relative;
 }
 
-.btn-plus{
-    margin: 0;
-    background-color: transparent;
-    border: none;
-    cursor: pointer;
+.create-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.25rem;
+  background: var(--color-background-light);
+  backdrop-filter: blur(1rem);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 0.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.125rem;
+  z-index: 100;
+  min-width: 10rem;
+}
+
+.create-option {
+  background: none;
+  border: none;
+  padding: 0.5rem 0.75rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-radius: 0.25rem;
+  transition: background 0.2s;
+  font-size: var(--text-small);
+  color: var(--color-text);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.create-option:hover {
+  background: var(--color-background-dark);
+}
+
+.menu-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 99;
+  background: transparent;
+}
+
+.types-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
+}
+
+.type-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--gap-small);
+  border: 1px solid var(--color-background-dark);
+  border-radius: var(--radius);
+}
+
+.type-info {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  font-weight: 500;
 }
 
 .categories-layout {

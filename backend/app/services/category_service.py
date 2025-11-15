@@ -1,8 +1,3 @@
-"""
-Consolidated Category Service - Handles all category operations
-Merged from: category_service, category_initialization, category_mappings, 
-             category_training, category_queries
-"""
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, delete, desc
 from typing import List, Dict, Any, Optional, Tuple
@@ -275,22 +270,6 @@ DEFAULT_CATEGORIES = {
 }
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-# ============================================================================
-# MAIN SERVICE CLASS
-# ============================================================================
-
 class CategoryService:
     """Consolidated service for all category operations"""
     
@@ -298,16 +277,11 @@ class CategoryService:
         self.db = db
         self.user = user
     
-    # ========================================================================
-    # INITIALIZATION
-    # ========================================================================
-    
     async def initialize_default_categories(self) -> int:
         """Create default category tree for user"""
         created_count = 0
         
         for type_key, type_data in DEFAULT_CATEGORIES.items():
-            # Create main type category
             type_category = Category(
                 id=str(uuid.uuid4()),
                 user_id=self.user.id,
@@ -322,7 +296,6 @@ class CategoryService:
             self.db.add(type_category)
             created_count += 1
             
-            # Create child categories
             for cat_data in type_data['categories']:
                 subcolors = cat_data.get('subcolors', [])
                 random.shuffle(subcolors)
@@ -341,7 +314,6 @@ class CategoryService:
                 self.db.add(category)
                 created_count += 1
                 
-                # Create subcategories
                 for idx, subcat_data in enumerate(cat_data.get('subcategories', [])):
                     subcolor = subcolors[idx % len(subcolors)] if subcolors else cat_data['color']
                     
@@ -391,10 +363,6 @@ class CategoryService:
             await self.db.refresh(uncategorized)
         
         return uncategorized
-    
-    # ========================================================================
-    # CATEGORY CRUD
-    # ========================================================================
     
     async def get_category_tree(self) -> List[Dict[str, Any]]:
         """Get hierarchical category tree with transaction counts"""
@@ -450,15 +418,15 @@ class CategoryService:
         return tree
     
     async def get_category_by_id(self, category_id: str) -> Optional[Category]:
-        """Get single category with user verification"""
+        """Get single category - FIXED: compare as string"""
         try:
-            cat_uuid = uuid.UUID(category_id)
+            uuid.UUID(category_id)
         except ValueError:
             return None
         
         query = select(Category).where(
             and_(
-                Category.id == cat_uuid,
+                Category.id == category_id,
                 Category.user_id == self.user.id
             )
         )
@@ -500,7 +468,7 @@ class CategoryService:
         self, category_id: str, name: Optional[str] = None,
         icon: Optional[str] = None, color: Optional[str] = None
     ) -> Category:
-        """Update category details"""
+        """Update category - FIXED"""
         category = await self.get_category_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -517,7 +485,7 @@ class CategoryService:
         return category
     
     async def delete_category(self, category_id: str) -> Dict[str, Any]:
-        """Delete category and move transactions to Uncategorized"""
+        """Delete category - FIXED: string comparisons"""
         category = await self.get_category_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -527,15 +495,14 @@ class CategoryService:
             raise HTTPException(status_code=400, detail=usage_check["warning_message"])
         
         uncategorized = await self.get_or_create_uncategorized()
-        cat_uuid = uuid.UUID(category_id)
         
         from sqlalchemy import update
         update_query = update(Transaction).where(
-            Transaction.category_id == cat_uuid
-        ).values(category_id=uuid.UUID(uncategorized.id))
+            Transaction.category_id == category_id
+        ).values(category_id=uncategorized.id)
         await self.db.execute(update_query)
         
-        delete_query = delete(Category).where(Category.id == cat_uuid)
+        delete_query = delete(Category).where(Category.id == category_id)
         await self.db.execute(delete_query)
         await self.db.commit()
         
@@ -547,20 +514,20 @@ class CategoryService:
         }
     
     async def check_category_usage(self, category_id: str) -> Dict[str, Any]:
-        """Check if category can be deleted"""
+        """Check if category can be deleted - FIXED"""
         try:
-            cat_uuid = uuid.UUID(category_id)
+            uuid.UUID(category_id)
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid category ID")
         
         trans_count_query = select(func.count(Transaction.id)).where(
-            Transaction.category_id == cat_uuid
+            Transaction.category_id == category_id
         )
         trans_result = await self.db.execute(trans_count_query)
         transaction_count = trans_result.scalar()
         
         children_query = select(func.count(Category.id)).where(
-            Category.parent_id == cat_uuid
+            Category.parent_id == category_id
         )
         children_result = await self.db.execute(children_query)
         children_count = children_result.scalar()
@@ -581,21 +548,13 @@ class CategoryService:
             "warning_message": warning
         }
     
-    # ========================================================================
-    # CSV MAPPING & AUTO-CREATION
-    # ========================================================================
-    
     async def ensure_categories_from_csv(
         self, main_category: str, category: str = None, subcategory: str = None
     ) -> Optional[Category]:
-        """
-        Ensure categories exist from CSV data, creating them if needed.
-        Returns the most specific category (subcategory > category > main_category).
-        """
+        """Ensure categories exist from CSV data"""
         if not main_category:
             return None
         
-        # Map CSV main categories to our type system
         type_map = {
             'INCOME': 'income',
             'EXPENSES': 'expenses', 
@@ -605,7 +564,6 @@ class CategoryService:
         
         category_type = type_map.get(main_category.upper(), 'expenses')
         
-        # Get or create main type category
         type_query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
@@ -617,7 +575,6 @@ class CategoryService:
         type_category = type_result.scalar_one_or_none()
         
         if not type_category:
-            # Create main type category if missing
             type_data = DEFAULT_CATEGORIES.get(category_type)
             if type_data:
                 color = type_data.get('color', '#94a3b8')
@@ -643,7 +600,6 @@ class CategoryService:
         if not category:
             return type_category
         
-        # Get or create mid-level category
         mid_query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
@@ -655,7 +611,6 @@ class CategoryService:
         mid_category = mid_result.scalar_one_or_none()
         
         if not mid_category:
-            # Try to find a matching default category for better icon/color
             default_cat = None
             if category_type in DEFAULT_CATEGORIES:
                 for cat_data in DEFAULT_CATEGORIES[category_type].get('categories', []):
@@ -667,7 +622,6 @@ class CategoryService:
                 color = default_cat.get('color', '#94a3b8')
                 icon = default_cat.get('icon', 'circle')
             else:
-                # Auto-generate color based on category name hash
                 color_hash = int(hashlib.md5(category.encode()).hexdigest()[:6], 16)
                 color = f"#{format(color_hash % 0xFFFFFF, '06x')}"
                 icon = 'circle'
@@ -688,7 +642,6 @@ class CategoryService:
         if not subcategory:
             return mid_category
         
-        # Get or create subcategory
         sub_query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
@@ -700,7 +653,6 @@ class CategoryService:
         sub_category = sub_result.scalar_one_or_none()
         
         if not sub_category:
-            # Try to find matching default subcategory
             default_subcat = None
             if category_type in DEFAULT_CATEGORIES:
                 for cat_data in DEFAULT_CATEGORIES[category_type].get('categories', []):
@@ -713,13 +665,11 @@ class CategoryService:
             
             if default_subcat:
                 icon = default_subcat.get('icon', 'circle')
-                # Use a lighter shade of parent color
                 parent_color = mid_category.color or '#94a3b8'
                 if parent_color.startswith('#'):
                     r = int(parent_color[1:3], 16)
                     g = int(parent_color[3:5], 16)
                     b = int(parent_color[5:7], 16)
-                    # Lighten by mixing with white
                     r = min(255, r + (255 - r) // 2)
                     g = min(255, g + (255 - g) // 2)
                     b = min(255, b + (255 - b) // 2)
@@ -727,7 +677,6 @@ class CategoryService:
                 else:
                     color = parent_color
             else:
-                # Lighter color for subcategory
                 color_hash = int(hashlib.md5(subcategory.encode()).hexdigest()[:6], 16)
                 color = f"#{format((color_hash % 0xFFFFFF) | 0x808080, '06x')}"
                 icon = 'circle'
@@ -747,78 +696,12 @@ class CategoryService:
         
         return sub_category
     
-    async def find_category_for_csv(
-        self, csv_main: str, csv_cat: str, csv_subcat: str
-    ) -> Optional[Category]:
-        """Find matching user category for CSV data"""
-        
-        # Get all categories
-        query = select(Category).where(
-            and_(
-                Category.user_id == self.user.id,
-                Category.active == True
-            )
-        )
-        result = await self.db.execute(query)
-        user_categories = result.scalars().all()
-        
-        # Normalize inputs
-        csv_main = (csv_main or '').lower().strip()
-        csv_cat = (csv_cat or '').lower().strip()
-        csv_subcat = (csv_subcat or '').lower().strip()
-        
-        # Try exact subcategory match first
-        if csv_subcat:
-            for cat in user_categories:
-                if cat.name.lower().strip() == csv_subcat:
-                    return cat
-        
-        # Try exact category match
-        if csv_cat:
-            for cat in user_categories:
-                if cat.name.lower().strip() == csv_cat:
-                    return cat
-        
-        # Try fuzzy subcategory match
-        if csv_subcat:
-            for cat in user_categories:
-                cat_name = cat.name.lower().strip()
-                if csv_subcat in cat_name or cat_name in csv_subcat:
-                    return cat
-        
-        # Try fuzzy category match
-        if csv_cat:
-            for cat in user_categories:
-                cat_name = cat.name.lower().strip()
-                if csv_cat in cat_name or cat_name in csv_cat:
-                    return cat
-        
-        return None
-    
-    def _calculate_similarity(self, str1: str, str2: str) -> float:
-        """Calculate similarity between two strings (0.0 to 1.0)"""
-        if not str1 or not str2:
-            return 0.0
-        
-        s1 = str1.lower().strip()
-        s2 = str2.lower().strip()
-        
-        if s1 == s2:
-            return 1.0
-        
-        return SequenceMatcher(None, s1, s2).ratio()
-    
-    # ========================================================================
-    # ANALYTICS & QUERIES
-    # ========================================================================
-    
     async def get_type_summary(
         self, category_type: str,
         start_date: Optional[date] = None,
         end_date: Optional[date] = None
     ) -> Dict[str, Any]:
         """Get summary for transaction type"""
-        
         cat_query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
@@ -895,7 +778,7 @@ class CategoryService:
         }
     
     def _is_main_category(self, cat: Category, all_cats: List[Category]) -> bool:
-        """Check if category is a main category (level 2 in hierarchy)"""
+        """Check if category is main (level 2)"""
         if not cat.parent_id:
             return False
         
@@ -904,174 +787,7 @@ class CategoryService:
             return True
         
         return False
-    
-    async def get_category_summary(
-        self, category_id: str,
-        start_date: Optional[date] = None,
-        end_date: Optional[date] = None
-    ) -> Dict[str, Any]:
-        """Get summary for specific category"""
-        
-        try:
-            cat_uuid = uuid.UUID(category_id)
-        except ValueError:
-            return {}
-        
-        category_query = select(Category).where(
-            and_(
-                Category.id == cat_uuid,
-                Category.user_id == self.user.id
-            )
-        )
-        category_result = await self.db.execute(category_query)
-        category = category_result.scalar_one_or_none()
-        
-        if not category:
-            return {}
-        
-        children_query = select(Category).where(
-            and_(
-                Category.parent_id == cat_uuid,
-                Category.user_id == self.user.id,
-                Category.active == True
-            )
-        )
-        children_result = await self.db.execute(children_query)
-        children = children_result.scalars().all()
-        child_ids = [str(c.id) for c in children]
-        all_category_ids = [str(cat_uuid)] + child_ids
-        
-        conditions = [
-            Transaction.user_id == self.user.id,
-            Transaction.category_id.in_(all_category_ids)
-        ]
-        if start_date:
-            conditions.append(Transaction.posted_at >= start_date)
-        if end_date:
-            conditions.append(Transaction.posted_at <= end_date)
-        
-        stats_query = select(
-            func.count(Transaction.id).label('total_count'),
-            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount'),
-            func.coalesce(func.avg(func.abs(Transaction.amount)), 0).label('avg_amount')
-        ).where(and_(*conditions))
-        
-        stats_result = await self.db.execute(stats_query)
-        stats = stats_result.first()
-        
-        subcategories = []
-        for child in children:
-            sub_query = select(
-                func.count(Transaction.id).label('count'),
-                func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
-            ).where(
-                and_(
-                    Transaction.user_id == self.user.id,
-                    Transaction.category_id == str(child.id)
-                )
-            )
-            
-            sub_result = await self.db.execute(sub_query)
-            sub_data = sub_result.first()
-            
-            if sub_data and sub_data.count > 0:
-                subcategories.append({
-                    'id': str(child.id),
-                    'name': child.name,
-                    'icon': child.icon,
-                    'count': sub_data.count,
-                    'amount': float(sub_data.amount)
-                })
-        
-        subcategories.sort(key=lambda x: x['amount'], reverse=True)
-        
-        merchants_query = select(
-            Transaction.merchant,
-            func.count(Transaction.id).label('count'),
-            func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('amount')
-        ).where(
-            and_(*conditions, Transaction.merchant.isnot(None))
-        ).group_by(Transaction.merchant).order_by(desc('amount')).limit(5)
-        
-        merchants_result = await self.db.execute(merchants_query)
-        top_merchants = [
-            {
-                'name': row.merchant,
-                'count': row.count,
-                'amount': float(row.amount)
-            }
-            for row in merchants_result
-        ]
-        
-        return {
-            'category': {
-                'id': str(category.id),
-                'name': category.name,
-                'icon': category.icon or 'circle',
-                'type': category.category_type
-            },
-            'stats': {
-                'total_count': stats.total_count or 0,
-                'total_amount': float(stats.total_amount),
-                'avg_amount': float(stats.avg_amount)
-            },
-            'subcategories': subcategories,
-            'top_merchants': top_merchants
-        }
-    
-    async def get_subcategory_transactions(
-        self, subcategory_id: str, page: int = 1, limit: int = 50,
-        start_date: Optional[date] = None, end_date: Optional[date] = None
-    ) -> Dict[str, Any]:
-        """Get transactions for subcategory with pagination"""
-        
-        try:
-            subcat_uuid = uuid.UUID(subcategory_id)
-        except ValueError:
-            return {'transactions': [], 'total': 0}
-        
-        conditions = [
-            Transaction.category_id == str(subcat_uuid),
-            Transaction.user_id == self.user.id
-        ]
-        
-        if start_date:
-            conditions.append(Transaction.posted_at >= start_date)
-        if end_date:
-            conditions.append(Transaction.posted_at <= end_date)
-        
-        count_query = select(func.count(Transaction.id)).where(and_(*conditions))
-        count_result = await self.db.execute(count_query)
-        total = count_result.scalar()
-        
-        transactions_query = select(Transaction).where(
-            and_(*conditions)
-        ).order_by(desc(Transaction.posted_at)).offset((page - 1) * limit).limit(limit)
-        
-        transactions_result = await self.db.execute(transactions_query)
-        transactions = transactions_result.scalars().all()
-        
-        return {
-            'transactions': [
-                {
-                    'id': str(t.id),
-                    'posted_at': t.posted_at.isoformat(),
-                    'amount': str(t.amount),
-                    'merchant': t.merchant,
-                    'memo': t.memo,
-                    'main_category': t.main_category
-                }
-                for t in transactions
-            ],
-            'total': total,
-            'page': page,
-            'limit': limit
-        }
 
-
-# ============================================================================
-# DEPENDENCY INJECTION
-# ============================================================================
 
 def get_category_service(
     current_user: User = Depends(get_current_user),

@@ -10,12 +10,12 @@
         
         <div class="modal-body">
           <div class="edit-form">
-            <!-- Type Selection (only when creating main category under a type) -->
+            <!-- Type Selector (only when creating category under a type) -->
             <div v-if="showTypeSelector" class="form-group">
-              <label>Category Type</label>
+              <label>Type</label>
               <select v-model="selectedTypeId" class="form-input" @change="onTypeChange">
                 <option value="">Select type...</option>
-                <option v-for="type in categoryTypes" :key="type.id" :value="type.id">
+                <option v-for="type in availableTypes" :key="type.id" :value="type.id">
                   {{ type.name }}
                 </option>
               </select>
@@ -80,7 +80,7 @@
           <button 
             class="btn" 
             @click="saveEdit"
-            :disabled="saving || !editForm.name || (showTypeSelector && !selectedTypeId)"
+            :disabled="saving || !editForm.name"
           >
             {{ saving ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create') }}
           </button>
@@ -143,7 +143,8 @@
 
 <script>
 import { ref, computed, onMounted } from 'vue'
-import { useCategoryStore } from '@/stores/categories'
+import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'
 
 export default {
@@ -151,7 +152,8 @@ export default {
   components: { AppIcon },
   emits: ['category-updated', 'category-deleted', 'add-chat-message'],
   setup(props, { emit }) {
-    const categoryStore = useCategoryStore()
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+    const authStore = useAuthStore()
     
     const editingCategory = ref(null)
     const deletingCategory = ref(null)
@@ -162,6 +164,7 @@ export default {
     const iconSearch = ref('')
     const availableIcons = ref([])
     const loadingIcons = ref(false)
+    const availableTypes = ref([])
     const selectedTypeId = ref('')
     
     const editForm = ref({
@@ -170,25 +173,41 @@ export default {
       color: ''
     })
 
-    const categoryTypes = computed(() => {
-      return categoryStore.categories?.filter(cat => !cat.parent_id) || []
-    })
-
     const isEditing = computed(() => editingCategory.value?.id !== undefined)
-
+    
     const showTypeSelector = computed(() => {
-      // Show type selector when creating a new main category (child of a type)
-      // Don't show when editing or creating subcategories
+      // Show when creating a main category (needs to choose type)
+      // Don't show when editing or creating type (parent_id = null) or subcategory
       if (isEditing.value) return false
       if (!editingCategory.value) return false
       
-      // Check if parent is a type (has no parent itself)
-      const parentId = editingCategory.value.parent_id
-      if (!parentId) return false
+      // If parent_id is explicitly null, we're creating a type - don't show selector
+      if (editingCategory.value.parent_id === null && !editingCategory.value.isMainCategory) return false
       
-      const parent = categoryTypes.value.find(t => t.id === parentId)
-      return parent !== undefined
+      // If isMainCategory flag is set, show selector
+      return editingCategory.value.isMainCategory === true
     })
+
+    const onTypeChange = () => {
+      const selectedType = availableTypes.value.find(t => t.id === selectedTypeId.value)
+      if (selectedType) {
+        editingCategory.value.parent_id = selectedTypeId.value
+        editForm.value.color = selectedType.color || '#94a3b8'
+      }
+    }
+
+    const loadTypes = async () => {
+      try {
+        const response = await axios.get(`${API_BASE}/categories/tree`, {
+          headers: { Authorization: `Bearer ${authStore.token}` }
+        })
+        
+        availableTypes.value = (response.data.tree || []).filter(cat => !cat.parent_id)
+        console.log('✅ Types loaded:', availableTypes.value.length)
+      } catch (error) {
+        console.error('Failed to load types:', error)
+      }
+    }
 
     const filteredIcons = computed(() => {
       if (!iconSearch.value) return availableIcons.value
@@ -196,7 +215,6 @@ export default {
       return availableIcons.value.filter(icon => icon.toLowerCase().includes(search))
     })
 
-    // Fetch available icons from the icons folder
     const loadAvailableIcons = async () => {
       loadingIcons.value = true
       try {
@@ -214,30 +232,42 @@ export default {
       }
     }
 
-    const onTypeChange = () => {
-      const selectedType = categoryTypes.value.find(t => t.id === selectedTypeId.value)
-      if (selectedType) {
-        editingCategory.value.parent_id = selectedTypeId.value
-        editForm.value.color = selectedType.color || '#94a3b8'
+    const createCategory = (parent = null, isMainCategory = false) => {
+      editingCategory.value = { 
+        parent_id: parent?.id || null,
+        isMainCategory: isMainCategory 
       }
-    }
-
-    const createCategory = (parent = null) => {
-      editingCategory.value = { parent_id: parent?.id || null }
-      selectedTypeId.value = parent?.id || ''
       
-      editForm.value = {
-        name: '',
-        icon: parent ? 'circle' : 'apps-sort',
-        color: parent?.color || '#94a3b8'
+      if (isMainCategory) {
+        // Creating main category - will select type
+        selectedTypeId.value = ''
+        editForm.value = {
+          name: '',
+          icon: 'circle',
+          color: '#94a3b8'
+        }
+      } else if (!parent) {
+        // Creating a type (no parent)
+        editForm.value = {
+          name: '',
+          icon: 'apps-sort',
+          color: '#94a3b8'
+        }
+      } else {
+        // Creating a subcategory
+        editForm.value = {
+          name: '',
+          icon: 'circle',
+          color: parent?.color || '#94a3b8'
+        }
       }
+      
       showIconPicker.value = false
       iconSearch.value = ''
     }
 
     const editCategory = (category) => {
       editingCategory.value = category
-      selectedTypeId.value = ''
       editForm.value = {
         name: category.name || '',
         icon: category.icon || 'circle',
@@ -255,7 +285,6 @@ export default {
 
     const closeEditModal = () => {
       editingCategory.value = null
-      selectedTypeId.value = ''
       editForm.value = { name: '', icon: '', color: '' }
       showIconPicker.value = false
       iconSearch.value = ''
@@ -267,7 +296,7 @@ export default {
       // Validate type selection if needed
       if (showTypeSelector.value && !selectedTypeId.value) {
         emit('add-chat-message', {
-          response: 'Please select a category type'
+          response: 'Please select a type'
         })
         return
       }
@@ -275,46 +304,43 @@ export default {
       saving.value = true
       
       try {
-        let result
+        let response
         
         if (isEditing.value) {
-          result = await categoryStore.updateCategory(
-            editingCategory.value.id,
-            {
-              name: editForm.value.name,
-              icon: editForm.value.icon,
-              color: editForm.value.color
-            }
+          // Update existing category
+          response = await axios.put(
+            `${API_BASE}/categories/${editingCategory.value.id}`,
+            editForm.value,
+            { headers: { Authorization: `Bearer ${authStore.token}` }}
           )
         } else {
-          result = await categoryStore.createCategory({
-            name: editForm.value.name,
-            icon: editForm.value.icon,
-            color: editForm.value.color,
-            parent_id: editingCategory.value.parent_id
-          })
+          // Create new category
+          response = await axios.post(
+            `${API_BASE}/categories/`,
+            {
+              ...editForm.value,
+              parent_id: editingCategory.value.parent_id
+            },
+            { headers: { Authorization: `Bearer ${authStore.token}` }}
+          )
         }
         
-        if (result.success) {
-          emit('add-chat-message', {
-            message: isEditing.value ? 'Category updated' : 'Category created',
-            response: isEditing.value 
-              ? `"${editForm.value.name}" has been updated!`
-              : `"${editForm.value.name}" has been created!`
-          })
-          
-          closeEditModal()
-          emit('category-updated')
-        } else {
-          emit('add-chat-message', {
-            response: result.error || 'Failed to save category'
-          })
-        }
+        console.log('✅ Category saved:', response.data)
+        
+        emit('add-chat-message', {
+          message: isEditing.value ? 'Category updated' : 'Category created',
+          response: isEditing.value 
+            ? `"${editForm.value.name}" has been updated!`
+            : `"${editForm.value.name}" has been created!`
+        })
+        
+        closeEditModal()
+        emit('category-updated')
         
       } catch (error) {
         console.error('Failed to save category:', error)
         emit('add-chat-message', {
-          response: 'An error occurred. Please try again.'
+          response: error.response?.data?.detail || 'Failed to save category. Please try again.'
         })
       } finally {
         saving.value = false
@@ -325,8 +351,20 @@ export default {
       deletingCategory.value = category
       deleteCheck.value = null
       
-      const check = await categoryStore.checkDelete(category.id)
-      deleteCheck.value = check
+      try {
+        const response = await axios.get(
+          `${API_BASE}/categories/${category.id}/check-delete`,
+          { headers: { Authorization: `Bearer ${authStore.token}` }}
+        )
+        
+        deleteCheck.value = response.data
+      } catch (error) {
+        console.error('Failed to check delete:', error)
+        deleteCheck.value = { 
+          can_delete: false, 
+          warning_message: 'Failed to check category' 
+        }
+      }
     }
 
     const closeDeleteModal = () => {
@@ -340,26 +378,25 @@ export default {
       deleting.value = true
       
       try {
-        const result = await categoryStore.deleteCategory(deletingCategory.value.id)
+        const response = await axios.delete(
+          `${API_BASE}/categories/${deletingCategory.value.id}`,
+          { headers: { Authorization: `Bearer ${authStore.token}` }}
+        )
         
-        if (result.success) {
-          emit('add-chat-message', {
-            message: 'Category deleted',
-            response: `"${deletingCategory.value.name}" has been deleted.`
-          })
-          
-          emit('category-deleted')
-          closeDeleteModal()
-        } else {
-          emit('add-chat-message', {
-            response: result.error || 'Failed to delete category'
-          })
-        }
+        console.log('✅ Category deleted:', response.data)
+        
+        emit('add-chat-message', {
+          message: 'Category deleted',
+          response: `"${deletingCategory.value.name}" has been deleted.`
+        })
+        
+        emit('category-deleted')
+        closeDeleteModal()
         
       } catch (error) {
         console.error('Failed to delete category:', error)
         emit('add-chat-message', {
-          response: 'An error occurred. Please try again.'
+          response: error.response?.data?.detail || 'Failed to delete category. Please try again.'
         })
       } finally {
         deleting.value = false
@@ -368,6 +405,7 @@ export default {
 
     onMounted(() => {
       loadAvailableIcons()
+      loadTypes()
     })
 
     return {
@@ -382,10 +420,6 @@ export default {
       iconSearch,
       filteredIcons,
       loadingIcons,
-      categoryTypes,
-      selectedTypeId,
-      showTypeSelector,
-      onTypeChange,
       createCategory,
       editCategory,
       selectIcon,
