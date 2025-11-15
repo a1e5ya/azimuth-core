@@ -14,11 +14,9 @@
     </div>
     
     <!-- Empty State -->
-    <div v-else-if="owners.length === 0" class="empty-state">
-      <AppIcon name="credit-card" size="large" />
-      <div>No account owners yet</div>
-      <div class="text-small">Import training data or create owners manually</div>
-    </div>
+<div v-else-if="owners.length === 0" class="empty-state">
+  <div>No account owners yet</div>
+</div>
     
     <!-- Owners & Accounts List -->
     <div v-else class="accounts-grid">
@@ -324,7 +322,7 @@ export default {
       required: true
     }
   },
-  emits: ['import-success'],
+  emits: ['import-success', 'open-import'],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()

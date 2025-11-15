@@ -49,19 +49,21 @@
               >
               <div class="radio-content">
                 <strong>Training Data</strong>
-                <p>Import as uncategorized training data (current behavior)</p>
+                <p>Pre-categorized data with auto-creation</p>
               </div>
             </label>
             
-            <label class="radio-option">
+            <label class="radio-option" :class="{ 'disabled': !hasAccounts }">
               <input 
                 type="radio" 
                 v-model="importMode" 
                 value="account"
+                :disabled="!hasAccounts"
               >
               <div class="radio-content">
                 <strong>Direct to Account</strong>
-                <p>Import to a specific account with categorization</p>
+                <p v-if="hasAccounts">Import to a specific account</p>
+                <p v-else class="warning-text">No accounts available - create accounts first</p>
               </div>
             </label>
           </div>
@@ -102,8 +104,8 @@
           </div>
         </div>
 
-        <!-- Options -->
-        <div class="form-section">
+        <!-- Options (only for account mode) -->
+        <div v-if="importMode === 'account'" class="form-section">
           <h4>Options</h4>
           <label class="checkbox-option">
             <input type="checkbox" v-model="autoCategorize">
@@ -156,6 +158,8 @@ export default {
     const importing = ref(false)
     const loadingAccounts = ref(false)
     const accounts = ref([])
+
+    const hasAccounts = computed(() => accounts.value.length > 0)
 
     const selectedAccount = computed(() => {
       return accounts.value.find(a => a.id === selectedAccountId.value)
@@ -212,6 +216,11 @@ export default {
           headers: { Authorization: `Bearer ${authStore.token}` }
         })
         accounts.value = response.data.accounts || []
+        
+        // Switch to training mode if no accounts
+        if (accounts.value.length === 0) {
+          importMode.value = 'training'
+        }
       } catch (error) {
         console.error('Failed to load accounts:', error)
       } finally {
@@ -230,7 +239,7 @@ export default {
           const formData = new FormData()
           formData.append('file', file)
           formData.append('import_mode', importMode.value)
-          formData.append('auto_categorize', autoCategorize.value)
+          formData.append('auto_categorize', importMode.value === 'account' ? autoCategorize.value : 'true')
           
           if (importMode.value === 'account') {
             formData.append('account_id', selectedAccountId.value)
@@ -264,13 +273,7 @@ export default {
     }
 
     watch(() => props.show, (newVal) => {
-      if (newVal && importMode.value === 'account' && accounts.value.length === 0) {
-        loadAccounts()
-      }
-    })
-
-    watch(importMode, (newVal) => {
-      if (newVal === 'account' && accounts.value.length === 0) {
+      if (newVal) {
         loadAccounts()
       }
     })
@@ -285,6 +288,7 @@ export default {
       importing,
       loadingAccounts,
       groupedAccounts,
+      hasAccounts,
       canImport,
       triggerFileInput,
       handleFileSelect,
@@ -333,6 +337,11 @@ export default {
   margin: var(--gap-small) 0;
 }
 
+.help-text {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
 .file-list {
   width: 100%;
 }
@@ -359,5 +368,99 @@ export default {
   cursor: pointer;
   color: var(--color-text-muted);
   padding: 0 var(--gap-small);
+}
+
+.btn-remove:hover {
+  color: var(--color-danger);
+}
+
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--gap-small);
+  padding: var(--gap-standard);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.radio-option:hover {
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.radio-option.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.radio-content {
+  flex: 1;
+}
+
+.radio-content p {
+  margin: 0.25rem 0 0 0;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.warning-text {
+  color: var(--color-warning);
+  font-size: var(--text-small);
+}
+
+.form-select {
+  width: 100%;
+  padding: var(--gap-small);
+  border: 1px solid rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  background: var(--color-background-light);
+  font-size: var(--text-small);
+}
+
+.account-preview {
+  margin-top: var(--gap-standard);
+  padding: var(--gap-standard);
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+}
+
+.preview-label {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+  margin-bottom: var(--gap-small);
+}
+
+.preview-content {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  flex-wrap: wrap;
+}
+
+.owner-badge {
+  padding: 0.25rem var(--gap-small);
+  border-radius: var(--radius);
+  color: white;
+  font-size: var(--text-small);
+}
+
+.checkbox-option {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+  cursor: pointer;
+}
+
+.loading-text {
+  padding: var(--gap-standard);
+  text-align: center;
+  color: var(--color-text-muted);
 }
 </style>

@@ -1,23 +1,31 @@
 <template>
   <div class="container">
-    <div class="chart-header">
-      <h3>Income vs Expenses Trend</h3>
-    </div>
 
-    <div v-if="chartData.length === 0" class="empty-state">
-      <div>No data for selected period</div>
-      <div class="add-data">Add data here
-                  <button 
-            class="btn btn-icon" 
-            @click="showImportModal = true"
-            title="Import Transactions"
-          >
-            <AppIcon name="file-add" size="medium" />
-                  </button>
+
+    <!-- Empty State with Drop Zone -->
+    <div v-if="chartData.length === 0" class="empty-state-import">
+      <div class="file-drop-zone" 
+           @drop.prevent="handleDrop" 
+           @dragover.prevent
+           @click="triggerFileInput">
+        <AppIcon name="file-add" size="large" />
+        <p>Drop training data here or click to browse</p>
+        <p class="help-text">CSV/XLSX files supported</p>
       </div>
+      <input 
+        ref="fileInput" 
+        type="file" 
+        accept=".csv,.xlsx"
+        multiple
+        @change="handleFileSelect"
+        style="display: none"
+      >
     </div>
 
     <div v-else class="chart-container">
+          <div class="chart-header">
+      <h3>Income vs Expenses Trend</h3>
+    </div>
       <apexchart
         type="area"
         height="300"
@@ -29,15 +37,17 @@
 </template>
 
 <script>
-import { computed } from 'vue'
+import { ref, computed } from 'vue'
 import VueApexCharts from 'vue3-apexcharts'
 import AppIcon from './AppIcon.vue'
+import axios from 'axios'
+import { useAuthStore } from '@/stores/auth'
 
 export default {
   name: 'DashboardIncomeExpensesChart',
   components: {
-    AppIcon,
-    apexchart: VueApexCharts
+    apexchart: VueApexCharts,
+    AppIcon
   },
   props: {
     filteredTransactions: {
@@ -49,7 +59,58 @@ export default {
       required: true
     }
   },
-  setup(props) {
+  emits: ['import-complete'],
+  setup(props, { emit }) {
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+    const authStore = useAuthStore()
+    const fileInput = ref(null)
+
+    const triggerFileInput = () => {
+      fileInput.value?.click()
+    }
+
+    const handleFileSelect = (event) => {
+      const files = Array.from(event.target.files)
+      processFiles(files)
+      event.target.value = ''
+    }
+
+    const handleDrop = (event) => {
+      const files = Array.from(event.dataTransfer.files)
+      const validFiles = files.filter(f => 
+        f.name.toLowerCase().endsWith('.csv') || 
+        f.name.toLowerCase().endsWith('.xlsx')
+      )
+      processFiles(validFiles)
+    }
+
+    const processFiles = async (files) => {
+      if (!files || files.length === 0) return
+
+      for (const file of files) {
+        try {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('import_mode', 'training')
+          formData.append('auto_categorize', 'true')
+
+          await axios.post(`${API_BASE}/transactions/import`, formData, {
+            headers: {
+              'Authorization': `Bearer ${authStore.token}`,
+              'Content-Type': 'multipart/form-data'
+            },
+            timeout: 300000
+          })
+
+          console.log(`✅ Imported: ${file.name}`)
+        } catch (error) {
+          console.error(`❌ Import failed: ${file.name}`, error)
+        }
+      }
+
+      emit('import-complete', { success: true, fileCount: files.length })
+    }
+
     const chartData = computed(() => {
       if (props.filteredTransactions.length === 0) return []
 
@@ -212,23 +273,19 @@ export default {
     }))
 
     return {
+      fileInput,
       chartData,
       chartSeries,
-      chartOptions
+      chartOptions,
+      triggerFileInput,
+      handleFileSelect,
+      handleDrop
     }
   }
 }
 </script>
 
 <style scoped>
-.add-data {
-  margin-top: 1rem;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.5rem;
-
-}
 .chart-header {
   display: flex;
   justify-content: space-between;
@@ -244,6 +301,34 @@ export default {
 
 .chart-container {
   padding: var(--gap-small);
+}
+
+.empty-state-import {
+  padding: var(--gap-large);
+}
+
+.file-drop-zone {
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  padding: var(--gap-xxl);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--color-background-light);
+}
+
+.file-drop-zone:hover {
+  border-color: var(--color-button-active);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.file-drop-zone p {
+  margin: var(--gap-small) 0;
+}
+
+.help-text {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
 }
 
 :deep(.apexcharts-tooltip) {

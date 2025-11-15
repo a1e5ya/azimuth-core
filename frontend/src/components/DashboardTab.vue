@@ -27,12 +27,21 @@
       <DashboardIncomeExpensesChart
         :filtered-transactions="filteredTransactionsWithContext"
         :get-type-color="getTypeColor"
+        @import-complete="handleImportComplete"
       />
 
       <DashboardAccountsManagement
         :filtered-transactions="filteredTransactions"
+        @open-import="showImportModal = true"
       />
     </template>
+
+    <!-- Import Modal -->
+    <TransactionImportModal
+      :show="showImportModal"
+      @close="showImportModal = false"
+      @import-complete="handleImportComplete"
+    />
   </div>
 </template>
 
@@ -44,6 +53,7 @@ import DashboardDateRangePicker from './DashboardDateRangePicker.vue'
 import DashboardStatCards from './DashboardStatCards.vue'
 import DashboardIncomeExpensesChart from './DashboardIncomeExpensesChart.vue'
 import DashboardAccountsManagement from './DashboardAccountsManagement.vue'
+import TransactionImportModal from './TransactionImportModal.vue'
 
 export default {
   name: 'DashboardTab',
@@ -51,7 +61,8 @@ export default {
     DashboardDateRangePicker,
     DashboardStatCards,
     DashboardIncomeExpensesChart,
-    DashboardAccountsManagement
+    DashboardAccountsManagement,
+    TransactionImportModal
   },
   setup() {
     const authStore = useAuthStore()
@@ -60,6 +71,7 @@ export default {
     
     const loading = ref(false)
     const transactions = ref([])
+    const showImportModal = ref(false)
     const dateRange = ref({
       startDate: new Date(),
       endDate: new Date()
@@ -114,6 +126,12 @@ export default {
 
     function handleDateRangeChange(newRange) {
       dateRange.value = newRange
+    }
+
+    async function handleImportComplete(result) {
+      if (result.success) {
+        await loadTransactions()
+      }
     }
 
     async function loadTransactions() {
@@ -210,7 +228,9 @@ export default {
       maxAvailableDate,
       filteredTransactions,
       filteredTransactionsWithContext,
+      showImportModal,
       handleDateRangeChange,
+      handleImportComplete,
       getTypeColor
     }
   }
