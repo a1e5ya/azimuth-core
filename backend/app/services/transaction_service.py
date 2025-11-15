@@ -3,7 +3,7 @@ Consolidated Transaction Service - FIXED
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_, func, or_, desc, asc, extract
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime, date, timedelta
 import uuid
@@ -373,8 +373,6 @@ class TransactionQueries:
         result = await self.db.execute(query)
         return result.scalar_one_or_none()
     
-    # In backend/app/services/transaction_service.py
-# In the get_transactions_with_filters method, around line 390-425
 
     async def get_transactions_with_filters(
         self, filters: Dict[str, Any]
@@ -444,7 +442,9 @@ class TransactionQueries:
         page = filters.get('page', 1)
         limit = filters.get('limit', 50)
         query = query.offset((page - 1) * limit).limit(limit)
-        query = query.options(selectinload(Transaction.assigned_category))
+        query = query.options(
+        selectinload(Transaction.assigned_category).selectinload(Category.parent)
+        )
         
         result = await self.db.execute(query)
         transactions = result.scalars().all()
@@ -646,6 +646,138 @@ class TransactionService:
         except Exception as e:
             await self.db.rollback()
             return {"success": False, "message": str(e)}
+    
+    async def update_transaction(
+        self, transaction_id: str, merchant: Optional[str] = None,
+        amount: Optional[float] = None, memo: Optional[str] = None,
+        category_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Update transaction details"""
+        try:
+            # Convert string to UUID
+            try:
+                trans_uuid = uuid.UUID(transaction_id)
+            except ValueError:
+                return {"success": False, "message": "Invalid transaction ID format"}
+            
+            transaction_query = select(Transaction).where(
+                and_(
+                    Transaction.id == str(trans_uuid),  # FIX: compare as string
+                    Transaction.user_id == str(self.user.id)
+                )
+            )
+            result = await self.db.execute(transaction_query)
+            transaction = result.scalar_one_or_none()
+            
+            if not transaction:
+                return {"success": False, "message": "Transaction not found"}
+            
+            # Update fields if provided
+            if merchant is not None:
+                transaction.merchant = merchant
+            if amount is not None:
+                transaction.amount = amount
+                transaction.is_expense = amount < 0
+                transaction.is_income = amount > 0
+            if memo is not None:
+                transaction.memo = memo
+            if category_id is not None:
+                # Verify category exists
+                try:
+                    cat_uuid = uuid.UUID(category_id)
+                except ValueError:
+                    return {"success": False, "message": "Invalid category ID format"}
+                
+                category_query = select(Category).where(
+                    and_(
+                        Category.id == str(cat_uuid),  # FIX: compare as string
+                        Category.user_id == str(self.user.id)
+                    )
+                )
+                category_result = await self.db.execute(category_query)
+                category = category_result.scalar_one_or_none()
+                
+                if not category:
+                    return {"success": False, "message": "Category not found"}
+                
+                transaction.category_id = str(cat_uuid)  # FIX: store as string
+                transaction.source_category = "user"
+                transaction.review_needed = False
+            
+            transaction.updated_at = datetime.utcnow()
+            
+            await self.db.commit()
+            
+            return {
+                "success": True,
+                "message": "Transaction updated successfully"
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            print(f"❌ Update failed: {e}")  # DEBUG
+            return {"success": False, "message": str(e)}
+
+
+    async def bulk_categorize(
+        self, transaction_ids: List[str], category_id: str,
+        confidence: float = 1.0
+    ) -> Dict[str, Any]:
+        """Bulk categorize multiple transactions"""
+        try:
+            # Verify category exists
+            try:
+                cat_uuid = uuid.UUID(category_id)
+            except ValueError:
+                return {"success": False, "message": "Invalid category ID format", "updated_count": 0}
+            
+            category_query = select(Category).where(
+                and_(
+                    Category.id == str(cat_uuid),  # FIX: compare as string
+                    Category.user_id == str(self.user.id)
+                )
+            )
+            category_result = await self.db.execute(category_query)
+            category = category_result.scalar_one_or_none()
+            
+            if not category:
+                return {"success": False, "message": "Category not found", "updated_count": 0}
+            
+            # Convert transaction IDs to strings
+            trans_ids = [str(uuid.UUID(tid)) for tid in transaction_ids]
+            
+            # Update transactions
+            from sqlalchemy import update
+            update_query = update(Transaction).where(
+                and_(
+                    Transaction.id.in_(trans_ids),  # FIX: use string list
+                    Transaction.user_id == str(self.user.id)
+                )
+            ).values(
+                category_id=str(cat_uuid),  # FIX: store as string
+                source_category="user",
+                confidence_score=confidence,
+                review_needed=False,
+                updated_at=datetime.utcnow()
+            )
+            
+            result = await self.db.execute(update_query)
+            await self.db.commit()
+            
+            return {
+                "success": True,
+                "message": f"Categorized {result.rowcount} transactions as {category.name}",
+                "updated_count": result.rowcount
+            }
+            
+        except Exception as e:
+            await self.db.rollback()
+            print(f"❌ Bulk categorize failed: {e}")  # DEBUG
+            return {"success": False, "message": str(e), "updated_count": 0}
+
+
+
+
     
     async def delete_transaction(self, transaction_id: str) -> Dict[str, Any]:
         """Delete a transaction"""

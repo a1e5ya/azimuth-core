@@ -196,38 +196,41 @@ export default {
     }
 
     const saveEdit = async () => {
-      if (!editingTransaction.value || saving.value) return
-      
-      saving.value = true
-      
-      try {
-        const token = authStore.token
-        
-        await axios.put(
-          `${API_BASE}/transactions/${editingTransaction.value.id}`,
-          editForm.value,
-          {
-            headers: { 'Authorization': `Bearer ${token}` }
-          }
-        )
-        
-        emit('add-chat-message', {
-          message: 'Transaction updated',
-          response: 'Transaction has been successfully updated!'
-        })
-        
-        emit('transaction-updated')
-        closeEditModal()
-        
-      } catch (error) {
-        console.error('Failed to update transaction:', error)
-        emit('add-chat-message', {
-          response: 'Failed to update transaction. Please try again.'
-        })
-      } finally {
-        saving.value = false
+  if (!editingTransaction.value || saving.value) return
+  
+  saving.value = true
+  
+  try {
+    const token = authStore.token
+    
+    const response = await axios.put(
+      `${API_BASE}/transactions/${editingTransaction.value.id}`,
+      editForm.value,
+      {
+        headers: { 'Authorization': `Bearer ${token}` }
       }
-    }
+    )
+    
+    console.log('✅ Update response:', response.data)  // DEBUG
+    
+    emit('add-chat-message', {
+      message: 'Transaction updated',
+      response: response.data.message || 'Transaction has been successfully updated!'
+    })
+    
+    closeEditModal()
+    emit('transaction-updated')  // This triggers refresh
+    
+  } catch (error) {
+    console.error('Failed to update transaction:', error)
+    console.error('Error response:', error.response?.data)  // DEBUG
+    emit('add-chat-message', {
+      response: error.response?.data?.detail || 'Failed to update transaction. Please try again.'
+    })
+  } finally {
+    saving.value = false
+  }
+}
 
     const deleteTransaction = (transaction) => {
       deletingTransaction.value = transaction

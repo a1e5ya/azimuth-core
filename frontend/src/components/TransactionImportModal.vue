@@ -129,7 +129,7 @@
 </template>
 
 <script>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'

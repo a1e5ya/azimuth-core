@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, distinct
 from typing import List, Optional
 from datetime import date, datetime
+from pydantic import BaseModel
 import uuid
 
 from ..models.database import get_db, User, Transaction, Category, AuditLog
@@ -25,6 +26,13 @@ from .transaction_models import (
 from ..auth.local_auth import get_current_user
 
 router = APIRouter()
+
+class TransactionUpdateRequest(BaseModel):
+    merchant: Optional[str] = None
+    amount: Optional[float] = None
+    memo: Optional[str] = None
+    category_id: Optional[str] = None
+
 
 @router.get("/list", response_model=List[TransactionResponse])
 async def list_transactions(
@@ -65,6 +73,11 @@ async def list_transactions(
     transactions, total_count = await queries.get_transactions_with_filters(filters)    
     response_data = []
     for transaction in transactions:
+        parent_category_name = None
+        if transaction.assigned_category:
+            if transaction.assigned_category.parent:
+                parent_category_name = transaction.assigned_category.parent.name
+
         response_data.append(TransactionResponse(
             id=str(transaction.id),
             account_id=str(transaction.account_id) if transaction.account_id else None,
@@ -76,6 +89,7 @@ async def list_transactions(
             category_id=str(transaction.category_id) if transaction.category_id else None,
             category_name=transaction.assigned_category.name if transaction.assigned_category else None,
             category_icon=transaction.assigned_category.icon if transaction.assigned_category else None,
+            parent_category_name=parent_category_name,
             source_category=transaction.source_category,
             import_batch_id=str(transaction.import_batch_id) if transaction.import_batch_id else None,
             main_category=transaction.main_category,
@@ -252,13 +266,6 @@ async def categorize_transaction(
     
     return result
 
-@router.post("/bulk-categorize", response_model=BulkOperationResponse)
-async def bulk_categorize_transactions(
-    request: BulkCategorizeRequest,
-    service: TransactionService = Depends(get_transaction_service)
-):
-    """Bulk categorize multiple transactions"""
-    return BulkOperationResponse(success=False, message="Not implemented yet", updated_count=0)
 
 @router.delete("/{transaction_id}", response_model=DeleteResponse)
 async def delete_transaction(
@@ -295,6 +302,44 @@ async def reset_all_transactions(
         "message": f"Successfully deleted {transaction_count} transactions",
         "deleted_count": transaction_count
     }
+
+@router.put("/{transaction_id}")
+async def update_transaction(
+    transaction_id: str,
+    update_data: TransactionUpdateRequest,
+    service: TransactionService = Depends(get_transaction_service)
+):
+    """Update transaction details"""
+    result = await service.update_transaction(
+        transaction_id=transaction_id,
+        merchant=update_data.merchant,
+        amount=update_data.amount,
+        memo=update_data.memo,
+        category_id=update_data.category_id
+    )
+    
+    if not result["success"]:
+        raise HTTPException(status_code=404, detail=result["message"])
+    
+    return result
+
+
+@router.post("/bulk-categorize", response_model=BulkOperationResponse)
+async def bulk_categorize_transactions(
+    request: BulkCategorizeRequest,
+    service: TransactionService = Depends(get_transaction_service)
+):
+    """Bulk categorize multiple transactions"""
+    result = await service.bulk_categorize(
+        transaction_ids=request.transaction_ids,
+        category_id=request.category_id,
+        confidence=request.confidence
+    )
+    
+    return BulkOperationResponse(**result)
+
+
+
 
 @router.get("/filter-metadata")
 async def get_filter_metadata(

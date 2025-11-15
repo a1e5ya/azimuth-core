@@ -514,51 +514,53 @@ export default {
     }
 
     async function loadTransactions() {
-    loading.value = true
+  loading.value = true
+  
+  try {
+    const params = {
+      page: currentPage.value,
+      limit: pageSize.value,
+      sort_by: sortBy.value,
+      sort_order: sortOrder.value,
+      start_date: filters.value.startDate || undefined,
+      end_date: filters.value.endDate || undefined,
+      min_amount: filters.value.minAmount || undefined,
+      max_amount: filters.value.maxAmount || undefined,
+      merchant: filters.value.merchant || undefined,
+      owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
+      account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
+      main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
+      categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,
+      subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined,
+      _t: Date.now()  // Cache busting timestamp
+    }
     
-    try {
-      const params = {
-        page: currentPage.value,
-        limit: pageSize.value,
-        sort_by: sortBy.value,
-        sort_order: sortOrder.value,
-        start_date: filters.value.startDate || undefined,
-        end_date: filters.value.endDate || undefined,
-        min_amount: filters.value.minAmount || undefined,
-        max_amount: filters.value.maxAmount || undefined,
-        merchant: filters.value.merchant || undefined,
-        owners: filters.value.owners.length > 0 ? filters.value.owners : undefined,
-        account_types: filters.value.accountTypes.length > 0 ? filters.value.accountTypes : undefined,
-        main_categories: filters.value.types.length > 0 ? filters.value.types : undefined,
-        categories: filters.value.categories.length > 0 ? filters.value.categories : undefined,  // ADD THIS
-        subcategories: filters.value.subcategories.length > 0 ? filters.value.subcategories : undefined  // ADD THIS
-      }
-      
-      // Remove undefined values
-      Object.keys(params).forEach(key => {
-        if (params[key] === undefined) delete params[key]
-      })
-      
-      console.log('🔍 Loading with filters:', params)
-      
-      const response = await axios.get(`${API_BASE}/transactions/list`, {
-        params,
-        headers: { Authorization: `Bearer ${authStore.token}` },
-        paramsSerializer: {
+    Object.keys(params).forEach(key => {
+      if (params[key] === undefined) delete params[key]
+    })
+    
+    console.log('🔍 Loading with filters:', params)
+    
+    const response = await axios.get(`${API_BASE}/transactions/list`, {
+      params,
+      headers: { 
+        Authorization: `Bearer ${authStore.token}`,
+        'Cache-Control': 'no-cache'  // Prevent caching
+      },
+      paramsSerializer: {
         indexes: null 
       }
-      })
-      
-      transactions.value = response.data
-      await loadFilteredStats()
-      console.log(`✅ Loaded ${response.data.length} transactions`)
-    } catch (error) {
-      console.error('Failed to load transactions:', error)
-    } finally {
-      loading.value = false
-    }
+    })
+    
+    transactions.value = response.data
+    await loadFilteredStats()
+    console.log(`✅ Loaded ${response.data.length} transactions`)
+  } catch (error) {
+    console.error('Failed to load transactions:', error)
+  } finally {
+    loading.value = false
   }
-
+}
     const refreshTransactions = async () => {
       await loadSummary()
       await loadTransactions()
@@ -592,47 +594,63 @@ export default {
       crudComponent.value.deleteTransaction(transaction)
     }
 
-    const handleTransactionUpdated = async () => {
-      await loadTransactions()
-      await loadSummary()
-    }
+const handleTransactionUpdated = async () => {
+  console.log('🔄 Refreshing after update...')
+  await loadTransactions()
+  await loadSummary()
+  await loadFilteredStats()  // Also refresh stats
+}
 
-    const handleTransactionDeleted = async () => {
-      await loadTransactions()
-      await loadSummary()
-    }
+const handleTransactionDeleted = async () => {
+  console.log('🔄 Refreshing after delete...')
+  await loadTransactions()
+  await loadSummary()
+  await loadFilteredStats()
+}
 
-    const handleBulkCategorize = async (data) => {
-      try {
-        const token = authStore.token
-        
-        await axios.post(`${API_BASE}/transactions/bulk-categorize`, {
-          transaction_ids: data.transactionIds,
-          category_id: data.categoryId,
-          confidence: 1.0
-        }, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        const category = groupedCategories.value
-          .flatMap(g => g.categories)
-          .find(c => c.id === data.categoryId)
-        
-        addChatMessage({
-          message: `Bulk categorization: ${data.transactionIds.length} transactions`,
-          response: `Successfully applied category ${category?.name || 'selected category'} to ${data.transactionIds.length} transactions!`
-        })
-        
-        await loadTransactions()
-        await loadSummary()
-        
-      } catch (error) {
-        console.error('Bulk categorization failed:', error)
-        addChatMessage({
-          response: 'Bulk categorization failed. Please try again.'
-        })
+const handleBulkCategorize = async (data) => {
+  console.log('🔄 Bulk categorize request:', data)
+  
+  try {
+    const token = authStore.token
+    
+    const response = await axios.post(`${API_BASE}/transactions/bulk-categorize`, {
+      transaction_ids: data.transactionIds,
+      category_id: data.categoryId,
+      confidence: 1.0
+    }, {
+      headers: { 
+        'Authorization': `Bearer ${token}`,
+        'Cache-Control': 'no-cache'  // Prevent caching
       }
-    }
+    })
+    
+    console.log('✅ Bulk categorize response:', response.data)
+    
+    addChatMessage({
+      message: `Bulk categorization: ${data.transactionIds.length} transactions`,
+      response: response.data.message || `Successfully categorized ${response.data.updated_count} transactions!`
+    })
+    
+    // Clear local state first
+    transactions.value = []
+    
+    // Force reload with small delay
+    await new Promise(resolve => setTimeout(resolve, 100))
+    await loadTransactions()
+    await loadSummary()
+    await loadFilteredStats()
+    
+    console.log('✅ Table refreshed, first transaction:', transactions.value[0])
+    
+  } catch (error) {
+    console.error('❌ Bulk categorization failed:', error)
+    console.error('Error response:', error.response?.data)
+    addChatMessage({
+      response: error.response?.data?.detail || 'Bulk categorization failed. Please try again.'
+    })
+  }
+}
 
     watch(filters, () => {
       currentPage.value = 1

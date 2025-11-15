@@ -114,16 +114,25 @@
               <div class="owner-secondary">{{ transaction.bank_account_type || '-' }}</div>
             </td>
             
-            <td class="col-category">
-              
-              <div class="category-primary" v-if="transaction.category">
-                {{ transaction.category }}
-              </div>
-              <div class="category-secondary" v-if="transaction.subcategory">
-                {{ transaction.subcategory }}
-              </div>
-              <div v-if="!transaction.category && !transaction.subcategory" class="text-muted">-</div>
-            </td>
+<td class="col-category">
+  <!-- Assigned category with parent path -->
+  <div v-if="transaction.category_name" class="category-assigned">
+    <div v-if="transaction.parent_category_name" class="category-primary">
+      {{ transaction.parent_category_name }}
+    </div>
+    <div class="category-secondary">
+      {{ transaction.category_name }}
+    </div>
+  </div>
+  <!-- CSV fallback -->
+  <div v-else-if="transaction.category" class="category-csv">
+    <div class="category-primary">{{ transaction.category }}</div>
+    <div v-if="transaction.subcategory" class="category-secondary">
+      {{ transaction.subcategory }}
+    </div>
+  </div>
+  <div v-else class="text-muted">Uncategorized</div>
+</td>
             
             <td class="col-type">
               <div class="type-text" v-if="transaction.main_category">

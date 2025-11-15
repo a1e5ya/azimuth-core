@@ -18,6 +18,7 @@ class TransactionResponse(BaseModel):
     category_id: Optional[str]
     category_name: Optional[str]
     category_icon: Optional[str]
+    parent_category_name: Optional[str]
     source_category: str
     import_batch_id: Optional[str]
     bank_account: Optional[str]

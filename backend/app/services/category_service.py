@@ -213,7 +213,7 @@ DEFAULT_CATEGORIES = {
         'id': 'transfers',
         'name': 'TRANSFERS',
         'icon': 'apps-sort',
-        'color': "#46330F",
+        'color': "#BD8317",
         'categories': [
             {
                 'id': 'account-transfers',
