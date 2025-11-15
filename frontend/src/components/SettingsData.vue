@@ -16,11 +16,10 @@
       <button @click="backupData" class="btn btn-primary" :disabled="backingUp">
         {{ backingUp ? 'Backing up...' : 'Backup Now' }}
       </button>
-      <button @click="restoreData" class="btn btn-secondary">Restore</button>
+      <button @click="restoreData" class="btn btn-primary">Restore</button>
     </div>
         <div class="btn-row">
-      <button @click="triggerImport" class="btn btn-primary">Import CSV</button>
-      <button @click="exportData" class="btn btn-secondary" :disabled="exporting">
+      <button @click="exportData" class="btn btn-primary" :disabled="exporting">
         {{ exporting ? 'Exporting...' : 'Export All' }}
       </button>
     </div>

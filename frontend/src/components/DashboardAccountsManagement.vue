@@ -826,6 +826,7 @@ export default {
   margin: 0;
   background-color: transparent;
   border: none;
+  cursor: pointer;
 }
 
 .btn-icon:hover {

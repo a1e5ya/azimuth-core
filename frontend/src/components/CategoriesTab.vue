@@ -1,5 +1,6 @@
 <template>
   <div class="categories-layout">
+    
     <!-- Vertical Type Tabs - Left Side -->
     <div class="vertical-tabs">
       <button
@@ -14,9 +15,15 @@
         <AppIcon :name="type.icon" size="medium" />
       </button>
     </div>
+    
 
     <!-- Scrollable Content - All Categories -->
     <div class="categories-scroll-container" ref="scrollContainer">
+      <div class="add-category-button" style="margin-bottom: 1rem;">
+      <button class=" btn-plus" @click="showAddOwnerModal = true">
+        <AppIcon name="plus" size="medium" />
+      </button>
+      </div>
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
@@ -263,6 +270,20 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+
+.add-category-button {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: -30px !important;
+}
+
+.btn-plus{
+    margin: 0;
+    background-color: transparent;
+    border: none;
+    cursor: pointer;
+}
+
 .categories-layout {
   display: flex;
   min-height: 100%;
