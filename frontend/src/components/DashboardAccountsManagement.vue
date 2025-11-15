@@ -67,7 +67,7 @@
                   <AppIcon name="file-add" size="medium" />
                 </button>
                 <div>
-                  <div class="account-name">{{ account.account_type }}</div>
+                  <div class="account-name">{{ account.name || account.account_type }}</div>
                 </div>
               </div>
 
@@ -120,171 +120,179 @@
     </div>
 
     <!-- Add/Edit Owner Modal -->
-    <div v-if="showAddOwnerModal || editingOwner" class="modal-overlay" @click="closeOwnerModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ editingOwner ? 'Edit Owner' : 'Add Owner' }}</h3>
-          <button class="close-btn" @click="closeOwnerModal">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Owner Name *</label>
-            <input 
-              type="text" 
-              v-model="ownerForm.name"
-              class="form-input"
-              placeholder=""
-              maxlength="50"
-            >
+    <teleport to="body">
+      <div v-if="showAddOwnerModal || editingOwner" class="modal-overlay" @click="closeOwnerModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>{{ editingOwner ? 'Edit Owner' : 'Add Owner' }}</h3>
+            <button class="close-btn" @click="closeOwnerModal">×</button>
           </div>
           
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Owner Name *</label>
+              <input 
+                type="text" 
+                v-model="ownerForm.name"
+                class="form-input"
+                placeholder=""
+                maxlength="50"
+              >
+            </div>
+            
+            
+          </div>
           
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-primary" 
-            @click="saveOwner"
-            :disabled="!ownerForm.name || saving"
-          >
-            {{ saving ? 'Saving...' : (editingOwner ? 'Update' : 'Create') }}
-          </button>
-          <button class="btn btn-link" @click="closeOwnerModal" :disabled="saving">
-            Cancel
-          </button>
+          <div class="modal-actions">
+            <button 
+              class="btn btn-primary" 
+              @click="saveOwner"
+              :disabled="!ownerForm.name || saving"
+            >
+              {{ saving ? 'Saving...' : (editingOwner ? 'Update' : 'Create') }}
+            </button>
+            <button class="btn btn-link" @click="closeOwnerModal" :disabled="saving">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
 
     <!-- Add/Edit Account Modal -->
-    <div v-if="showAccountModal || editingAccount" class="modal-overlay" @click="closeAccountModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>{{ editingAccount ? 'Edit Account' : 'Add Account' }}</h3>
-          <button class="close-btn" @click="closeAccountModal">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="form-group">
-            <label>Account Name *</label>
-            <input 
-              type="text" 
-              v-model="accountForm.name"
-              class="form-input"
-              placeholder="e.g., Main Account, Savings"
-            >
+    <teleport to="body">
+      <div v-if="showAccountModal || editingAccount" class="modal-overlay" @click="closeAccountModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>{{ editingAccount ? 'Edit Account' : 'Add Account' }}</h3>
+            <button class="close-btn" @click="closeAccountModal">×</button>
           </div>
           
-          <div class="form-group">
-            <label>Account Type *</label>
-            <select v-model="accountForm.account_type" class="form-input">
-              <option value="">Select type...</option>
-              <option value="Main">Main</option>
-              <option value="Kopio">Kopilka</option>
-              <option value="Reserv">Reserv</option>
-              <option value="BSP">BSP</option>
-            </select>
-          </div>
-        
+          <div class="modal-body">
+            <div class="form-group">
+              <label>Account Name (Optional)</label>
+              <input 
+                type="text" 
+                v-model="accountForm.name"
+                class="form-input"
+                placeholder="Leave empty to use account type as name"
+              >
+            </div>
+            
+            <div class="form-group">
+              <label>Account Type *</label>
+              <select v-model="accountForm.account_type" class="form-input">
+                <option value="">Select type...</option>
+                <option value="Main">Main</option>
+                <option value="Kopio">Kopilka</option>
+                <option value="Reserv">Reserv</option>
+                <option value="BSP">BSP</option>
+              </select>
+            </div>
           
-          <div class="form-group">
-            <label>Current Balance (Optional)</label>
-            <input 
-              type="number" 
-              v-model.number="accountForm.current_balance"
-              class="form-input"
-              step="0.01"
-              placeholder="0.00"
-            >
+            
+            <div class="form-group">
+              <label>Current Balance (Optional)</label>
+              <input 
+                type="number" 
+                v-model.number="accountForm.current_balance"
+                class="form-input"
+                step="0.01"
+                placeholder="0.00"
+              >
+            </div>
           </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-primary" 
-            @click="saveAccount"
-            :disabled="!accountForm.name || !accountForm.account_type || saving"
-          >
-            {{ saving ? 'Saving...' : (editingAccount ? 'Update' : 'Create') }}
-          </button>
-          <button class="btn btn-link" @click="closeAccountModal" :disabled="saving">
-            Cancel
-          </button>
+          
+          <div class="modal-actions">
+            <button 
+              class="btn btn-primary" 
+              @click="saveAccount"
+              :disabled="!accountForm.account_type || saving"
+            >
+              {{ saving ? 'Saving...' : (editingAccount ? 'Update' : 'Create') }}
+            </button>
+            <button class="btn btn-link" @click="closeAccountModal" :disabled="saving">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
 
     <!-- Delete Owner Confirmation -->
-    <div v-if="deletingOwner" class="modal-overlay" @click="closeDeletingOwner">
-      <div class="modal-content delete-modal" @click.stop>
-        <div class="modal-header">
-          <h3>Delete Owner</h3>
-          <button class="close-btn" @click="closeDeletingOwner">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="delete-warning">
-            <div class="warning-icon">⚠️</div>
-            <div class="warning-text">
-              <p><strong>Delete {{ deletingOwner.name }}?</strong></p>
-              <p v-if="deletingOwner.accounts.length > 0">
-                This will delete <strong>{{ deletingOwner.accounts.length }} account(s)</strong> 
-                and all transactions.
-              </p>
-              <p>This action cannot be undone.</p>
+    <teleport to="body">
+      <div v-if="deletingOwner" class="modal-overlay" @click="closeDeletingOwner">
+        <div class="modal-content delete-modal" @click.stop>
+          <div class="modal-header">
+            <h3>Delete Owner</h3>
+            <button class="close-btn" @click="closeDeletingOwner">×</button>
+          </div>
+          
+          <div class="modal-body">
+            <div class="delete-warning">
+              <div class="warning-icon">⚠️</div>
+              <div class="warning-text">
+                <p><strong>Delete {{ deletingOwner.name }}?</strong></p>
+                <p v-if="deletingOwner.accounts.length > 0">
+                  This will delete <strong>{{ deletingOwner.accounts.length }} account(s)</strong> 
+                  and all transactions.
+                </p>
+                <p>This action cannot be undone.</p>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-danger" 
-            @click="deleteOwner"
-            :disabled="deleting"
-          >
-            {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
-          </button>
-          <button class="btn btn-link" @click="closeDeletingOwner" :disabled="deleting">
-            Cancel
-          </button>
+          
+          <div class="modal-actions">
+            <button 
+              class="btn btn-danger" 
+              @click="deleteOwner"
+              :disabled="deleting"
+            >
+              {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
+            </button>
+            <button class="btn btn-link" @click="closeDeletingOwner" :disabled="deleting">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
 
     <!-- Delete Account Confirmation -->
-    <div v-if="deletingAccount" class="modal-overlay" @click="closeDeletingAccount">
-      <div class="modal-content delete-modal" @click.stop>
-        <div class="modal-header">
-          <h3>Delete Account</h3>
-          <button class="close-btn" @click="closeDeletingAccount">×</button>
-        </div>
-        
-        <div class="modal-body">
-          <div class="delete-warning">
-            <div class="warning-icon">⚠️</div>
-            <div class="warning-text">
-              <p><strong>Delete {{ deletingAccount.account.name }}?</strong></p>
-              <p>Owner: {{ deletingAccount.owner.name }}</p>
-              <p>This action cannot be undone.</p>
+    <teleport to="body">
+      <div v-if="deletingAccount" class="modal-overlay" @click="closeDeletingAccount">
+        <div class="modal-content delete-modal" @click.stop>
+          <div class="modal-header">
+            <h3>Delete Account</h3>
+            <button class="close-btn" @click="closeDeletingAccount">×</button>
+          </div>
+          
+          <div class="modal-body">
+            <div class="delete-warning">
+              <div class="warning-icon">⚠️</div>
+              <div class="warning-text">
+                <p><strong>Delete {{ deletingAccount.account.name || deletingAccount.account.account_type }}?</strong></p>
+                <p>Owner: {{ deletingAccount.owner.name }}</p>
+                <p>This action cannot be undone.</p>
+              </div>
             </div>
           </div>
-        </div>
-        
-        <div class="modal-actions">
-          <button 
-            class="btn btn-danger" 
-            @click="deleteAccount"
-            :disabled="deleting"
-          >
-            {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
-          </button>
-          <button class="btn btn-link" @click="closeDeletingAccount" :disabled="deleting">
-            Cancel
-          </button>
+          
+          <div class="modal-actions">
+            <button 
+              class="btn btn-danger" 
+              @click="deleteAccount"
+              :disabled="deleting"
+            >
+              {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
+            </button>
+            <button class="btn btn-link" @click="closeDeletingAccount" :disabled="deleting">
+              Cancel
+            </button>
+          </div>
         </div>
       </div>
-    </div>
+    </teleport>
 
     <!-- Import File Input (Hidden) -->
     <input 
@@ -532,7 +540,7 @@ export default {
     }
 
     async function saveAccount() {
-      if (!accountForm.value.name || !accountForm.value.account_type || saving.value) return
+      if (!accountForm.value.account_type || saving.value) return
       
       saving.value = true
       
@@ -625,7 +633,7 @@ export default {
           }
         )
         
-        alert(`Successfully imported to ${importingOwner.value.name} - ${importingAccount.value.name}`)
+        alert(`Successfully imported to ${importingOwner.value.name} - ${importingAccount.value.name || importingAccount.value.account_type}`)
         emit('import-success')
         await loadOwners()
         
@@ -870,5 +878,28 @@ export default {
 
 .delete-modal {
   max-width: 30rem;
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  max-width: 32rem;
+  width: 90%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: var(--shadow);
 }
 </style>

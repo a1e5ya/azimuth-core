@@ -66,7 +66,7 @@ async def list_accounts(
     if owner_id:
         try:
             owner_uuid = uuid.UUID(owner_id)
-            query = query.where(Account.owner_id == owner_uuid)
+            query = query.where(Account.owner_id == str(owner_uuid))
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid owner ID")
     
@@ -202,7 +202,7 @@ async def get_account(
     
     query = select(Account).where(
         and_(
-            Account.id == account_uuid,
+            Account.id == str(account_uuid),
             Account.user_id == current_user.id
         )
     )
@@ -219,7 +219,7 @@ async def get_account(
     
     # Get transaction count
     count_query = select(func.count(Transaction.id)).where(
-        Transaction.account_id == account_uuid
+        Transaction.account_id == str(account_uuid)
     )
     count_result = await db.execute(count_query)
     transaction_count = count_result.scalar()
@@ -255,7 +255,7 @@ async def create_account(
     
     owner_query = select(Owner).where(
         and_(
-            Owner.id == owner_uuid,
+            Owner.id == str(owner_uuid),
             Owner.user_id == current_user.id
         )
     )
@@ -268,7 +268,7 @@ async def create_account(
     # Check if account with same name exists for this owner
     existing_query = select(Account).where(
         and_(
-            Account.owner_id == owner_uuid,
+            Account.owner_id == str(owner_uuid),
             Account.name == account_data.name,
             Account.account_type == account_data.account_type
         )
@@ -328,7 +328,7 @@ async def update_account(
     
     query = select(Account).where(
         and_(
-            Account.id == account_uuid,
+            Account.id == str(account_uuid),
             Account.user_id == current_user.id
         )
     )
@@ -365,7 +365,7 @@ async def update_account(
     owner = owner_result.scalar_one_or_none()
     
     count_query = select(func.count(Transaction.id)).where(
-        Transaction.account_id == account_uuid
+        Transaction.account_id == str(account_uuid)
     )
     count_result = await db.execute(count_query)
     transaction_count = count_result.scalar()
@@ -403,7 +403,7 @@ async def delete_account(
     
     query = select(Account).where(
         and_(
-            Account.id == account_uuid,
+            Account.id == str(account_uuid),
             Account.user_id == current_user.id
         )
     )
@@ -415,7 +415,7 @@ async def delete_account(
     
     # Check for transactions
     trans_query = select(func.count(Transaction.id)).where(
-        Transaction.account_id == account_uuid
+        Transaction.account_id == str(account_uuid)
     )
     trans_result = await db.execute(trans_query)
     transaction_count = trans_result.scalar()
@@ -427,7 +427,7 @@ async def delete_account(
         )
     
     # Delete account (cascade will delete transactions if force=true)
-    delete_query = delete(Account).where(Account.id == account_uuid)
+    delete_query = delete(Account).where(Account.id == str(account_uuid))
     await db.execute(delete_query)
     await db.commit()
     
@@ -458,7 +458,7 @@ async def import_transactions_to_account(
     # Verify account exists and belongs to user
     query = select(Account).where(
         and_(
-            Account.id == account_uuid,
+            Account.id == str(account_uuid),
             Account.user_id == current_user.id
         )
     )
@@ -530,7 +530,7 @@ async def get_account_transactions(
     # Verify account exists and belongs to user
     account_query = select(Account).where(
         and_(
-            Account.id == account_uuid,
+            Account.id == str(account_uuid),
             Account.user_id == current_user.id
         )
     )
@@ -544,7 +544,7 @@ async def get_account_transactions(
     from sqlalchemy import desc
     
     trans_query = select(Transaction).where(
-        Transaction.account_id == account_uuid
+        Transaction.account_id == str(account_uuid)
     ).order_by(desc(Transaction.posted_at)).offset((page - 1) * limit).limit(limit)
     
     trans_result = await db.execute(trans_query)
@@ -552,7 +552,7 @@ async def get_account_transactions(
     
     # Get total count
     count_query = select(func.count(Transaction.id)).where(
-        Transaction.account_id == account_uuid
+        Transaction.account_id == str(account_uuid)
     )
     count_result = await db.execute(count_query)
     total_count = count_result.scalar()

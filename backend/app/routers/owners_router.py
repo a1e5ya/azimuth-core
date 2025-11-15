@@ -117,7 +117,7 @@ async def get_owner(
     
     query = select(Owner).where(
         and_(
-            Owner.id == owner_uuid,
+            Owner.id == str(owner_uuid),
             Owner.user_id == current_user.id
         )
     )
@@ -130,7 +130,7 @@ async def get_owner(
     # Get accounts
     accounts_query = select(Account).where(
         and_(
-            Account.owner_id == owner_uuid,
+            Account.owner_id == str(owner_uuid),
             Account.user_id == current_user.id
         )
     ).order_by(Account.name)
@@ -222,7 +222,7 @@ async def update_owner(
     
     query = select(Owner).where(
         and_(
-            Owner.id == owner_uuid,
+            Owner.id == str(owner_uuid),
             Owner.user_id == current_user.id
         )
     )
@@ -262,7 +262,7 @@ async def update_owner(
     await db.refresh(owner)
     
     # Get account count
-    count_query = select(func.count(Account.id)).where(Account.owner_id == owner_uuid)
+    count_query = select(func.count(Account.id)).where(Account.owner_id == str(owner_uuid))
     count_result = await db.execute(count_query)
     account_count = count_result.scalar()
     
@@ -295,7 +295,7 @@ async def delete_owner(
     
     query = select(Owner).where(
         and_(
-            Owner.id == owner_uuid,
+            Owner.id == str(owner_uuid),
             Owner.user_id == current_user.id
         )
     )
@@ -306,7 +306,7 @@ async def delete_owner(
         raise HTTPException(status_code=404, detail="Owner not found")
     
     # Check for accounts
-    accounts_query = select(func.count(Account.id)).where(Account.owner_id == owner_uuid)
+    accounts_query = select(func.count(Account.id)).where(Account.owner_id == str(owner_uuid))
     accounts_result = await db.execute(accounts_query)
     account_count = accounts_result.scalar()
     
@@ -317,7 +317,7 @@ async def delete_owner(
         )
     
     # Delete owner (cascade will delete accounts if force=true)
-    delete_query = delete(Owner).where(Owner.id == owner_uuid)
+    delete_query = delete(Owner).where(Owner.id == str(owner_uuid))
     await db.execute(delete_query)
     await db.commit()
     
@@ -346,7 +346,7 @@ async def get_owner_stats(
     # Verify owner exists and belongs to user
     owner_query = select(Owner).where(
         and_(
-            Owner.id == owner_uuid,
+            Owner.id == str(owner_uuid),
             Owner.user_id == current_user.id
         )
     )
@@ -357,7 +357,7 @@ async def get_owner_stats(
         raise HTTPException(status_code=404, detail="Owner not found")
     
     # Get all accounts for this owner
-    accounts_query = select(Account).where(Account.owner_id == owner_uuid)
+    accounts_query = select(Account).where(Account.owner_id == str(owner_uuid))
     accounts_result = await db.execute(accounts_query)
     accounts = accounts_result.scalars().all()
     
