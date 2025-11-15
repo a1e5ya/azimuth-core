@@ -155,7 +155,7 @@ export const useCategoryStore = defineStore('categories', () => {
     error.value = null
     
     try {
-      const response = await axios.post(`${API_BASE}/categories`, categoryData, {
+      const response = await axios.post(`${API_BASE}/categories/`, categoryData, {
         headers: { Authorization: `Bearer ${authStore.token}` }
       })
       
@@ -173,7 +173,7 @@ export const useCategoryStore = defineStore('categories', () => {
       loading.value = false
     }
   }
-  
+
   async function updateCategory(categoryId, updates) {
     loading.value = true
     error.value = null
@@ -197,7 +197,7 @@ export const useCategoryStore = defineStore('categories', () => {
       loading.value = false
     }
   }
-  
+
   async function checkDelete(categoryId) {
     try {
       const response = await axios.get(`${API_BASE}/categories/${categoryId}/check-delete`, {
@@ -211,7 +211,7 @@ export const useCategoryStore = defineStore('categories', () => {
       return { can_delete: false, warning_message: 'Failed to check category' }
     }
   }
-  
+
   async function deleteCategory(categoryId) {
     loading.value = true
     error.value = null
