@@ -121,6 +121,7 @@
           :phase="phase"
           @logout="handleLogout"
           @show-tab="showTab"
+          @chat-cleared="clearChatHistory"
         />
       </div>
 
@@ -491,6 +492,11 @@ const sendMessage = async (message = null) => {
       }
     }
 
+const clearChatHistory = () => {
+  chatHistory.value = []
+  showHistory.value = false
+}
+
     // Backend health check
     const checkBackend = async () => {
       try {
@@ -710,6 +716,7 @@ const sendMessage = async (message = null) => {
       toggleChatPanel,
       sendMessage,
       addChatMessage,
+      clearChatHistory,
       scrollToBottom,
       loadTransactions,
       refreshTransactions,

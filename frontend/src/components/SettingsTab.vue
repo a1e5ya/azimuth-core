@@ -16,8 +16,6 @@
       
       <!-- System Status -->
       <div class="card settings-card">
-
-        
         <div class="stats-grid">
           <div class="stat-box">
             <div :class="['stat-value', systemStatus.database ? 'status-ok' : 'status-error']">
@@ -37,21 +35,17 @@
             </div>
             <div class="stat-label">Ollama</div>
           </div>
-
         </div>
-        
-
       </div>
       
       <!-- Danger Zone -->
       <SettingsDanger 
         @transaction-deleted="handleTransactionDeleted" 
         @account-deleted="handleAccountDeleted" 
+        @chat-cleared="handleChatCleared"
       />
       
     </div>
-
-    
   </div>
 </template>
 
@@ -72,7 +66,8 @@ export default {
     SettingsSecurity,
     SettingsDanger
   },
-  setup() {
+  emits: ['chat-cleared'],
+  setup(props, { emit }) {
     const systemStatus = ref({
       database: true,
       api: true,
@@ -89,17 +84,6 @@ export default {
     })
 
     const showSystemDetails = ref(false)
-
-    const formatNumber = (num) => {
-      return num.toLocaleString()
-    }
-
-    const formatShortNumber = (num) => {
-      if (num >= 1000) {
-        return (num / 1000).toFixed(1) + 'k'
-      }
-      return num.toString()
-    }
 
     const checkSystemStatus = async () => {
       try {
@@ -126,42 +110,11 @@ export default {
           systemStatus.value.ollama = false
         }
 
-        try {
-          const statsResponse = await fetch('http://localhost:8001/transactions/stats', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          if (statsResponse.ok) {
-            const stats = await statsResponse.json()
-            systemStatus.value.transactions = stats.total_count || 0
-          }
-        } catch (error) {
-          console.error('Failed to load transaction stats:', error)
-        }
-
-        try {
-          const detailsResponse = await fetch('http://localhost:8001/system/details', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          if (detailsResponse.ok) {
-            const details = await detailsResponse.json()
-            systemDetails.value = {
-              ...systemDetails.value,
-              ...details
-            }
-          }
-        } catch (error) {
-          console.error('Failed to load system details:', error)
-        }
-
         systemStatus.value.database = true
       } catch (error) {
         console.error('System status check failed:', error)
         systemStatus.value.database = false
       }
-    }
-
-    const viewSystemDetails = () => {
-      showSystemDetails.value = true
     }
 
     const handleDataImported = () => {
@@ -176,6 +129,10 @@ export default {
       // This will redirect, so no need to refresh
     }
 
+    const handleChatCleared = () => {
+      emit('chat-cleared')
+    }
+
     onMounted(() => {
       checkSystemStatus()
       setInterval(checkSystemStatus, 30000)
@@ -185,19 +142,16 @@ export default {
       systemStatus,
       systemDetails,
       showSystemDetails,
-      formatNumber,
-      formatShortNumber,
-      viewSystemDetails,
       handleDataImported,
       handleTransactionDeleted,
-      handleAccountDeleted
+      handleAccountDeleted,
+      handleChatCleared
     }
   }
 }
 </script>
 
 <style scoped>
-/* Only SettingsTab-specific layout */
 .settings-container {
   padding: 0;
   width: 100%;

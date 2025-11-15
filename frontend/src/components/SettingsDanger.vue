@@ -63,30 +63,55 @@
 
 <script>
 import { ref, computed } from 'vue'
+import { useAuthStore } from '@/stores/auth'
+import axios from 'axios'
 
 export default {
   name: 'SettingsDanger',
-  emits: ['transaction-deleted', 'account-deleted'],
+  emits: ['transaction-deleted', 'account-deleted', 'chat-cleared'],
   setup(props, { emit }) {
+    const authStore = useAuthStore()
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
+    
     const showConfirmation = ref(false)
     const confirmationTitle = ref('')
     const confirmationMessage = ref('')
     const confirmationPassword = ref('')
     const pendingAction = ref(null)
     const executing = ref(false)
+    const sessionStartTime = computed(() => {
+      return new Date().toLocaleString()
+    })
 
     const requiresPasswordConfirmation = computed(() => {
       return ['delete-transactions', 'delete-account'].includes(pendingAction.value)
     })
 
+    const logout = async () => {
+      await authStore.logout()
+      window.location.reload()
+    }
+
     const confirmAction = (action) => {
       pendingAction.value = action
       confirmationPassword.value = ''
       const actions = {
-        'reset-categories': { title: 'Reset Categories?', message: 'This will reset all categories to their default state. Custom categories will be removed. This cannot be undone.' },
-        'clear-chat': { title: 'Clear Chat History?', message: 'This will delete all chat messages permanently. This cannot be undone.' },
-        'delete-transactions': { title: 'Delete All Transactions?', message: 'This will delete ALL your transaction data permanently. This cannot be undone! Please enter your password to confirm.' },
-        'delete-account': { title: 'Delete Account?', message: 'This will permanently delete your account and ALL associated data including transactions, categories, budgets, and goals. This cannot be undone! Please enter your password to confirm.' }
+        'reset-categories': { 
+          title: 'Reset Categories?', 
+          message: 'This will reset all categories to their default state. Custom categories will be removed. This cannot be undone.' 
+        },
+        'clear-chat': { 
+          title: 'Clear Chat History?', 
+          message: 'This will delete all chat messages permanently. This cannot be undone.' 
+        },
+        'delete-transactions': { 
+          title: 'Delete All Transactions?', 
+          message: 'This will delete ALL your transaction data permanently. This cannot be undone! Please enter your password to confirm.' 
+        },
+        'delete-account': { 
+          title: 'Delete Account?', 
+          message: 'This will permanently delete your account and ALL associated data including transactions, categories, budgets, and goals. This cannot be undone! Please enter your password to confirm.' 
+        }
       }
       const actionConfig = actions[action]
       confirmationTitle.value = actionConfig.title
@@ -101,16 +126,17 @@ export default {
     }
 
     const executeAction = async () => {
-      if (requiresPasswordConfirmation.value && !confirmationPassword.value) return
+      if (requiresPasswordConfirmation.value && !confirmationPassword.value) {
+        return
+      }
+      
       executing.value = true
       try {
-        const token = localStorage.getItem('token')
-        if (!token) return
         switch (pendingAction.value) {
-          case 'reset-categories': await resetCategories(token); break
-          case 'clear-chat': await clearChatHistory(token); break
-          case 'delete-transactions': await deleteAllTransactions(token); break
-          case 'delete-account': await deleteAccount(token); break
+          case 'reset-categories': await resetCategories(); break
+          case 'clear-chat': await clearChatHistory(); break
+          case 'delete-transactions': await deleteAllTransactions(); break
+          case 'delete-account': await deleteAccount(); break
         }
       } catch (error) {
         console.error('Action failed:', error)
@@ -120,52 +146,56 @@ export default {
       }
     }
 
-    const resetCategories = async (token) => {
-      const response = await fetch('http://localhost:8001/categories/reset', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}` }
+    const resetCategories = async () => {
+      await axios.post(`${API_BASE}/dangerous/categories/reset`, {}, {
+        headers: { 'Authorization': `Bearer ${authStore.token}` }
       })
-      if (response.ok) window.location.reload()
-      else throw new Error((await response.json()).detail || 'Failed to reset categories')
+      window.location.reload()
     }
 
-    const clearChatHistory = async (token) => {
-      const response = await fetch('http://localhost:8001/chat/history', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      })
-      if (response.ok) window.location.reload()
-      else throw new Error((await response.json()).detail || 'Failed to clear chat history')
+    const clearChatHistory = async () => {
+      emit('chat-cleared')
     }
 
-    const deleteAllTransactions = async (token) => {
-      const response = await fetch('http://localhost:8001/dangerous/transactions/delete-all', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: confirmationPassword.value })
+    const deleteAllTransactions = async () => {
+      await axios.delete(`${API_BASE}/dangerous/transactions/delete-all`, {
+        headers: { 
+          'Authorization': `Bearer ${authStore.token}`,
+          'Content-Type': 'application/json'
+        },
+        data: { password: confirmationPassword.value }
       })
-      if (response.ok) {
-        emit('transaction-deleted')
-        window.location.reload()
-      } else throw new Error((await response.json()).detail || 'Failed to delete transactions')
+      
+      emit('transaction-deleted')
+      window.location.reload()
     }
 
-    const deleteAccount = async (token) => {
-      const response = await fetch('http://localhost:8001/dangerous/account', {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ password: confirmationPassword.value })
+    const deleteAccount = async () => {
+      await axios.delete(`${API_BASE}/dangerous/account`, {
+        headers: { 
+          'Authorization': `Bearer ${authStore.token}`,
+          'Content-Type': 'application/json'
+        },
+        data: { password: confirmationPassword.value }
       })
-      if (response.ok) {
-        localStorage.removeItem('token')
-        emit('account-deleted')
-        window.location.href = '/'
-      } else throw new Error((await response.json()).detail || 'Failed to delete account')
+      
+      await authStore.logout()
+      emit('account-deleted')
+      window.location.href = '/'
     }
 
     return {
-      showConfirmation, confirmationTitle, confirmationMessage, confirmationPassword,
-      requiresPasswordConfirmation, executing, confirmAction, cancelAction, executeAction
+      sessionStartTime,
+      showConfirmation, 
+      confirmationTitle, 
+      confirmationMessage, 
+      confirmationPassword,
+      requiresPasswordConfirmation, 
+      executing, 
+      logout,
+      confirmAction, 
+      cancelAction, 
+      executeAction
     }
   }
 }
