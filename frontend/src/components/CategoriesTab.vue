@@ -20,8 +20,11 @@
     <!-- Scrollable Content - All Categories -->
     <div class="categories-scroll-container" ref="scrollContainer">
       <div class="add-category-button" style="margin-bottom: 1rem;">
-        <button class="btn btn-icon" @click="showCreateMenu = !showCreateMenu">
-          <AppIcon name="plus" size="medium" />
+        <button 
+          class="btn-menu-dots always-visible"
+          @click="showCreateMenu = !showCreateMenu"
+        >
+          <AppIcon name="menu-dots" size="small" />
         </button>
         
         <!-- Create Menu Dropdown -->
@@ -150,7 +153,7 @@
         <div class="modal-body">
           <div class="types-list">
             <div 
-              v-for="type in sortedCategories" 
+              v-for="type in sortedTypes" 
               :key="type.id"
               class="type-row"
             >
@@ -158,9 +161,14 @@
                 <AppIcon :name="type.icon" size="medium" :style="{ color: type.color }" />
                 <span>{{ type.name }}</span>
               </div>
-              <button class="btn btn-small" @click="handleEdit(type); showEditTypesModal = false">
-                Edit
-              </button>
+              <div class="type-actions">
+                <button class="btn btn-small" @click="handleEdit(type); showEditTypesModal = false">
+                  Edit
+                </button>
+                <button class="btn btn-small btn-danger" @click="handleDelete(type); showEditTypesModal = false">
+                  Delete
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -211,6 +219,18 @@ export default {
       const order = ['income', 'expenses', 'transfers', 'targets']
       
       return [...cats].sort((a, b) => {
+        const aIndex = order.indexOf(a.code)
+        const bIndex = order.indexOf(b.code)
+        return aIndex - bIndex
+      })
+    })
+
+    const sortedTypes = computed(() => {
+      // Get only types (categories without parent_id)
+      const types = (categories.value || []).filter(cat => !cat.parent_id)
+      const order = ['income', 'expenses', 'transfers', 'targets']
+      
+      return [...types].sort((a, b) => {
         const aIndex = order.indexOf(a.code)
         const bIndex = order.indexOf(b.code)
         return aIndex - bIndex
@@ -304,12 +324,11 @@ export default {
     }
 
     function handleCreateType() {
-      crudComponent.value.createCategory(null)
+      crudComponent.value.createCategory(null, false)
       showCreateMenu.value = false
     }
 
     function handleEditTypes() {
-      // Show modal with list of all types to edit
       showEditTypesModal.value = true
       showCreateMenu.value = false
     }
@@ -350,6 +369,7 @@ export default {
 
     return {
       categories: sortedCategories,
+      sortedTypes,
       loading,
       activeTypeId,
       scrollContainer,
@@ -385,11 +405,34 @@ export default {
   position: relative;
 }
 
+.btn-menu-dots {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.25rem;
+  transition: all 0.2s;
+  color: var(--color-text-light);
+}
+
+.btn-menu-dots.always-visible {
+  opacity: 1 !important;
+  color: var(--color-text);
+}
+
+.btn-menu-dots:hover {
+  opacity: 1 !important;
+  background: var(--color-background-dark);
+  color: var(--color-text);
+}
+
 .create-dropdown {
   position: absolute;
-  top: 100%;
+  top: calc(100% + 0.25rem);
   right: 0;
-  margin-top: 0.25rem;
   background: var(--color-background-light);
   backdrop-filter: blur(1rem);
   border-radius: var(--radius);
@@ -452,6 +495,11 @@ export default {
   align-items: center;
   gap: var(--gap-small);
   font-weight: 500;
+}
+
+.type-actions {
+  display: flex;
+  gap: var(--gap-small);
 }
 
 .categories-layout {

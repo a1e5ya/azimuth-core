@@ -335,34 +335,94 @@ class CategoryService:
         print(f"✅ Created {created_count} default categories")
         return created_count
     
-    async def get_or_create_uncategorized(self) -> Category:
-        """Get or create Uncategorized category"""
+    async def get_or_create_uncategorized(self, category_type: str = 'expenses') -> Category:
+        """Get or create Uncategorized category (level 2) under the appropriate type"""
+        
+        # Step 1: Get the type (level 1) - INCOME, EXPENSES, etc
+        type_query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.category_type == category_type,
+                Category.parent_id.is_(None)
+            )
+        )
+        type_result = await self.db.execute(type_query)
+        type_category = type_result.scalar_one_or_none()
+        
+        if not type_category:
+            # Create the type if it doesn't exist
+            type_data = DEFAULT_CATEGORIES.get(category_type, {})
+            type_category = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=None,
+                name=type_data.get('name', category_type.upper()),
+                code=category_type,
+                icon=type_data.get('icon', 'apps-sort'),
+                color=type_data.get('color', '#94a3b8'),
+                category_type=category_type,
+                active=True
+            )
+            self.db.add(type_category)
+            await self.db.flush()
+        
+        # Step 2: Find or create "Uncategorized" category (level 2) under the type
         query = select(Category).where(
             and_(
                 Category.user_id == self.user.id,
+                Category.parent_id == type_category.id,
                 Category.code == 'uncategorized'
             )
         )
         result = await self.db.execute(query)
-        uncategorized = result.scalar_one_or_none()
+        uncategorized_category = result.scalar_one_or_none()
         
-        if not uncategorized:
-            uncategorized = Category(
+        if not uncategorized_category:
+            uncategorized_category = Category(
                 id=str(uuid.uuid4()),
                 user_id=self.user.id,
-                parent_id=None,
+                parent_id=type_category.id,  # Child of type (level 2)
                 name='Uncategorized',
                 code='uncategorized',
                 icon='circle-question',
                 color='#999999',
-                category_type='expense',
+                category_type=category_type,
                 active=True
             )
-            self.db.add(uncategorized)
-            await self.db.commit()
-            await self.db.refresh(uncategorized)
+            self.db.add(uncategorized_category)
+            await self.db.flush()
         
-        return uncategorized
+        # Step 3: Find or create "Uncategorized" subcategory (level 3) under the category
+        subcat_query = select(Category).where(
+            and_(
+                Category.user_id == self.user.id,
+                Category.parent_id == uncategorized_category.id,
+                Category.name == 'Uncategorized'
+            )
+        )
+        subcat_result = await self.db.execute(subcat_query)
+        uncategorized_subcat = subcat_result.scalar_one_or_none()
+        
+        if not uncategorized_subcat:
+            uncategorized_subcat = Category(
+                id=str(uuid.uuid4()),
+                user_id=self.user.id,
+                parent_id=uncategorized_category.id,  # Child of category (level 3)
+                name='Uncategorized',
+                code='uncategorized-sub',
+                icon='circle',
+                color='#999999',
+                category_type=category_type,
+                active=True
+            )
+            self.db.add(uncategorized_subcat)
+            await self.db.commit()
+            await self.db.refresh(uncategorized_subcat)
+        
+        return uncategorized_subcat  # Return the subcategory (level 3)
+
+
+
     
     async def get_category_tree(self) -> List[Dict[str, Any]]:
         """Get hierarchical category tree with transaction counts"""
@@ -485,7 +545,7 @@ class CategoryService:
         return category
     
     async def delete_category(self, category_id: str) -> Dict[str, Any]:
-        """Delete category - FIXED: string comparisons"""
+        """Delete category - FIXED: don't create Uncategorized for types"""
         category = await self.get_category_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -494,24 +554,31 @@ class CategoryService:
         if not usage_check["can_delete"]:
             raise HTTPException(status_code=400, detail=usage_check["warning_message"])
         
-        uncategorized = await self.get_or_create_uncategorized()
+        # Only move transactions if there are any
+        transactions_moved = 0
+        if usage_check["transaction_count"] > 0:
+            uncategorized = await self.get_or_create_uncategorized()
+            
+            from sqlalchemy import update
+            update_query = update(Transaction).where(
+                Transaction.category_id == category_id
+            ).values(category_id=uncategorized.id)
+            await self.db.execute(update_query)
+            transactions_moved = usage_check["transaction_count"]
         
-        from sqlalchemy import update
-        update_query = update(Transaction).where(
-            Transaction.category_id == category_id
-        ).values(category_id=uncategorized.id)
-        await self.db.execute(update_query)
-        
+        # Delete the category
         delete_query = delete(Category).where(Category.id == category_id)
         await self.db.execute(delete_query)
         await self.db.commit()
         
         return {
             "success": True,
-            "transactions_moved": usage_check["transaction_count"],
-            "moved_to": uncategorized.id,
-            "message": f"Category deleted. {usage_check['transaction_count']} transactions moved."
+            "transactions_moved": transactions_moved,
+            "message": f"Category deleted. {transactions_moved} transactions moved." if transactions_moved > 0 else "Category deleted."
         }
+
+
+
     
     async def check_category_usage(self, category_id: str) -> Dict[str, Any]:
         """Check if category can be deleted - FIXED"""

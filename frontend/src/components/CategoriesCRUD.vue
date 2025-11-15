@@ -4,16 +4,16 @@
     <div v-if="editingCategory" class="modal-overlay" @click="closeEditModal">
       <div class="modal-content category-edit-modal" @click.stop>
         <div class="modal-header">
-          <h3>{{ isEditing ? 'Edit Category' : 'Add Category' }}</h3>
+          <h3>{{ isEditing ? 'Edit Category' : (isCreatingType ? 'Add Type' : (isCreatingMainCategory ? 'Add Category' : 'Add Subcategory')) }}</h3>
           <button class="close-btn" @click="closeEditModal">×</button>
         </div>
         
         <div class="modal-body">
           <div class="edit-form">
-            <!-- Type Selector (only when creating category under a type) -->
-            <div v-if="showTypeSelector" class="form-group">
-              <label>Type</label>
-              <select v-model="selectedTypeId" class="form-input" @change="onTypeChange">
+            <!-- Type Selector (only when creating main category) -->
+            <div v-if="isCreatingMainCategory" class="form-group">
+              <label>Type *</label>
+              <select v-model="selectedTypeId" class="form-input" @change="onTypeChange" required>
                 <option value="">Select type...</option>
                 <option v-for="type in availableTypes" :key="type.id" :value="type.id">
                   {{ type.name }}
@@ -22,12 +22,13 @@
             </div>
             
             <div class="form-group">
-              <label>Name</label>
+              <label>Name *</label>
               <input 
                 type="text" 
                 v-model="editForm.name"
                 class="form-input"
                 placeholder="Category name..."
+                required
               >
             </div>
             
@@ -80,7 +81,7 @@
           <button 
             class="btn" 
             @click="saveEdit"
-            :disabled="saving || !editForm.name"
+            :disabled="saving || !editForm.name || (isCreatingMainCategory && !selectedTypeId)"
           >
             {{ saving ? 'Saving...' : (isEditing ? 'Save Changes' : 'Create') }}
           </button>
@@ -174,19 +175,9 @@ export default {
     })
 
     const isEditing = computed(() => editingCategory.value?.id !== undefined)
-    
-    const showTypeSelector = computed(() => {
-      // Show when creating a main category (needs to choose type)
-      // Don't show when editing or creating type (parent_id = null) or subcategory
-      if (isEditing.value) return false
-      if (!editingCategory.value) return false
-      
-      // If parent_id is explicitly null, we're creating a type - don't show selector
-      if (editingCategory.value.parent_id === null && !editingCategory.value.isMainCategory) return false
-      
-      // If isMainCategory flag is set, show selector
-      return editingCategory.value.isMainCategory === true
-    })
+    const isCreatingType = computed(() => !isEditing.value && editingCategory.value?.parent_id === null && !editingCategory.value?.isMainCategory)
+    const isCreatingMainCategory = computed(() => !isEditing.value && editingCategory.value?.isMainCategory === true)
+    const isCreatingSubcategory = computed(() => !isEditing.value && editingCategory.value?.parent_id !== null && !editingCategory.value?.isMainCategory)
 
     const onTypeChange = () => {
       const selectedType = availableTypes.value.find(t => t.id === selectedTypeId.value)
@@ -239,7 +230,7 @@ export default {
       }
       
       if (isMainCategory) {
-        // Creating main category - will select type
+        // Creating main category - must select type
         selectedTypeId.value = ''
         editForm.value = {
           name: '',
@@ -267,7 +258,7 @@ export default {
     }
 
     const editCategory = (category) => {
-      editingCategory.value = category
+      editingCategory.value = { ...category }
       editForm.value = {
         name: category.name || '',
         icon: category.icon || 'circle',
@@ -288,13 +279,14 @@ export default {
       editForm.value = { name: '', icon: '', color: '' }
       showIconPicker.value = false
       iconSearch.value = ''
+      selectedTypeId.value = ''
     }
 
     const saveEdit = async () => {
       if (!editForm.value.name || saving.value) return
       
       // Validate type selection if needed
-      if (showTypeSelector.value && !selectedTypeId.value) {
+      if (isCreatingMainCategory.value && !selectedTypeId.value) {
         emit('add-chat-message', {
           response: 'Please select a type'
         })
@@ -416,10 +408,16 @@ export default {
       deleting,
       editForm,
       isEditing,
+      isCreatingType,
+      isCreatingMainCategory,
+      isCreatingSubcategory,
       showIconPicker,
       iconSearch,
       filteredIcons,
       loadingIcons,
+      availableTypes,
+      selectedTypeId,
+      onTypeChange,
       createCategory,
       editCategory,
       selectIcon,
