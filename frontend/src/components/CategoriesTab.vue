@@ -20,10 +20,11 @@
     <!-- Scrollable Content - All Categories -->
     <div class="categories-scroll-container" ref="scrollContainer">
       <div class="add-category-button" style="margin-bottom: 1rem;">
-      <button class=" btn-plus" @click="showAddOwnerModal = true">
-        <AppIcon name="plus" size="medium" />
-      </button>
+        <button class="btn-plus" @click="handleAddMainCategory">
+          <AppIcon name="plus" size="medium" />
+        </button>
       </div>
+      
       <!-- Loading State -->
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
@@ -58,9 +59,9 @@
                   :show-add="true"
                   :show-edit="true"
                   :show-delete="true"
-                  @edit="editCategory(mainCat)"
-                  @add="addSubcategory(mainCat)"
-                  @delete="deleteCategory(mainCat)"
+                  @edit="handleEdit(mainCat)"
+                  @add="handleAdd(mainCat)"
+                  @delete="handleDelete(mainCat)"
                 />
               </div>
 
@@ -84,8 +85,8 @@
                       :show-add="false"
                       :show-edit="true"
                       :show-delete="true"
-                      @edit="editCategory(subcat)"
-                      @delete="deleteCategory(subcat)"
+                      @edit="handleEdit(subcat)"
+                      @delete="handleDelete(subcat)"
                     />
                   </div>
 
@@ -109,7 +110,7 @@
               </div>
 
               <div v-else class="no-subcategories">
-                <button class="btn btn-small" @click="addSubcategory(mainCat)">
+                <button class="btn btn-small" @click="handleAdd(mainCat)">
                   Add Subcategory
                 </button>
               </div>
@@ -118,6 +119,14 @@
         </section>
       </div>
     </div>
+    
+    <!-- CRUD Component -->
+    <CategoriesCRUD
+      ref="crudComponent"
+      @category-updated="handleCategoryUpdated"
+      @category-deleted="handleCategoryDeleted"
+      @add-chat-message="addChatMessage"
+    />
   </div>
 </template>
 
@@ -126,17 +135,21 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
+import CategoriesCRUD from './CategoriesCRUD.vue'
 
 export default {
   name: 'CategoriesTab',
   components: { 
     AppIcon,
-    ActionsMenu
+    ActionsMenu,
+    CategoriesCRUD
   },
-  setup() {
+  emits: ['add-chat-message'],
+  setup(props, { emit }) {
     const categoryStore = useCategoryStore()
     const activeTypeId = ref(null)
     const scrollContainer = ref(null)
+    const crudComponent = ref(null)
     let scrollTimeout = null
 
     const categories = computed(() => {
@@ -161,43 +174,35 @@ export default {
     }
 
     function scrollToType(typeId) {
-  const section = document.getElementById(`type-${typeId}`)
-  if (section) {
-    section.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start'
-    })
-  }
-  activeTypeId.value = typeId
-  
-  // Clear active state after scroll animation
-  setTimeout(() => {
-    activeTypeId.value = null
-  }, 1000)
-}
+      const section = document.getElementById(`type-${typeId}`)
+      if (section) {
+        section.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start'
+        })
+      }
+      activeTypeId.value = typeId
+      
+      setTimeout(() => {
+        activeTypeId.value = null
+      }, 1000)
+    }
 
     function handleScroll() {
-      console.log('🔄 Scroll detected!')
       if (scrollTimeout) clearTimeout(scrollTimeout)
       
       scrollTimeout = setTimeout(() => {
         const sections = document.querySelectorAll('.type-section')
-        console.log('📍 Sections found:', sections.length)
-        
         let currentSection = null
         
         sections.forEach(section => {
           const rect = section.getBoundingClientRect()
-          console.log(section.id, 'rect.top:', rect.top, 'rect.bottom:', rect.bottom)
-          // If section top is above middle of screen and bottom is below top bar
           if (rect.top <= window.innerHeight / 2 && rect.bottom > 100) {
             currentSection = section.id.replace('type-', '')
-            console.log('✅ Active section:', currentSection)
           }
         })
 
         if (currentSection && currentSection !== activeTypeId.value) {
-          console.log('🎯 Setting active:', currentSection)
           activeTypeId.value = currentSection
         }
       }, 100)
@@ -210,20 +215,36 @@ export default {
       }
     }
 
-    function editCategory(category) {
-      console.log('Edit:', category.name)
+    function handleEdit(category) {
+      crudComponent.value.editCategory(category)
     }
 
-    function deleteCategory(category) {
-      console.log('Delete:', category.name)
+    function handleDelete(category) {
+      crudComponent.value.deleteCategory(category)
     }
 
-    function addSubcategory(parent) {
-      console.log('Add subcategory to:', parent.name)
+    function handleAdd(parent) {
+      crudComponent.value.createCategory(parent)
     }
 
-    function addNewCategory(type) {
-      console.log('Add new main category to:', type.name)
+    function handleAddMainCategory() {
+      // Find the currently visible type or use first type
+      const currentType = categories.value.find(t => t.id === activeTypeId.value) || categories.value[0]
+      if (currentType) {
+        crudComponent.value.createCategory(currentType)
+      }
+    }
+
+    async function handleCategoryUpdated() {
+      await refreshCategories()
+    }
+
+    async function handleCategoryDeleted() {
+      await refreshCategories()
+    }
+
+    function addChatMessage(messageData) {
+      emit('add-chat-message', messageData)
     }
 
     function getKeywords(categoryId) {
@@ -238,29 +259,33 @@ export default {
       return []
     }
 
-onMounted(async () => {
-  await refreshCategories()
-  scrollContainer.value?.addEventListener('scroll', handleScroll)
-})
+    onMounted(async () => {
+      await refreshCategories()
+      scrollContainer.value?.addEventListener('scroll', handleScroll)
+    })
 
-onUnmounted(() => {
-  if (scrollTimeout) clearTimeout(scrollTimeout)
-  scrollContainer.value?.removeEventListener('scroll', handleScroll)
-})
+    onUnmounted(() => {
+      if (scrollTimeout) clearTimeout(scrollTimeout)
+      scrollContainer.value?.removeEventListener('scroll', handleScroll)
+    })
 
     return {
       categories,
       loading,
       activeTypeId,
       scrollContainer,
+      crudComponent,
       hexToRgba,
       scrollToType,
       handleScroll,
       refreshCategories,
-      editCategory,
-      deleteCategory,
-      addSubcategory,
-      addNewCategory,
+      handleEdit,
+      handleDelete,
+      handleAdd,
+      handleAddMainCategory,
+      handleCategoryUpdated,
+      handleCategoryDeleted,
+      addChatMessage,
       getKeywords,
       updateKeywords,
       getMerchants
@@ -270,7 +295,6 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-
 .add-category-button {
   display: flex;
   justify-content: flex-end;
