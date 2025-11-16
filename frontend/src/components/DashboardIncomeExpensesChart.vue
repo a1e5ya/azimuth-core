@@ -4,13 +4,18 @@
 
     <!-- Empty State with Drop Zone -->
     <div v-if="chartData.length === 0" class="empty-state-import">
-      <div class="file-drop-zone" 
+      <div v-if="loading" class="loading-state">
+        <div class="loading-spinner">⟳</div>
+        <div>Importing training data...</div>
+      </div>
+      <div v-else 
+           class="file-drop-zone" 
            @drop.prevent="handleDrop" 
            @dragover.prevent
            @click="triggerFileInput">
         <AppIcon name="file-add" size="large" />
         <p>Drop training data here or click to browse</p>
-        <p class="help-text">CSV/XLSX files supported</p>
+        <p class="help-text">CSV files supported</p>
       </div>
       <input 
         ref="fileInput" 
@@ -23,9 +28,9 @@
     </div>
 
     <div v-else class="chart-container">
-          <div class="chart-header">
-      <h3>Income vs Expenses Trend</h3>
-    </div>
+      <div class="chart-header">
+        <h3>Income vs Expenses Trend</h3>
+      </div>
       <apexchart
         type="area"
         height="300"
@@ -64,6 +69,7 @@ export default {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
     const fileInput = ref(null)
+    const loading = ref(false)
 
     const triggerFileInput = () => {
       fileInput.value?.click()
@@ -87,28 +93,34 @@ export default {
     const processFiles = async (files) => {
       if (!files || files.length === 0) return
 
-      for (const file of files) {
-        try {
-          const formData = new FormData()
-          formData.append('file', file)
-          formData.append('import_mode', 'training')
-          formData.append('auto_categorize', 'true')
+      loading.value = true
 
-          await axios.post(`${API_BASE}/transactions/import`, formData, {
-            headers: {
-              'Authorization': `Bearer ${authStore.token}`,
-              'Content-Type': 'multipart/form-data'
-            },
-            timeout: 300000
-          })
+      try {
+        for (const file of files) {
+          try {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('import_mode', 'training')
+            formData.append('auto_categorize', 'true')
 
-          console.log(`✅ Imported: ${file.name}`)
-        } catch (error) {
-          console.error(`❌ Import failed: ${file.name}`, error)
+            await axios.post(`${API_BASE}/transactions/import`, formData, {
+              headers: {
+                'Authorization': `Bearer ${authStore.token}`,
+                'Content-Type': 'multipart/form-data'
+              },
+              timeout: 300000
+            })
+
+            console.log(`✅ Imported: ${file.name}`)
+          } catch (error) {
+            console.error(`❌ Import failed: ${file.name}`, error)
+          }
         }
-      }
 
-      emit('import-complete', { success: true, fileCount: files.length })
+        emit('import-complete', { success: true, fileCount: files.length })
+      } finally {
+        loading.value = false
+      }
     }
 
     const chartData = computed(() => {
@@ -274,6 +286,7 @@ export default {
 
     return {
       fileInput,
+      loading,
       chartData,
       chartSeries,
       chartOptions,
@@ -307,6 +320,30 @@ export default {
   padding: var(--gap-large);
 }
 
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gap-xxl);
+  gap: var(--gap-standard);
+  color: var(--color-text-muted);
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .file-drop-zone {
   border: 2px dashed rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
@@ -315,6 +352,7 @@ export default {
   cursor: pointer;
   transition: all 0.2s ease;
   background: var(--color-background-light);
+  padding: 1rem;
 }
 
 .file-drop-zone:hover {

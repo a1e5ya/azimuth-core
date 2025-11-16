@@ -176,7 +176,6 @@ class TransactionImportService:
             
             # Derive is_income/is_expense from main_category
                 main_cat_raw = (trans_data.get('main_category') or '').strip()
-                main_cat_normalized = main_cat_raw.capitalize() if main_cat_raw else None  # "EXPENSES" → "Expenses"
                 is_income = (main_cat_raw.upper() == 'INCOME')
                 is_expense = (main_cat_raw.upper() == 'EXPENSES')
             
@@ -193,7 +192,7 @@ class TransactionImportService:
                 import_batch_id=str(import_batch.id),
                 hash_dedupe=trans_data['hash_dedupe'],
                 source_category=source_category,
-                main_category=main_cat_normalized,
+                main_category=main_cat_raw,
                 category=trans_data.get('category', '').strip() if trans_data.get('category') else None,
                 subcategory=trans_data.get('subcategory', '').strip() if trans_data.get('subcategory') else None,
                 bank_account=trans_data.get('bank_account'),
@@ -415,11 +414,14 @@ class TransactionQueries:
         if filters.get('account_types') and len(filters['account_types']) > 0:
             conditions.append(Transaction.bank_account_type.in_(filters['account_types']))
         if filters.get('main_categories') and len(filters['main_categories']) > 0:
-            conditions.append(Transaction.main_category.in_(filters['main_categories']))
+            upper_categories = [cat.upper() for cat in filters['main_categories']]
+            conditions.append(func.upper(Transaction.main_category).in_(upper_categories))
         if filters.get('categories') and len(filters['categories']) > 0:
-            conditions.append(Transaction.category.in_(filters['categories']))
+            upper_categories = [cat.upper() for cat in filters['categories']]
+            conditions.append(func.upper(Transaction.category).in_(upper_categories))
         if filters.get('subcategories') and len(filters['subcategories']) > 0:
-            conditions.append(Transaction.subcategory.in_(filters['subcategories']))
+            upper_subcategories = [sub.upper() for sub in filters['subcategories']]
+            conditions.append(func.upper(Transaction.subcategory).in_(upper_subcategories))
         
         if conditions:
             query = query.where(and_(*conditions))

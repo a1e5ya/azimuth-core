@@ -20,27 +20,38 @@
                 </option>
               </select>
             </div>
-            
-            <div class="form-group">
-              <label>Name *</label>
-              <input 
-                type="text" 
-                v-model="editForm.name"
-                class="form-input"
-                placeholder="Category name..."
-                required
-              >
+
+            <div class="form-group-row">
+                <div class="form-group">
+                <label>Name *</label>
+                <input 
+                    type="text" 
+                    v-model="editForm.name"
+                    class="form-input"
+                    placeholder=""
+                    required
+                >
+                </div>
+
+                <div class="form-group">
+                <label>Color</label>
+                <input 
+                    type="color" 
+                    v-model="editForm.color"
+                    class="form-input color-input"
+                >
+                </div>
             </div>
             
             <div class="form-group">
               <label>Icon</label>
               <div class="icon-selector">
-                <div class="selected-icon" @click="showIconPicker = !showIconPicker">
+                <div class="selected-icon">
                   <AppIcon :name="editForm.icon" size="medium" />
                   <span>{{ editForm.icon }}</span>
                 </div>
                 
-                <div v-if="showIconPicker" class="icon-picker">
+                <div class="icon-picker">
                   <div class="icon-search">
                     <input 
                       v-model="iconSearch" 
@@ -66,14 +77,7 @@
               </div>
             </div>
             
-            <div class="form-group">
-              <label>Color</label>
-              <input 
-                type="color" 
-                v-model="editForm.color"
-                class="form-input color-input"
-              >
-            </div>
+
           </div>
         </div>
         
@@ -184,7 +188,6 @@ export default {
     const moveToSubcategoryId = ref('')
     const saving = ref(false)
     const deleting = ref(false)
-    const showIconPicker = ref(false)
     const iconSearch = ref('')
     const availableIcons = ref([])
     const loadingIcons = ref(false)
@@ -278,7 +281,6 @@ export default {
         }
       }
       
-      showIconPicker.value = false
       iconSearch.value = ''
     }
 
@@ -289,20 +291,17 @@ export default {
         icon: category.icon || 'circle',
         color: category.color || '#94a3b8'
       }
-      showIconPicker.value = false
       iconSearch.value = ''
     }
 
     const selectIcon = (icon) => {
       editForm.value.icon = icon
-      showIconPicker.value = false
       iconSearch.value = ''
     }
 
     const closeEditModal = () => {
       editingCategory.value = null
       editForm.value = { name: '', icon: '', color: '' }
-      showIconPicker.value = false
       iconSearch.value = ''
       selectedTypeId.value = ''
     }
@@ -452,7 +451,6 @@ export default {
       isCreatingType,
       isCreatingMainCategory,
       isCreatingSubcategory,
-      showIconPicker,
       iconSearch,
       filteredIcons,
       loadingIcons,
@@ -476,6 +474,7 @@ export default {
 <style scoped>
 .category-edit-modal {
   max-width: 35rem;
+  min-height: fit-content;
 }
 
 .edit-form {
@@ -484,13 +483,25 @@ export default {
   gap: var(--gap-standard);
 }
 
+.form-group-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(12rem, 1fr));
+  gap: var(--gap-large);
+}
+
 .color-input {
-  height: 3rem;
+  width: 100%;
   cursor: pointer;
+  padding: 0;
+  background: none;
+  border: none;
+  margin: 0;
 }
 
 .icon-selector {
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
 }
 
 .selected-icon {
@@ -500,27 +511,13 @@ export default {
   padding: var(--gap-small);
   border: 1px solid var(--color-background-dark);
   border-radius: var(--radius);
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.selected-icon:hover {
-  border-color: var(--color-text-light);
   background: var(--color-background-light);
 }
 
 .icon-picker {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  right: 0;
-  margin-top: 0.25rem;
   background: var(--color-background);
   border: 1px solid var(--color-background-dark);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-hover);
-  z-index: 1000;
-  max-height: 20rem;
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -566,7 +563,7 @@ export default {
 }
 
 .icon-option.selected {
-  background: var(--color-button-active);
+  border: #2a2a2a 1px dashed;
 }
 
 .icon-name {
@@ -594,7 +591,7 @@ export default {
 }
 
 .warning-text {
-  color: #f59e0b;
+  color: #292929;
   font-weight: 500;
 }
 </style>

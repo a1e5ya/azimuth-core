@@ -417,3 +417,38 @@ async def get_filter_metadata(
         "categoryMap": category_map,
         "subcategoryMap": subcategory_map
     }
+
+@router.get("/debug/main-categories")
+async def debug_main_categories(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Debug: Check actual main_category values in database"""
+    from sqlalchemy import func, distinct
+    
+    # Get all unique main_category values
+    query = select(
+        Transaction.main_category,
+        func.count(Transaction.id).label('count')
+    ).where(
+        Transaction.user_id == current_user.id
+    ).group_by(
+        Transaction.main_category
+    ).order_by(
+        desc(func.count(Transaction.id))
+    )
+    
+    result = await db.execute(query)
+    categories = result.all()
+    
+    return {
+        "main_categories": [
+            {"value": cat.main_category, "count": cat.count}
+            for cat in categories
+        ],
+        "total_transactions": sum(cat.count for cat in categories)
+    }
+
+
+
+

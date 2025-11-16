@@ -3,22 +3,25 @@
     <!-- Bulk Actions -->
     <div class="bulk-actions" v-if="selectedIds.length > 0">
       <span class="bulk-selection">{{ selectedIds.length }} selected</span>
-      <select v-model="bulkCategoryId" class="bulk-category-select form-select">
-        <option value="">Select category for bulk assignment...</option>
-        <optgroup 
-          v-for="group in groupedCategories" 
-          :key="group.name" 
-          :label="group.name"
-        >
-          <option 
-            v-for="category in group.categories" 
-            :key="category.id" 
-            :value="category.id"
-          >
-            {{ category.name }}
-          </option>
-        </optgroup>
-      </select>
+      
+      <!-- NEW: Styled dropdown like delete modal -->
+      <div class="bulk-category-dropdown">
+        <select v-model="bulkCategoryId" class="form-input">
+          <option value="">Select subcategory...</option>
+          <template v-for="type in categoryTree" :key="type.id">
+            <template v-for="cat in type.children" :key="cat.id">
+              <option 
+                v-for="subcat in cat.children"
+                :key="subcat.id"
+                :value="subcat.id"
+              >
+                {{ type.name }} → {{ cat.name }} → {{ subcat.name }}
+              </option>
+            </template>
+          </template>
+        </select>
+      </div>
+      
       <button class="btn btn-small" @click="handleBulkCategorize" :disabled="!bulkCategoryId">
         Apply Category
       </button>
@@ -27,6 +30,7 @@
       </button>
     </div>
 
+    <!-- Rest of template unchanged... -->
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <div class="loading-spinner">⟳</div>
@@ -114,25 +118,23 @@
               <div class="owner-secondary">{{ transaction.bank_account_type || '-' }}</div>
             </td>
             
-<td class="col-category">
-  <!-- Assigned category with parent path -->
-  <div v-if="transaction.category_name" class="category-assigned">
-    <div v-if="transaction.parent_category_name" class="category-primary">
-      {{ transaction.parent_category_name }}
-    </div>
-    <div class="category-secondary">
-      {{ transaction.category_name }}
-    </div>
-  </div>
-  <!-- CSV fallback -->
-  <div v-else-if="transaction.category" class="category-csv">
-    <div class="category-primary">{{ transaction.category }}</div>
-    <div v-if="transaction.subcategory" class="category-secondary">
-      {{ transaction.subcategory }}
-    </div>
-  </div>
-  <div v-else class="text-muted">Uncategorized</div>
-</td>
+            <td class="col-category">
+              <div v-if="transaction.category_name" class="category-assigned">
+                <div v-if="transaction.parent_category_name" class="category-primary">
+                  {{ transaction.parent_category_name }}
+                </div>
+                <div class="category-secondary">
+                  {{ transaction.category_name }}
+                </div>
+              </div>
+              <div v-else-if="transaction.category" class="category-csv">
+                <div class="category-primary">{{ transaction.category }}</div>
+                <div v-if="transaction.subcategory" class="category-secondary">
+                  {{ transaction.subcategory }}
+                </div>
+              </div>
+              <div v-else class="text-muted">Uncategorized</div>
+            </td>
             
             <td class="col-type">
               <div class="type-text" v-if="transaction.main_category">
@@ -140,11 +142,13 @@
               </div>
               <div v-else class="text-muted">-</div>
             </td>
-            <td class="col-indicator"><div 
-                  v-if="getCategoryColor(transaction)"
-                  class="type-indicator"
-                  v-html="getTypeShape(transaction)"
-                ></div></td>
+            <td class="col-indicator">
+              <div 
+                v-if="getCategoryColor(transaction)"
+                class="type-indicator"
+                v-html="getTypeShape(transaction)"
+              ></div>
+            </td>
             <td class="col-actions">
               <div class="actions-cell">
                 <ActionsMenu
@@ -155,7 +159,6 @@
                   @edit="$emit('edit', transaction)"
                   @delete="$emit('delete', transaction)"
                 />
-                
               </div>
             </td>
           </tr>
@@ -371,8 +374,15 @@ export default {
   color: var(--color-text);
 }
 
-.bulk-category-select {
-  min-width: 12rem;
+.bulk-category-dropdown {
+  flex: 1;
+  min-width: 20rem;
+}
+
+.bulk-category-dropdown .form-input {
+  width: 100%;
+  padding: 0.5rem;
+  font-size: var(--text-small);
 }
 
 .transactions-table-container {
@@ -464,14 +474,11 @@ export default {
 .col-indicator {
   width: 2rem;
   text-align: center;
-
 }
-
 
 .col-actions {
   width: 2rem;
   text-align: center;
-  
 }
 
 .date-primary {
@@ -562,5 +569,41 @@ export default {
   width: 100%;
   height: 100%;
   opacity: 1;
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem;
+  gap: 1rem;
+  color: var(--color-text-light);
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  text-align: center;
+  padding: 3rem;
+  color: var(--color-text-light);
+}
+
+.empty-title {
+  font-size: 1.25rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.empty-subtitle {
+  font-size: var(--text-small);
 }
 </style>

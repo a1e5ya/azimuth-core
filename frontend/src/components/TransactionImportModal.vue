@@ -16,7 +16,7 @@
                @click="triggerFileInput">
             <div v-if="selectedFiles.length === 0" class="drop-placeholder">
               <AppIcon name="file-add" size="large" />
-              <p>Drop CSV/XLSX files here or click to browse</p>
+              <p>Drop CSV files here or click to browse</p>
               <p class="help-text">Multiple files supported</p>
             </div>
             <div v-else class="file-list">

@@ -439,7 +439,7 @@ class EnhancedCSVProcessor:
                     'source_category': 'imported',
                     
                     # Categories (direct from CSV, no csv_ prefix)
-                    'main_category': safe_get('main_category') or 'Uncategorized',
+                    'main_category': (safe_get('main_category') or 'Uncategorized').title(),
                     'category': safe_get('category') or 'Uncategorized',
                     'subcategory': safe_get('subcategory') or 'Uncategorized',
                     
