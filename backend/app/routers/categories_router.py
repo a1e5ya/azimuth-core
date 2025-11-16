@@ -3,12 +3,12 @@ Categories router - API endpoints for category management - FIXED IMPORTS
 """
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, delete, desc
+from sqlalchemy import select, and_, func, delete, desc, or_
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import date
 
-from ..models.database import get_db, User, Transaction
+from ..models.database import get_db, User, Transaction, Category
 from ..services.category_service import CategoryService, get_category_service
 from ..auth.local_auth import get_current_user
 
@@ -279,46 +279,22 @@ async def get_category_patterns(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    """Get merchants and keywords from training data for this category"""
+    """Get cached merchants and keywords"""
     
-    # Get transactions with this category from training
-    query = select(
-        Transaction.merchant,
-        Transaction.memo,
-        func.count(Transaction.id).label('count')
-    ).where(
+    query = select(Category).where(
         and_(
-            Transaction.user_id == current_user.id,
-            Transaction.category_id == category_id,
-            or_(
-                Transaction.source_category == 'csv_mapped',
-                Transaction.source_category == 'user'
-            )
+            Category.id == category_id,
+            Category.user_id == current_user.id
         )
-    ).group_by(Transaction.merchant, Transaction.memo)
-    
+    )
     result = await db.execute(query)
+    category = result.scalar_one_or_none()
     
-    merchants = {}
-    all_text = []
-    
-    for row in result:
-        if row.merchant:
-            merchants[row.merchant] = merchants.get(row.merchant, 0) + row.count
-            all_text.append(row.merchant.lower())
-        if row.memo:
-            all_text.append(row.memo.lower())
-    
-    # Extract keywords
-    from collections import Counter
-    words = ' '.join(all_text).split()
-    word_freq = Counter([w for w in words if len(w) > 3])
-    keywords = [w for w, _ in word_freq.most_common(20)]
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
     
     return {
-        "merchants": [
-            {"name": m, "count": c} 
-            for m, c in sorted(merchants.items(), key=lambda x: x[1], reverse=True)[:10]
-        ],
-        "keywords": keywords
+        "merchants": category.training_merchants or [],
+        "keywords": category.training_keywords or [],
+        "last_updated": category.last_training_update.isoformat() if category.last_training_update else None
     }

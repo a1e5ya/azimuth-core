@@ -115,6 +115,10 @@ class Category(Base):
     version = Column(Integer, default=1)
     active = Column(Boolean, default=True)
     created_at = Column(DateTime, default=datetime.utcnow)
+
+    training_merchants = Column(JSON, nullable=True)  # ["S-MARKET", "LIDL"]
+    training_keywords = Column(JSON, nullable=True)   # ["grocery", "food"]
+    last_training_update = Column(DateTime, nullable=True)
     
     # Relationships
     user = relationship("User", back_populates="categories")

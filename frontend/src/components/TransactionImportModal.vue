@@ -245,27 +245,37 @@ export default {
             formData.append('account_id', selectedAccountId.value)
           }
           
-          await axios.post(`${API_BASE}/transactions/import`, formData, {
+          const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
             headers: {
               'Authorization': `Bearer ${authStore.token}`,
               'Content-Type': 'multipart/form-data'
             },
             timeout: 300000
           })
+          
+          const stats = response.data.summary
+          
+          // ✅ Emit chat message with training log
+          let message = `Imported ${stats.rows_inserted || 0} transactions!\n\n`
+          
+          if (stats.categories_trained) {
+            message += `🎓 Trained ${stats.categories_trained} categories\n`
+            if (stats.training_log && stats.training_log.length > 0) {
+              const lastItems = stats.training_log.slice(-5)
+              message += lastItems.map(item => `   • ${item}`).join('\n')
+            }
+          }
+          
+          emit('import-complete', { 
+            success: true, 
+            fileCount: selectedFiles.value.length,
+            message: message  // ✅ Pass to parent
+          })
         }
         
-        emit('import-complete', { 
-          success: true, 
-          fileCount: selectedFiles.value.length 
-        })
         emit('close')
         
-      } catch (error) {
-        console.error('Import failed:', error)
-        emit('import-complete', { 
-          success: false, 
-          error: error.response?.data?.detail || 'Import failed' 
-        })
+
       } finally {
         importing.value = false
         selectedFiles.value = []

@@ -212,17 +212,33 @@ class TransactionImportService:
             self.db.add(transaction)
         
         await self.db.commit()
-        
-        # 🔥 DETECT TRANSFER PAIRS after training data import
+    
+        # Transfer detection
         from .transfer_detector import TransferDetector
         detector = TransferDetector(self.db, self.user)
         pairs_found = await detector.detect_pairs()
+        
+        # ✅ Train categories with detailed progress
+        from .category_training import CategoryTrainingService
+        trainer = CategoryTrainingService(self.db, self.user)
+        
+        training_log = []
+        
+        async def track_progress(current, total, category_name):
+            """Store progress messages"""
+            msg = f"Training {current}/{total}: {category_name}"
+            training_log.append(msg)
+            print(f"   📝 {msg}")
+        
+        trained_count = await trainer.train_all_categories(track_progress)
         
         return {
             "stats": {
                 "categorization": categorization_stats,
                 "auto_categorized": categorization_stats['auto_created'],
-                "transfer_pairs_found": pairs_found
+                "transfer_pairs_found": pairs_found,
+                "categories_trained": trained_count,
+                "training_log": training_log  # ✅ For chat display
             }
         }
     
@@ -280,20 +296,19 @@ class TransactionImportService:
         
         await self.db.commit()
     
-        # 🔥 STEP 1: Detect transfer pairs
+        # Transfer detection
         from .transfer_detector import TransferDetector
         detector = TransferDetector(self.db, self.user)
         pairs_found = await detector.detect_pairs()
         
-        # 🔥 STEP 2: LLM categorization for non-transfers
+        # ✅ LLM categorization
         from .llm_categorizer import LLMCategorizationService
         llm_service = LLMCategorizationService(self.db, self.user)
         
-        # Get uncategorized transactions from this batch
         uncategorized_query = select(Transaction).where(
             and_(
                 Transaction.import_batch_id == import_batch.id,
-                Transaction.category_id.is_(None)  # Not categorized yet
+                Transaction.category_id.is_(None)
             )
         )
         uncategorized_result = await self.db.execute(uncategorized_query)
@@ -320,12 +335,27 @@ class TransactionImportService:
         
         await self.db.commit()
         
+        # ✅ Train categories after LLM categorization
+        from .category_training import CategoryTrainingService
+        trainer = CategoryTrainingService(self.db, self.user)
+        
+        training_log = []
+        
+        async def track_progress(current, total, category_name):
+            msg = f"Training {current}/{total}: {category_name}"
+            training_log.append(msg)
+            print(f"   📝 {msg}")
+        
+        trained_count = await trainer.train_all_categories(track_progress)
+        
         return {
             "stats": {
                 "uncategorized": len(transactions_data),
                 "transfer_pairs_found": pairs_found,
                 "llm_categorized": categorized_by_llm,
-                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm
+                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm,
+                "categories_trained": trained_count,
+                "training_log": training_log  # ✅ NEW
             }
         }
     

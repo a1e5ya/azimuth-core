@@ -32,6 +32,8 @@
 
       <DashboardAccountsManagement
         :filtered-transactions="filteredTransactions"
+        @import-success="handleImportComplete"
+        @add-chat-message="addChatMessage"
         @open-import="showImportModal = true"
       />
     </template>
@@ -64,7 +66,8 @@ export default {
     DashboardAccountsManagement,
     TransactionImportModal
   },
-  setup() {
+  emits: ['add-chat-message'], 
+  setup(props, { emit }) {
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
@@ -124,14 +127,19 @@ export default {
       })
     })
 
+    function addChatMessage(data) {
+      emit('add-chat-message', data)
+    }
+
+    
     function handleDateRangeChange(newRange) {
       dateRange.value = newRange
     }
 
-    async function handleImportComplete(result) {
-      if (result.success) {
+    async function handleImportComplete() {
+
         await loadTransactions()
-      }
+      
     }
 
     async function loadTransactions() {
@@ -231,6 +239,7 @@ export default {
       showImportModal,
       handleDateRangeChange,
       handleImportComplete,
+      addChatMessage,
       getTypeColor
     }
   }

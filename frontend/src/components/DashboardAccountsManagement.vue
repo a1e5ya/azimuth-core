@@ -617,7 +617,7 @@ export default {
       formData.append('file', file)
       formData.append('import_mode', 'account')
       formData.append('account_id', importingAccount.value.id)
-      formData.append('auto_categorize', 'true')  // Enable LLM
+      formData.append('auto_categorize', 'true')
       
       loading.value = true
       
@@ -632,40 +632,32 @@ export default {
         
         const stats = response.data.summary
         
-        // Success alert
-        alert(
-          `✅ Imported ${stats.rows_inserted || 0} transactions!\n` +
-          `🔗 ${stats.transfer_pairs_found || 0} transfer pairs found\n` +
-          `🤖 ${stats.llm_categorized || 0} auto-categorized by AI\n` +
-          `⚠️ ${stats.needs_review || 0} need review`
-        )
+        // ✅ Build detailed message with training log
+        let message = `Successfully imported ${stats.rows_inserted || 0} transactions!\n\n`
+        message += `📊 Results:\n`
+        message += `• Transfer pairs: ${stats.transfer_pairs_found || 0}\n`
+        message += `• AI categorized: ${stats.llm_categorized || 0}\n`
+        message += `• Need review: ${stats.needs_review || 0}\n`
         
-        // Chat message
+        if (stats.categories_trained) {
+          message += `\n🎓 Trained ${stats.categories_trained} categories\n`
+          
+          // Show last 5 training items
+          if (stats.training_log && stats.training_log.length > 0) {
+            const lastItems = stats.training_log.slice(-5)
+            message += lastItems.map(item => `   • ${item}`).join('\n')
+          }
+        }
+        
         emit('add-chat-message', {
-          message: `Imported ${file.name} to ${importingOwner.value.name} - ${importingAccount.value.name}`,
-          response: 
-            `Successfully imported ${stats.rows_inserted || 0} transactions!\n\n` +
-            `📊 Results:\n` +
-            `• Transfer pairs detected: ${stats.transfer_pairs_found || 0}\n` +
-            `• AI categorized: ${stats.llm_categorized || 0}\n` +
-            `• Need manual review: ${stats.needs_review || 0}`
+          message: `Imported ${file.name}`,
+          response: message
         })
         
         emit('import-success')
         await loadOwners()
         
-      } catch (error) {
-        console.error('Import failed:', error)
-        const errorMsg = error.response?.data?.detail || 'Import failed'
-        
-        alert(`❌ ${errorMsg}`)
-        
-        // Chat error message
-        emit('add-chat-message', {
-          message: `Import failed: ${file.name}`,
-          response: `❌ ${errorMsg}`
-        })
-        
+      
       } finally {
         loading.value = false
         event.target.value = ''

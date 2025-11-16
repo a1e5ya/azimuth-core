@@ -189,6 +189,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
+import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
 import CategoriesCRUD from './CategoriesCRUD.vue'
@@ -204,6 +205,7 @@ export default {
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
+    const categoryStore = useCategoryStore()
     
     const categories = ref([])
     const loading = ref(false)
@@ -383,6 +385,17 @@ export default {
         }
       }
     })
+
+    watch(() => categoryStore.categories, async () => {
+      // Reload patterns when categories update
+      for (const type of categories.value) {
+        for (const cat of type.children || []) {
+          for (const subcat of cat.children || []) {
+            await loadCategoryPatterns(subcat.id)
+          }
+        }
+      }
+    }, { deep: true })
 
     onMounted(async () => {
       await loadCategories()

@@ -168,7 +168,15 @@ export default {
 
     const handleImportComplete = async (result) => {
       if (result.success) {
-        addChatMessage({ response: `Imported ${result.fileCount} files!` })
+        // ✅ Show chat message if provided
+        if (result.message) {
+          addChatMessage({
+            message: `Import complete: ${result.fileCount} file(s)`,
+            response: result.message
+          })
+        }
+        
+        await loadFilterOptions()
         await loadTransactions()
         await loadSummary()
       }
