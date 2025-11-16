@@ -78,20 +78,21 @@
       @apply="loadTransactions"
     />
 
-      <!-- Transactions Table Component -->
-      <TransactionsTable
-        :transactions="transactions"
-        :loading="loading"
-        :has-active-filters="hasActiveFilters"
-        :sort-by="sortBy"
-        :sort-order="sortOrder"
-        :grouped-categories="groupedCategories"
-        :category-tree="categoryTree"
-        @edit="handleEdit"
-        @delete="handleDelete"
-        @sort="toggleSort"
-        @bulk-categorize="handleBulkCategorize"
-      />
+<!-- Transactions Table Component -->
+<TransactionsTable
+  :transactions="transactions"
+  :loading="loading"
+  :has-active-filters="hasActiveFilters"
+  :sort-by="sortBy"
+  :sort-order="sortOrder"
+  :grouped-categories="groupedCategories"
+  :category-tree="categoryTree"
+  @edit="handleEdit"
+  @delete="handleDelete"
+  @sort="toggleSort"
+  @bulk-categorize="handleBulkCategorize"
+  @category-updated="handleCategoryUpdated"
+/>
     </div>
 
     <!-- CRUD Modals Component -->
@@ -388,115 +389,123 @@ export default {
       }
     }
 
-    const loadFilterOptions = async () => {
-      if (!props.user) return
+const loadFilterOptions = async () => {
+  if (!props.user) return
+  
+  console.log('🔄 Loading filter options...')
+  
+  try {
+    const token = authStore.token
+    
+    const response = await axios.get(`${API_BASE}/transactions/filter-metadata`, {
+      headers: { 'Authorization': `Bearer ${token}` }
+    })
+    
+    filterOptions.value = response.data
+    
+    console.log('✅ Filter options RAW:', JSON.stringify(response.data, null, 2))
+    
+    console.log('✅ Filter options loaded:', {
+      owners: filterOptions.value.owners?.length || 0,
+      ownerAccountMap: Object.keys(filterOptions.value.ownerAccountMap || {}).length,
+      accountTypes: filterOptions.value.account_types?.length || 0,
+      mainCategories: filterOptions.value.mainCategories?.length || 0,
+      categoryMap: filterOptions.value.categoryMap,
+      subcategoryMap: filterOptions.value.subcategoryMap
+    })
+    
+  } catch (error) {
+    console.error('Filter metadata endpoint failed, using fallback:', error)
+    
+    const token = authStore.token
+    const ownerAccountMap = {}
+    const mainCats = new Set()
+    const categoryMap = {}
+    const subcategoryMap = {}
+    
+    let page = 1
+    let hasMore = true
+    const batchSize = 200
+    const maxPages = 100
+    
+    while (hasMore && page <= maxPages) {
+      const response = await axios.get(`${API_BASE}/transactions/list`, {
+        params: { page: page, limit: batchSize },
+        headers: { 'Authorization': `Bearer ${token}` }
+      })
       
-      try {
-        const token = authStore.token
-        
-        const response = await axios.get(`${API_BASE}/transactions/filter-metadata`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        
-        filterOptions.value = response.data
-        
-        console.log('✅ Filter options loaded:', {
-          owners: filterOptions.value.owners?.length || 0,
-          ownerAccountMap: Object.keys(filterOptions.value.ownerAccountMap || {}).length,
-          accountTypes: filterOptions.value.account_types?.length || 0,
-          mainCategories: filterOptions.value.mainCategories?.length || 0
-        })
-        
-      } catch (error) {
-        console.error('Filter metadata endpoint failed, using fallback:', error)
-        
-        const token = authStore.token
-        const ownerAccountMap = {}
-        const mainCats = new Set()
-        const categoryMap = {}
-        const subcategoryMap = {}
-        
-        let page = 1
-        let hasMore = true
-        const batchSize = 200
-        const maxPages = 100
-        
-        while (hasMore && page <= maxPages) {
-          const response = await axios.get(`${API_BASE}/transactions/list`, {
-            params: { page: page, limit: batchSize },
-            headers: { 'Authorization': `Bearer ${token}` }
-          })
-          
-          const pageTransactions = response.data
-          
-          if (pageTransactions.length === 0) {
-            hasMore = false
-            break
-          }
-          
-          pageTransactions.forEach(t => {
-            if (t.owner && t.bank_account_type) {
-              if (!ownerAccountMap[t.owner]) {
-                ownerAccountMap[t.owner] = new Set()
-              }
-              ownerAccountMap[t.owner].add(t.bank_account_type)
-            }
-            
-            if (t.main_category) {
-              mainCats.add(t.main_category)
-              
-              if (t.category) {
-                if (!categoryMap[t.main_category]) {
-                  categoryMap[t.main_category] = new Set()
-                }
-                categoryMap[t.main_category].add(t.category)
-                
-                if (t.subcategory) {
-                  const key = `${t.main_category}|${t.category}`
-                  if (!subcategoryMap[key]) {
-                    subcategoryMap[key] = new Set()
-                  }
-                  subcategoryMap[key].add(t.subcategory)
-                }
-              }
-            }
-          })
-          
-          if (pageTransactions.length < batchSize) {
-            hasMore = false
-          }
-          
-          page++
-        }
-        
-        const ownerAccountMapArray = {}
-        Object.keys(ownerAccountMap).forEach(owner => {
-          ownerAccountMapArray[owner] = Array.from(ownerAccountMap[owner]).sort()
-        })
-        
-        const categoryMapArray = {}
-        Object.keys(categoryMap).forEach(main => {
-          categoryMapArray[main] = Array.from(categoryMap[main]).sort()
-        })
-        
-        const subcategoryMapArray = {}
-        Object.keys(subcategoryMap).forEach(key => {
-          subcategoryMapArray[key] = Array.from(subcategoryMap[key]).sort()
-        })
-        
-        filterOptions.value = {
-          ownerAccountMap: ownerAccountMapArray,
-          mainCategories: Array.from(mainCats).sort(),
-          categoryMap: categoryMapArray,
-          subcategoryMap: subcategoryMapArray
-        }
-        
-        console.log('✅ Filter options loaded (fallback):', {
-          owners: Object.keys(filterOptions.value.ownerAccountMap).length,
-          mainCategories: filterOptions.value.mainCategories.length
-        })
+      const pageTransactions = response.data
+      
+      if (pageTransactions.length === 0) {
+        hasMore = false
+        break
       }
+      
+      pageTransactions.forEach(t => {
+        if (t.owner && t.bank_account_type) {
+          if (!ownerAccountMap[t.owner]) {
+            ownerAccountMap[t.owner] = new Set()
+          }
+          ownerAccountMap[t.owner].add(t.bank_account_type)
+        }
+        
+        if (t.main_category) {
+          mainCats.add(t.main_category)
+          
+          if (t.category) {
+            if (!categoryMap[t.main_category]) {
+              categoryMap[t.main_category] = new Set()
+            }
+            categoryMap[t.main_category].add(t.category)
+            
+            if (t.subcategory) {
+              const key = `${t.main_category}|${t.category}`
+              if (!subcategoryMap[key]) {
+                subcategoryMap[key] = new Set()
+              }
+              subcategoryMap[key].add(t.subcategory)
+            }
+          }
+        }
+      })
+      
+      if (pageTransactions.length < batchSize) {
+        hasMore = false
+      }
+      
+      page++
     }
+    
+    const ownerAccountMapArray = {}
+    Object.keys(ownerAccountMap).forEach(owner => {
+      ownerAccountMapArray[owner] = Array.from(ownerAccountMap[owner]).sort()
+    })
+    
+    const categoryMapArray = {}
+    Object.keys(categoryMap).forEach(main => {
+      categoryMapArray[main] = Array.from(categoryMap[main]).sort()
+    })
+    
+    const subcategoryMapArray = {}
+    Object.keys(subcategoryMap).forEach(key => {
+      subcategoryMapArray[key] = Array.from(subcategoryMap[key]).sort()
+    })
+    
+    filterOptions.value = {
+      ownerAccountMap: ownerAccountMapArray,
+      mainCategories: Array.from(mainCats).sort(),
+      categoryMap: categoryMapArray,
+      subcategoryMap: subcategoryMapArray
+    }
+    
+    console.log('✅ Filter options loaded (fallback):', {
+      owners: Object.keys(filterOptions.value.ownerAccountMap).length,
+      mainCategories: filterOptions.value.mainCategories.length,
+      categoryMap: filterOptions.value.categoryMap,
+      subcategoryMap: filterOptions.value.subcategoryMap
+    })
+  }
+}
 
     const loadSummary = async () => {
       if (!props.user) return
@@ -596,6 +605,7 @@ export default {
 
 const handleTransactionUpdated = async () => {
   console.log('🔄 Refreshing after update...')
+  await loadFilterOptions()
   await loadTransactions()
   await loadSummary()
   await loadFilteredStats()  // Also refresh stats
@@ -603,6 +613,15 @@ const handleTransactionUpdated = async () => {
 
 const handleTransactionDeleted = async () => {
   console.log('🔄 Refreshing after delete...')
+  await loadFilterOptions()
+  await loadTransactions()
+  await loadSummary()
+  await loadFilteredStats()
+}
+
+const handleCategoryUpdated = async () => {
+  console.log('🔄 Category updated, refreshing filters...')
+  await loadFilterOptions()
   await loadTransactions()
   await loadSummary()
   await loadFilteredStats()
@@ -621,7 +640,7 @@ const handleBulkCategorize = async (data) => {
     }, {
       headers: { 
         'Authorization': `Bearer ${token}`,
-        'Cache-Control': 'no-cache'  // Prevent caching
+        'Cache-Control': 'no-cache'
       }
     })
     
@@ -632,11 +651,10 @@ const handleBulkCategorize = async (data) => {
       response: response.data.message || `Successfully categorized ${response.data.updated_count} transactions!`
     })
     
-    // Clear local state first
     transactions.value = []
     
-    // Force reload with small delay
     await new Promise(resolve => setTimeout(resolve, 100))
+    await loadFilterOptions()  // ADD THIS
     await loadTransactions()
     await loadSummary()
     await loadFilteredStats()
@@ -704,6 +722,7 @@ const handleBulkCategorize = async (data) => {
       handleTransactionUpdated,
       handleTransactionDeleted,
       handleBulkCategorize,
+      handleCategoryUpdated,
       showImportModal,
       handleImportStarted,
       handleImportComplete

@@ -175,9 +175,10 @@ class TransactionImportService:
                     categorization_stats['none'] += 1
             
             # Derive is_income/is_expense from main_category
-            main_cat_upper = (trans_data.get('main_category') or '').upper()
-            is_income = (main_cat_upper == 'INCOME')
-            is_expense = (main_cat_upper == 'EXPENSES')
+                main_cat_raw = (trans_data.get('main_category') or '').strip()
+                main_cat_normalized = main_cat_raw.capitalize() if main_cat_raw else None  # "EXPENSES" → "Expenses"
+                is_income = (main_cat_raw.upper() == 'INCOME')
+                is_expense = (main_cat_raw.upper() == 'EXPENSES')
             
             transaction = Transaction(
                 id=str(uuid.uuid4()),
@@ -192,9 +193,9 @@ class TransactionImportService:
                 import_batch_id=str(import_batch.id),
                 hash_dedupe=trans_data['hash_dedupe'],
                 source_category=source_category,
-                main_category=trans_data.get('main_category'),
-                category=trans_data.get('category'),
-                subcategory=trans_data.get('subcategory'),
+                main_category=main_cat_normalized,
+                category=trans_data.get('category', '').strip() if trans_data.get('category') else None,
+                subcategory=trans_data.get('subcategory', '').strip() if trans_data.get('subcategory') else None,
                 bank_account=trans_data.get('bank_account'),
                 owner=trans_data.get('owner'),
                 bank_account_type=trans_data.get('bank_account_type'),
@@ -615,7 +616,9 @@ class TransactionService:
             if not transaction:
                 return {"success": False, "message": "Transaction not found"}
             
-            category_query = select(Category).where(
+            category_query = select(Category).options(
+                selectinload(Category.parent)
+            ).where(
                 and_(
                     Category.id == uuid.UUID(category_id),
                     Category.user_id == self.user.id
@@ -627,11 +630,34 @@ class TransactionService:
             if not category:
                 return {"success": False, "message": "Category not found"}
             
+            # Update category_id
             transaction.category_id = uuid.UUID(category_id)
             transaction.source_category = "user"
             transaction.confidence_score = confidence
             transaction.review_needed = False
             transaction.updated_at = datetime.utcnow()
+            
+            # UPDATE CSV FIELDS - Get full hierarchy
+            main_cat = None
+            mid_cat = None
+            sub_cat = category.name
+            
+            if category.parent:
+                mid_cat = category.parent.name
+                if category.parent.parent:
+                    main_cat = category.parent.parent.name
+                else:
+                    main_cat = category.parent.name
+                    mid_cat = category.name
+                    sub_cat = None
+            else:
+                main_cat = category.name
+                mid_cat = None
+                sub_cat = None
+            
+            transaction.main_category = main_cat
+            transaction.category = mid_cat
+            transaction.subcategory = sub_cat
             
             if notes:
                 transaction.notes = notes
@@ -725,15 +751,17 @@ class TransactionService:
     ) -> Dict[str, Any]:
         """Bulk categorize multiple transactions"""
         try:
-            # Verify category exists
+            # Verify category exists and get hierarchy
             try:
                 cat_uuid = uuid.UUID(category_id)
             except ValueError:
                 return {"success": False, "message": "Invalid category ID format", "updated_count": 0}
             
-            category_query = select(Category).where(
+            category_query = select(Category).options(
+                selectinload(Category.parent).selectinload(Category.parent)
+            ).where(
                 and_(
-                    Category.id == str(cat_uuid),  # FIX: compare as string
+                    Category.id == str(cat_uuid),
                     Category.user_id == str(self.user.id)
                 )
             )
@@ -743,18 +771,39 @@ class TransactionService:
             if not category:
                 return {"success": False, "message": "Category not found", "updated_count": 0}
             
+            # Get full hierarchy for CSV fields
+            main_cat = None
+            mid_cat = None
+            sub_cat = category.name
+
+            if category.parent:
+                mid_cat = category.parent.name
+                if category.parent.parent:
+                    main_cat = category.parent.parent.name
+                else:
+                    main_cat = category.parent.name
+                    mid_cat = category.name
+                    sub_cat = None
+            else:
+                main_cat = category.name
+                mid_cat = None
+                sub_cat = None
+            
             # Convert transaction IDs to strings
             trans_ids = [str(uuid.UUID(tid)) for tid in transaction_ids]
             
-            # Update transactions
+            # Update transactions with both category_id AND CSV fields
             from sqlalchemy import update
             update_query = update(Transaction).where(
                 and_(
-                    Transaction.id.in_(trans_ids),  # FIX: use string list
+                    Transaction.id.in_(trans_ids),
                     Transaction.user_id == str(self.user.id)
                 )
             ).values(
-                category_id=str(cat_uuid),  # FIX: store as string
+                category_id=str(cat_uuid),
+                main_category=main_cat,
+                category=mid_cat,
+                subcategory=sub_cat,
                 source_category="user",
                 confidence_score=confidence,
                 review_needed=False,
@@ -772,7 +821,7 @@ class TransactionService:
             
         except Exception as e:
             await self.db.rollback()
-            print(f"❌ Bulk categorize failed: {e}")  # DEBUG
+            print(f"❌ Bulk categorize failed: {e}")
             return {"success": False, "message": str(e), "updated_count": 0}
 
 

@@ -346,9 +346,9 @@ async def get_filter_metadata(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get unique values for filter dropdowns - FIXED"""
+    """Get unique values for filter dropdowns - FROM CATEGORY TREE"""
     
-    # Get unique owners and account types
+    # Get unique owners and account types (still from transactions)
     owner_account_query = select(
         Transaction.owner,
         Transaction.bank_account_type
@@ -369,63 +369,51 @@ async def get_filter_metadata(
         if account_type not in owner_account_map[owner]:
             owner_account_map[owner].append(account_type)
     
-    # Sort account types for each owner
     for owner in owner_account_map:
         owner_account_map[owner].sort()
     
-    # Get unique main categories
-    main_cat_query = select(Transaction.main_category).where(
-        and_(
-            Transaction.user_id == current_user.id,
-            Transaction.main_category.isnot(None)
-        )
-    ).distinct()
+    # Get categories from Category table, not transactions!
+    from sqlalchemy.orm import selectinload
     
-    main_cat_result = await db.execute(main_cat_query)
-    main_categories = sorted([row[0] for row in main_cat_result])
-    
-    # Build category/subcategory maps
-    category_query = select(
-        Transaction.main_category,
-        Transaction.category,
-        Transaction.subcategory
+    categories_query = select(Category).options(
+        selectinload(Category.children).selectinload(Category.children)
     ).where(
         and_(
-            Transaction.user_id == current_user.id,
-            Transaction.main_category.isnot(None)
+            Category.user_id == current_user.id,
+            Category.active == True,
+            Category.parent_id.is_(None)  # Get root categories only
         )
-    ).distinct()
+    )
     
-    category_result = await db.execute(category_query)
+    categories_result = await db.execute(categories_query)
+    root_categories = categories_result.scalars().all()
     
+    main_categories = []
     category_map = {}
     subcategory_map = {}
     
-    for main_cat, cat, subcat in category_result:
-        if main_cat:
-            if cat:
-                if main_cat not in category_map:
-                    category_map[main_cat] = set()
-                category_map[main_cat].add(cat)
-                
-                if subcat:
-                    key = f"{main_cat}|{cat}"
-                    if key not in subcategory_map:
-                        subcategory_map[key] = set()
-                    subcategory_map[key].add(subcat)
+    for root_cat in root_categories:
+        main_categories.append(root_cat.name)
+        category_map[root_cat.name] = []
+        
+        for mid_cat in root_cat.children:
+            category_map[root_cat.name].append(mid_cat.name)
+            
+            key = f"{root_cat.name}|{mid_cat.name}"
+            subcategory_map[key] = []
+            
+            for sub_cat in mid_cat.children:
+                subcategory_map[key].append(sub_cat.name)
+            
+            subcategory_map[key].sort()
+        
+        category_map[root_cat.name].sort()
     
-    # Convert sets to sorted lists
-    category_map_list = {}
-    for main_cat, cats in category_map.items():
-        category_map_list[main_cat] = sorted(list(cats))
-    
-    subcategory_map_list = {}
-    for key, subcats in subcategory_map.items():
-        subcategory_map_list[key] = sorted(list(subcats))
+    main_categories.sort()
     
     return {
         "ownerAccountMap": owner_account_map,
         "mainCategories": main_categories,
-        "categoryMap": category_map_list,
-        "subcategoryMap": subcategory_map_list
+        "categoryMap": category_map,
+        "subcategoryMap": subcategory_map
     }

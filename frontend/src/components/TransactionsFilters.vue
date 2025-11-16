@@ -54,61 +54,63 @@
     <div class="filters-row filters-row-actions">
       <div class="filter-group-compact">
         <label>Type</label>
-        <select 
-          v-model="localFilters.types" 
-          class="form-input filter-input-compact"
-          multiple
-          size="3"
-          @change="handleTypeChange"
-        >
-          <option 
+        <div class="checkbox-list">
+          <label 
             v-for="type in availableTypes" 
-            :key="type" 
-            :value="type"
+            :key="type"
+            class="checkbox-item"
           >
-            {{ type }}
-          </option>
-        </select>
+            <input 
+              type="checkbox" 
+              :value="type"
+              :checked="localFilters.types.includes(type)"
+              @change="toggleArrayItem(localFilters.types, type); handleTypeChange()"
+            >
+            <span>{{ type }}</span>
+          </label>
+        </div>
       </div>
 
       <div class="filter-group-compact">
         <label>Category</label>
-        <select 
-          v-model="localFilters.categories" 
-          class="form-input filter-input-compact"
-          multiple
-          size="3"
-          :disabled="localFilters.types.length === 0"
-          @change="handleCategoryChange"
-        >
-          <option 
+        <div class="checkbox-list">
+          <label 
             v-for="category in availableCategories" 
-            :key="category" 
-            :value="category"
+            :key="category"
+            class="checkbox-item"
+            :class="{ disabled: localFilters.types.length === 0 }"
           >
-            {{ category }}
-          </option>
-        </select>
+            <input 
+              type="checkbox" 
+              :value="category"
+              :checked="localFilters.categories.includes(category)"
+              :disabled="localFilters.types.length === 0"
+              @change="toggleArrayItem(localFilters.categories, category); handleCategoryChange()"
+            >
+            <span>{{ category }}</span>
+          </label>
+        </div>
       </div>
 
       <div class="filter-group-compact">
         <label>Subcategory</label>
-        <select 
-          v-model="localFilters.subcategories" 
-          class="form-input filter-input-compact"
-          multiple
-          size="3"
-          :disabled="localFilters.categories.length === 0"
-          @change="applyFilters"
-        >
-          <option 
+        <div class="checkbox-list">
+          <label 
             v-for="subcategory in availableSubcategories" 
-            :key="subcategory" 
-            :value="subcategory"
+            :key="subcategory"
+            class="checkbox-item"
+            :class="{ disabled: localFilters.categories.length === 0 }"
           >
-            {{ subcategory }}
-          </option>
-        </select>
+            <input 
+              type="checkbox" 
+              :value="subcategory"
+              :checked="localFilters.subcategories.includes(subcategory)"
+              :disabled="localFilters.categories.length === 0"
+              @change="toggleArrayItem(localFilters.subcategories, subcategory); applyFilters()"
+            >
+            <span>{{ subcategory }}</span>
+          </label>
+        </div>
       </div>
     </div>
 
@@ -116,40 +118,40 @@
     <div class="filters-row third-row">
       <div class="filter-group-compact">
         <label>Owner</label>
-        <select 
-          v-model="localFilters.owners" 
-          class="form-input filter-input-compact"
-          multiple
-          size="3"
-          @change="handleOwnerChange"
-        >
-          <option 
+        <div class="checkbox-list">
+          <label 
             v-for="owner in availableOwners" 
-            :key="owner" 
-            :value="owner"
+            :key="owner"
+            class="checkbox-item"
           >
-            {{ owner }}
-          </option>
-        </select>
+            <input 
+              type="checkbox" 
+              :value="owner"
+              :checked="localFilters.owners.includes(owner)"
+              @change="toggleArrayItem(localFilters.owners, owner); handleOwnerChange()"
+            >
+            <span>{{ owner }}</span>
+          </label>
+        </div>
       </div>
       
       <div class="filter-group-compact">
         <label>Account Type</label>
-        <select 
-          v-model="localFilters.accountTypes" 
-          class="form-input filter-input-compact"
-          multiple
-          size="3"
-          @change="applyFilters"
-        >
-          <option 
+        <div class="checkbox-list">
+          <label 
             v-for="type in availableAccountTypes" 
-            :key="type" 
-            :value="type"
+            :key="type"
+            class="checkbox-item"
           >
-            {{ type }}
-          </option>
-        </select>
+            <input 
+              type="checkbox" 
+              :value="type"
+              :checked="localFilters.accountTypes.includes(type)"
+              @change="toggleArrayItem(localFilters.accountTypes, type); applyFilters()"
+            >
+            <span>{{ type }}</span>
+          </label>
+        </div>
       </div>
 
       <div class="filter-group-compact filter-search-compact">
@@ -161,15 +163,13 @@
           placeholder="Search merchant, message..."
           @input="debounceSearch"
         >
-              <div class="filter-actions-compact">
-        <button class="btn btn-small" @click="filterUncategorized">Uncategorized</button>
-        <div></div>
-        <button class="btn btn-small" @click="clearAllFilters">Clear</button>
-        <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
+        <div class="filter-actions-compact">
+          <button class="btn btn-small" @click="filterUncategorized">Uncategorized</button>
+          <div></div>
+          <button class="btn btn-small" @click="clearAllFilters">Clear</button>
+          <button class="btn btn-small" @click="$emit('update:show', false)">Hide</button>
+        </div>
       </div>
-      </div>
-
-
     </div>
   </div>
   </transition>
@@ -212,7 +212,19 @@ export default {
     let searchTimeout = null
 
     watch(() => props.modelValue, (newVal) => {
-      localFilters.value = { ...newVal }
+      // Force complete sync with proper array cloning
+      localFilters.value = {
+        startDate: newVal.startDate || '',
+        endDate: newVal.endDate || '',
+        minAmount: newVal.minAmount,
+        maxAmount: newVal.maxAmount,
+        merchant: newVal.merchant || '',
+        owners: [...(newVal.owners || [])],
+        accountTypes: [...(newVal.accountTypes || [])],
+        types: [...(newVal.types || [])],
+        categories: [...(newVal.categories || [])],
+        subcategories: [...(newVal.subcategories || [])]
+      }
     }, { immediate: true, deep: true })
 
     const availableOwners = computed(() => {
@@ -271,6 +283,15 @@ export default {
       })
       return Array.from(subcategories).sort()
     })
+
+    const toggleArrayItem = (array, item) => {
+      const index = array.indexOf(item)
+      if (index > -1) {
+        array.splice(index, 1)
+      } else {
+        array.push(item)
+      }
+    }
 
     const applyFilters = () => {
       emit('update:modelValue', { ...localFilters.value })
@@ -349,7 +370,8 @@ export default {
       handleTypeChange,
       handleCategoryChange,
       clearAllFilters,
-      filterUncategorized
+      filterUncategorized,
+      toggleArrayItem
     }
   }
 }
@@ -456,4 +478,52 @@ export default {
 .slide-down-leave-active {
   animation: slideDown 0.2s ease reverse;
 }
+
+.checkbox-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  max-height: fit-content;
+  min-height: 90px;
+  overflow-y: auto;
+  padding: 0.25rem;
+  border: 1px solid var(--color-background-dark);
+  border-radius: var(--radius);
+  background: #fff;
+}
+
+.checkbox-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  border-radius: 0.25rem;
+  transition: background 0.2s;
+  font-size: var(--text-small);
+}
+
+.checkbox-item:hover {
+  background: var(--color-background-light);
+}
+
+.checkbox-item.disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.checkbox-item input[type="checkbox"] {
+  cursor: pointer;
+  margin: 0;
+}
+
+.checkbox-item.disabled input[type="checkbox"] {
+  cursor: not-allowed;
+}
+
+.checkbox-item span {
+  user-select: none;
+}
+
+
 </style>
