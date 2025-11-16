@@ -111,9 +111,31 @@
                   ❌ This category has subcategories. Please delete subcategories first.
                 </p>
                 
-                <p v-if="deleteCheck.transaction_count > 0" class="warning-text">
-                  {{ deleteCheck.transaction_count }} transactions will be moved to "Uncategorized"
-                </p>
+                <div v-if="deleteCheck.transaction_count > 0">
+                  <p class="warning-text">
+                    {{ deleteCheck.transaction_count }} transactions will be moved
+                  </p>
+                  
+                  <div class="form-group" style="margin-top: 1rem;">
+                    <label>Move transactions to:</label>
+                    <select v-model="moveToSubcategoryId" class="form-input" required>
+                      <option value="">Select subcategory...</option>
+                      <option value="uncategorized">Uncategorized</option>
+                      <template v-for="type in availableTypesForMove" :key="type.id">
+                        <template v-for="cat in type.children" :key="cat.id">
+                          <option 
+                            v-for="subcat in cat.children"
+                            :key="subcat.id"
+                            :value="subcat.id"
+                            :disabled="subcat.id === deletingCategory.id"
+                          >
+                            {{ type.name }} → {{ cat.name }} → {{ subcat.name }}
+                          </option>
+                        </template>
+                      </template>
+                    </select>
+                  </div>
+                </div>
                 
                 <p v-if="deleteCheck.can_delete && deleteCheck.transaction_count === 0">
                   This category is empty and can be safely deleted.
@@ -129,7 +151,7 @@
           <button 
             class="btn btn-danger" 
             @click="confirmDelete"
-            :disabled="deleting || !deleteCheck?.can_delete"
+            :disabled="deleting || !deleteCheck?.can_delete || (deleteCheck?.transaction_count > 0 && !moveToSubcategoryId)"
           >
             {{ deleting ? 'Deleting...' : 'Yes, Delete' }}
           </button>
@@ -159,6 +181,7 @@ export default {
     const editingCategory = ref(null)
     const deletingCategory = ref(null)
     const deleteCheck = ref(null)
+    const moveToSubcategoryId = ref('')
     const saving = ref(false)
     const deleting = ref(false)
     const showIconPicker = ref(false)
@@ -178,6 +201,8 @@ export default {
     const isCreatingType = computed(() => !isEditing.value && editingCategory.value?.parent_id === null && !editingCategory.value?.isMainCategory)
     const isCreatingMainCategory = computed(() => !isEditing.value && editingCategory.value?.isMainCategory === true)
     const isCreatingSubcategory = computed(() => !isEditing.value && editingCategory.value?.parent_id !== null && !editingCategory.value?.isMainCategory)
+    
+    const availableTypesForMove = computed(() => availableTypes.value)
 
     const onTypeChange = () => {
       const selectedType = availableTypes.value.find(t => t.id === selectedTypeId.value)
@@ -342,6 +367,7 @@ export default {
     const deleteCategory = async (category) => {
       deletingCategory.value = category
       deleteCheck.value = null
+      moveToSubcategoryId.value = ''
       
       try {
         const response = await axios.get(
@@ -362,16 +388,30 @@ export default {
     const closeDeleteModal = () => {
       deletingCategory.value = null
       deleteCheck.value = null
+      moveToSubcategoryId.value = ''
     }
 
     const confirmDelete = async () => {
       if (!deletingCategory.value || deleting.value || !deleteCheck.value?.can_delete) return
       
+      // Validate move-to selection if there are transactions
+      if (deleteCheck.value.transaction_count > 0 && !moveToSubcategoryId.value) {
+        emit('add-chat-message', {
+          response: 'Please select where to move transactions'
+        })
+        return
+      }
+      
       deleting.value = true
       
       try {
+        // Send move_to_category_id as query parameter instead of body
+        const params = moveToSubcategoryId.value 
+          ? `?move_to_category_id=${moveToSubcategoryId.value}` 
+          : ''
+        
         const response = await axios.delete(
-          `${API_BASE}/categories/${deletingCategory.value.id}`,
+          `${API_BASE}/categories/${deletingCategory.value.id}${params}`,
           { headers: { Authorization: `Bearer ${authStore.token}` }}
         )
         
@@ -404,6 +444,7 @@ export default {
       editingCategory,
       deletingCategory,
       deleteCheck,
+      moveToSubcategoryId,
       saving,
       deleting,
       editForm,
@@ -416,6 +457,7 @@ export default {
       filteredIcons,
       loadingIcons,
       availableTypes,
+      availableTypesForMove,
       selectedTypeId,
       onTypeChange,
       createCategory,

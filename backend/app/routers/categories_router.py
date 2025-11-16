@@ -46,6 +46,10 @@ class DeleteCheckResponse(BaseModel):
     warning_message: str
 
 
+class DeleteCategoryRequest(BaseModel):
+    move_to_category_id: Optional[str] = None
+
+
 @router.get("/tree")
 async def get_category_tree(
     category_service: CategoryService = Depends(get_category_service)
@@ -147,10 +151,11 @@ async def check_category_deletion(
 @router.delete("/{category_id}")
 async def delete_category(
     category_id: str,
+    move_to_category_id: Optional[str] = None,  # Query parameter
     category_service: CategoryService = Depends(get_category_service)
 ):
-    """Delete category and move transactions to Uncategorized"""
-    result = await category_service.delete_category(category_id)
+    """Delete category and move transactions to specified category"""
+    result = await category_service.delete_category(category_id, move_to_category_id)
     return result
 
 

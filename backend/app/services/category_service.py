@@ -544,8 +544,8 @@ class CategoryService:
         await self.db.refresh(category)
         return category
     
-    async def delete_category(self, category_id: str) -> Dict[str, Any]:
-        """Delete category - FIXED: don't create Uncategorized for types"""
+    async def delete_category(self, category_id: str, move_to_category_id: Optional[str] = None) -> Dict[str, Any]:
+        """Delete category and move transactions to specified category or Uncategorized"""
         category = await self.get_category_by_id(category_id)
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
@@ -554,19 +554,26 @@ class CategoryService:
         if not usage_check["can_delete"]:
             raise HTTPException(status_code=400, detail=usage_check["warning_message"])
         
-        # Only move transactions if there are any
         transactions_moved = 0
+        moved_to = None
+        
         if usage_check["transaction_count"] > 0:
-            uncategorized = await self.get_or_create_uncategorized()
+            # Use specified category or create Uncategorized
+            if move_to_category_id == "uncategorized" or not move_to_category_id:
+                target_category = await self.get_or_create_uncategorized(category.category_type)
+            else:
+                target_category = await self.get_category_by_id(move_to_category_id)
+                if not target_category:
+                    raise HTTPException(status_code=404, detail="Target category not found")
             
             from sqlalchemy import update
             update_query = update(Transaction).where(
                 Transaction.category_id == category_id
-            ).values(category_id=uncategorized.id)
+            ).values(category_id=target_category.id)
             await self.db.execute(update_query)
             transactions_moved = usage_check["transaction_count"]
+            moved_to = target_category.id
         
-        # Delete the category
         delete_query = delete(Category).where(Category.id == category_id)
         await self.db.execute(delete_query)
         await self.db.commit()
@@ -574,6 +581,7 @@ class CategoryService:
         return {
             "success": True,
             "transactions_moved": transactions_moved,
+            "moved_to": moved_to,
             "message": f"Category deleted. {transactions_moved} transactions moved." if transactions_moved > 0 else "Category deleted."
         }
 
