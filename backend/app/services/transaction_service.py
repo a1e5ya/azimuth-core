@@ -1,5 +1,5 @@
 """
-Consolidated Transaction Service - FIXED
+Consolidated Transaction Service - WITH TRANSFER DETECTION
 """
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete, and_, func, or_, desc, asc, extract
@@ -175,9 +175,9 @@ class TransactionImportService:
                     categorization_stats['none'] += 1
             
             # Derive is_income/is_expense from main_category
-                main_cat_raw = (trans_data.get('main_category') or '').strip()
-                is_income = (main_cat_raw.upper() == 'INCOME')
-                is_expense = (main_cat_raw.upper() == 'EXPENSES')
+            main_cat_raw = (trans_data.get('main_category') or '').strip()
+            is_income = (main_cat_raw.upper() == 'INCOME')
+            is_expense = (main_cat_raw.upper() == 'EXPENSES')
             
             transaction = Transaction(
                 id=str(uuid.uuid4()),
@@ -213,10 +213,16 @@ class TransactionImportService:
         
         await self.db.commit()
         
+        # 🔥 DETECT TRANSFER PAIRS after training data import
+        from .transfer_detector import TransferDetector
+        detector = TransferDetector(self.db, self.user)
+        pairs_found = await detector.detect_pairs()
+        
         return {
             "stats": {
                 "categorization": categorization_stats,
-                "auto_categorized": categorization_stats['auto_created']
+                "auto_categorized": categorization_stats['auto_created'],
+                "transfer_pairs_found": pairs_found
             }
         }
     
@@ -274,9 +280,15 @@ class TransactionImportService:
         
         await self.db.commit()
         
+        # 🔥 DETECT TRANSFER PAIRS after account import
+        from .transfer_detector import TransferDetector
+        detector = TransferDetector(self.db, self.user)
+        pairs_found = await detector.detect_pairs()
+        
         return {
             "stats": {
-                "uncategorized": len(transactions_data)
+                "uncategorized": len(transactions_data),
+                "transfer_pairs_found": pairs_found
             }
         }
     
@@ -427,7 +439,7 @@ class TransactionQueries:
             query = query.where(and_(*conditions))
             count_query = count_query.where(and_(*conditions))
         
-        # GET COUNT - THIS WAS MISSING!
+        # GET COUNT
         count_result = await self.db.execute(count_query)
         total_count = count_result.scalar()
         
@@ -457,7 +469,7 @@ class TransactionQueries:
     async def get_transaction_summary(
         self, start_date: Optional[date] = None, end_date: Optional[date] = None
     ) -> Dict[str, Any]:
-        """Get comprehensive transaction summary - FIXED"""
+        """Get comprehensive transaction summary"""
         
         base_conditions = [Transaction.user_id == self.user.id]
         if start_date:
@@ -682,7 +694,6 @@ class TransactionService:
     ) -> Dict[str, Any]:
         """Update transaction details"""
         try:
-            # Convert string to UUID
             try:
                 trans_uuid = uuid.UUID(transaction_id)
             except ValueError:
@@ -690,7 +701,7 @@ class TransactionService:
             
             transaction_query = select(Transaction).where(
                 and_(
-                    Transaction.id == str(trans_uuid),  # FIX: compare as string
+                    Transaction.id == str(trans_uuid),
                     Transaction.user_id == str(self.user.id)
                 )
             )
@@ -700,7 +711,6 @@ class TransactionService:
             if not transaction:
                 return {"success": False, "message": "Transaction not found"}
             
-            # Update fields if provided
             if merchant is not None:
                 transaction.merchant = merchant
             if amount is not None:
@@ -710,7 +720,6 @@ class TransactionService:
             if memo is not None:
                 transaction.memo = memo
             if category_id is not None:
-                # Verify category exists
                 try:
                     cat_uuid = uuid.UUID(category_id)
                 except ValueError:
@@ -718,7 +727,7 @@ class TransactionService:
                 
                 category_query = select(Category).where(
                     and_(
-                        Category.id == str(cat_uuid),  # FIX: compare as string
+                        Category.id == str(cat_uuid),
                         Category.user_id == str(self.user.id)
                     )
                 )
@@ -728,7 +737,7 @@ class TransactionService:
                 if not category:
                     return {"success": False, "message": "Category not found"}
                 
-                transaction.category_id = str(cat_uuid)  # FIX: store as string
+                transaction.category_id = str(cat_uuid)
                 transaction.source_category = "user"
                 transaction.review_needed = False
             
@@ -743,7 +752,7 @@ class TransactionService:
             
         except Exception as e:
             await self.db.rollback()
-            print(f"❌ Update failed: {e}")  # DEBUG
+            print(f"❌ Update failed: {e}")
             return {"success": False, "message": str(e)}
 
 
@@ -753,7 +762,6 @@ class TransactionService:
     ) -> Dict[str, Any]:
         """Bulk categorize multiple transactions"""
         try:
-            # Verify category exists and get hierarchy
             try:
                 cat_uuid = uuid.UUID(category_id)
             except ValueError:
@@ -791,10 +799,8 @@ class TransactionService:
                 mid_cat = None
                 sub_cat = None
             
-            # Convert transaction IDs to strings
             trans_ids = [str(uuid.UUID(tid)) for tid in transaction_ids]
             
-            # Update transactions with both category_id AND CSV fields
             from sqlalchemy import update
             update_query = update(Transaction).where(
                 and_(
@@ -825,10 +831,6 @@ class TransactionService:
             await self.db.rollback()
             print(f"❌ Bulk categorize failed: {e}")
             return {"success": False, "message": str(e), "updated_count": 0}
-
-
-
-
     
     async def delete_transaction(self, transaction_id: str) -> Dict[str, Any]:
         """Delete a transaction"""
