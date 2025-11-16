@@ -322,7 +322,7 @@ export default {
       required: true
     }
   },
-  emits: ['import-success', 'open-import'],
+  emits: ['import-success', 'open-import', 'add-chat-message'],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
@@ -615,29 +615,57 @@ export default {
       
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('auto_categorize', 'true')
+      formData.append('import_mode', 'account')
+      formData.append('account_id', importingAccount.value.id)
+      formData.append('auto_categorize', 'true')  // Enable LLM
       
       loading.value = true
       
       try {
-        await axios.post(
-          `${API_BASE}/accounts/${importingAccount.value.id}/import`,
-          formData,
-          {
-            headers: {
-              'Authorization': `Bearer ${authStore.token}`,
-              'Content-Type': 'multipart/form-data'
-            }
-          }
+        const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
+          headers: {
+            'Authorization': `Bearer ${authStore.token}`,
+            'Content-Type': 'multipart/form-data'
+          },
+          timeout: 300000
+        })
+        
+        const stats = response.data.summary
+        
+        // Success alert
+        alert(
+          `✅ Imported ${stats.rows_inserted || 0} transactions!\n` +
+          `🔗 ${stats.transfer_pairs_found || 0} transfer pairs found\n` +
+          `🤖 ${stats.llm_categorized || 0} auto-categorized by AI\n` +
+          `⚠️ ${stats.needs_review || 0} need review`
         )
         
-        alert(`Successfully imported to ${importingOwner.value.name} - ${importingAccount.value.name || importingAccount.value.account_type}`)
+        // Chat message
+        emit('add-chat-message', {
+          message: `Imported ${file.name} to ${importingOwner.value.name} - ${importingAccount.value.name}`,
+          response: 
+            `Successfully imported ${stats.rows_inserted || 0} transactions!\n\n` +
+            `📊 Results:\n` +
+            `• Transfer pairs detected: ${stats.transfer_pairs_found || 0}\n` +
+            `• AI categorized: ${stats.llm_categorized || 0}\n` +
+            `• Need manual review: ${stats.needs_review || 0}`
+        })
+        
         emit('import-success')
         await loadOwners()
         
       } catch (error) {
         console.error('Import failed:', error)
-        alert(error.response?.data?.detail || 'Import failed')
+        const errorMsg = error.response?.data?.detail || 'Import failed'
+        
+        alert(`❌ ${errorMsg}`)
+        
+        // Chat error message
+        emit('add-chat-message', {
+          message: `Import failed: ${file.name}`,
+          response: `❌ ${errorMsg}`
+        })
+        
       } finally {
         loading.value = false
         event.target.value = ''

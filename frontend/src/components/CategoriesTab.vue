@@ -186,7 +186,7 @@
 </template>
 
 <script>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'
@@ -236,6 +236,8 @@ export default {
         return aIndex - bIndex
       })
     })
+
+    const categoryPatterns = ref({})
 
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
@@ -345,17 +347,42 @@ export default {
       emit('add-chat-message', messageData)
     }
 
-    function getKeywords(categoryId) {
-      return ''
-    }
 
     function updateKeywords(categoryId, keywords) {
       console.log('Update keywords:', categoryId, keywords)
     }
 
-    function getMerchants(categoryId) {
-      return []
+
+    async function loadCategoryPatterns(subcategoryId) {
+      try {
+        const response = await axios.get(
+          `${API_BASE}/categories/${subcategoryId}/patterns`,
+          { headers: { Authorization: `Bearer ${authStore.token}` } }
+        )
+        categoryPatterns.value[subcategoryId] = response.data
+      } catch (error) {
+        console.error('Failed to load patterns:', error)
+      }
     }
+
+    function getKeywords(subcategoryId) {
+      return categoryPatterns.value[subcategoryId]?.keywords?.join(', ') || ''
+    }
+
+    function getMerchants(subcategoryId) {
+      return categoryPatterns.value[subcategoryId]?.merchants || []
+    }
+
+    // Load patterns when categories load
+    watch(categories, async (newCats) => {
+      for (const type of newCats) {
+        for (const cat of type.children || []) {
+          for (const subcat of cat.children || []) {
+            await loadCategoryPatterns(subcat.id)
+          }
+        }
+      }
+    })
 
     onMounted(async () => {
       await loadCategories()

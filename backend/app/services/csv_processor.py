@@ -23,9 +23,22 @@ class EnhancedCSVProcessor:
     # Expected column mappings for your 19-column format
     EXPECTED_COLUMNS = {
         'Date': 'date',
-        'Amount': 'amount', 
+        'Bokningsdag': 'date',  # Swedish: Booking date
+        'Kirjauspäivä': 'date',  # Finnish: Posting date
+        'Betalningsdag': 'date',  # Swedish: Payment date
+        
+        'Amount': 'amount',
+        'Belopp': 'amount',  # Swedish
+        'Määrä': 'amount',  # Finnish
+        
         'Merchant': 'merchant',
+        'Betalare': 'merchant',  # Swedish: Payer
+        'Mottagarens namn': 'merchant',  # Swedish: Recipient name
+        'Saaja/Maksaja': 'merchant',  # Finnish: Payee/Payer
+        
         'Message': 'message',
+        'Meddelande': 'message',  # Swedish
+        'Viite': 'message',  # Finnish: Reference
         'Full_Description': 'full_description',
         'Main_Category': 'main_category',
         'Category': 'category',

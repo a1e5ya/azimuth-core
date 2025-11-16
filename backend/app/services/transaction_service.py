@@ -279,16 +279,53 @@ class TransactionImportService:
             self.db.add(transaction)
         
         await self.db.commit()
-        
-        # 🔥 DETECT TRANSFER PAIRS after account import
+    
+        # 🔥 STEP 1: Detect transfer pairs
         from .transfer_detector import TransferDetector
         detector = TransferDetector(self.db, self.user)
         pairs_found = await detector.detect_pairs()
         
+        # 🔥 STEP 2: LLM categorization for non-transfers
+        from .llm_categorizer import LLMCategorizationService
+        llm_service = LLMCategorizationService(self.db, self.user)
+        
+        # Get uncategorized transactions from this batch
+        uncategorized_query = select(Transaction).where(
+            and_(
+                Transaction.import_batch_id == import_batch.id,
+                Transaction.category_id.is_(None)  # Not categorized yet
+            )
+        )
+        uncategorized_result = await self.db.execute(uncategorized_query)
+        uncategorized = uncategorized_result.scalars().all()
+        
+        categorized_by_llm = 0
+        
+        for transaction in uncategorized:
+            result = await llm_service.categorize_transaction(
+                merchant=transaction.merchant,
+                memo=transaction.memo,
+                amount=float(transaction.amount),
+                csv_main=None,
+                category=None,
+                subcategory=None
+            )
+            
+            if result['category_id']:
+                transaction.category_id = result['category_id']
+                transaction.source_category = result['method']
+                transaction.confidence_score = result['confidence']
+                transaction.review_needed = result['confidence'] < 0.7
+                categorized_by_llm += 1
+        
+        await self.db.commit()
+        
         return {
             "stats": {
                 "uncategorized": len(transactions_data),
-                "transfer_pairs_found": pairs_found
+                "transfer_pairs_found": pairs_found,
+                "llm_categorized": categorized_by_llm,
+                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm
             }
         }
     
