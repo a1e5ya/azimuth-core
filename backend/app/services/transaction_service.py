@@ -7,8 +7,10 @@ from sqlalchemy.orm import selectinload, joinedload
 from typing import List, Dict, Any, Optional, Tuple, Union
 from datetime import datetime, date, timedelta
 import uuid
+import asyncio
+from ..services.import_jobs import create_job, update_job, complete_job, fail_job
 import hashlib
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, BackgroundTasks
 
 from ..models.database import (
     Transaction, Account, Category, ImportBatch, User, AuditLog, Owner, get_db
@@ -32,19 +34,27 @@ class TransactionImportService:
     
     async def import_from_csv(
         self, file_content: bytes, filename: str,
-        import_mode: str = "training",  # "training" or "account"
+        import_mode: str = "training",
         account_id: str = None,
         auto_categorize: bool = True
     ) -> Dict[str, Any]:
         """
-        Import transactions with two modes:
-        - training: Pre-categorized data, auto-creates categories from CSV
-        - account: Uncategorized bank data, direct to account
+        Import transactions - Returns job_id immediately, processes sync
         """
         
+        # ✅ Process everything synchronously but with progress updates
         print(f"📤 Starting import: {filename} (mode: {import_mode})")
         
+        # Create job
+        job_id = create_job(str(self.user.id))
+        
         try:
+            # Update: CSV processing
+            update_job(job_id, {
+                "current_step": "processing_csv",
+                "message": "Processing CSV..."
+            })
+            
             file_hash = hashlib.md5(file_content).hexdigest()
             
             import_batch = ImportBatch(
@@ -60,21 +70,32 @@ class TransactionImportService:
             await self.db.refresh(import_batch)
 
             # Process CSV
+            from ..services.csv_processor import process_csv_upload
             transactions_data, summary = process_csv_upload(
                 file_content, filename, str(self.user.id), None
             )
+            
+            # Update: Saving transactions
+            update_job(job_id, {
+                "current_step": "saving",
+                "progress": 0,
+                "total": len(transactions_data),
+                "message": f"Saving {len(transactions_data)} transactions..."
+            })
+            
             print(f"✅ Processed {len(transactions_data)} transactions")
-
-            # Mode-specific handling
+            
+            # Mode-specific handling WITH PROGRESS
             if import_mode == "training":
-                result = await self._import_training_data(
-                    transactions_data, import_batch, auto_categorize
+                result = await self._import_training_data_with_progress(
+                    transactions_data, import_batch, auto_categorize, job_id
                 )
-            else:  # account mode
-                result = await self._import_to_account(
-                    transactions_data, import_batch, account_id
+            else:
+                result = await self._import_to_account_with_progress(
+                    transactions_data, import_batch, account_id, job_id
                 )
             
+            # Complete
             import_batch.rows_total = len(transactions_data)
             import_batch.rows_imported = len(transactions_data)
             import_batch.status = "completed"
@@ -87,17 +108,22 @@ class TransactionImportService:
             
             await self.db.commit()
             
-            print(f"✅ Import complete: {len(transactions_data)} transactions")
-            
-            return {
-                "success": True,
-                "batch_id": str(import_batch.id),
+            complete_job(job_id, {
                 "summary": {
                     **summary,
                     "rows_inserted": len(transactions_data),
                     **result.get("stats", {})
                 },
-                "message": f"Imported {len(transactions_data)} transactions"
+                "batch_id": str(import_batch.id)
+            })
+            
+            print(f"✅ Import complete: {len(transactions_data)} transactions")
+            
+            # ✅ Return job_id for polling
+            return {
+                "success": True,
+                "job_id": job_id,
+                "message": "Import processing"
             }
             
         except Exception as e:
@@ -107,11 +133,334 @@ class TransactionImportService:
                 import_batch.error_message = str(e)
                 await self.db.commit()
             
-            return {
-                "success": False,
-                "message": f"Import failed: {str(e)}"
-            }
+            fail_job(job_id, str(e))
+            
+            raise
     
+    async def _import_training_data_with_progress(
+        self, transactions_data: List[Dict], import_batch: ImportBatch,
+        auto_categorize: bool, job_id: str
+    ) -> Dict[str, Any]:
+        """Import with progress tracking"""
+        
+        # Auto-create owners and accounts
+        owner_account_map = await self._auto_create_owners_and_accounts(transactions_data)
+        
+        update_job(job_id, {
+            "current_step": "inserting",
+            "message": f"Creating {len(owner_account_map)} accounts..."
+        })
+        
+        print(f"✅ Created {len(owner_account_map)} account mappings")
+        
+        categorization_stats = {'auto_created': 0, 'csv_mapped': 0, 'none': 0}
+        
+        # ✅ Insert transactions with progress
+        for idx, trans_data in enumerate(transactions_data):
+            # Determine account
+            owner_name = trans_data.get('owner', '').strip()
+            account_type = trans_data.get('bank_account_type', '').strip()
+            key = (owner_name, account_type)
+            transaction_account_id = str(owner_account_map[key].id) if key in owner_account_map else None
+            
+            # Auto-categorize with auto-creation
+            category_id = None
+            confidence_score = None
+            source_category = "imported"
+            
+            if auto_categorize:
+                csv_main = trans_data.get('main_category', '').strip()
+                csv_cat = trans_data.get('category', '').strip()
+                csv_subcat = trans_data.get('subcategory', '').strip()
+                
+                if csv_main == '-': csv_main = ''
+                if csv_cat == '-': csv_cat = ''
+                if csv_subcat == '-': csv_subcat = ''
+                
+                if csv_main:
+                    category = await self.category_service.ensure_categories_from_csv(
+                        csv_main, csv_cat, csv_subcat
+                    )
+                    
+                    if category:
+                        category_id = category.id
+                        confidence_score = 0.95
+                        source_category = 'csv_mapped'
+                        categorization_stats['auto_created'] += 1
+                    else:
+                        uncategorized = await self.category_service.get_or_create_uncategorized()
+                        category_id = uncategorized.id
+                        source_category = 'imported'
+                        categorization_stats['none'] += 1
+                else:
+                    uncategorized = await self.category_service.get_or_create_uncategorized()
+                    category_id = uncategorized.id
+                    source_category = 'imported'
+                    categorization_stats['none'] += 1
+            
+            # Derive is_income/is_expense
+            main_cat_raw = (trans_data.get('main_category') or '').strip()
+            is_income = (main_cat_raw.upper() == 'INCOME')
+            is_expense = (main_cat_raw.upper() == 'EXPENSES')
+            
+            # ✅ CREATE TRANSACTION OBJECT
+            transaction = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=str(self.user.id),
+                account_id=transaction_account_id,
+                posted_at=trans_data['posted_at'],
+                amount=trans_data['amount'],
+                currency=trans_data.get('currency', 'EUR'),
+                merchant=trans_data.get('merchant'),
+                memo=trans_data.get('memo'),
+                category_id=str(category_id) if category_id else None,
+                import_batch_id=str(import_batch.id),
+                hash_dedupe=trans_data['hash_dedupe'],
+                source_category=source_category,
+                main_category=main_cat_raw,
+                category=trans_data.get('category', '').strip() if trans_data.get('category') else None,
+                subcategory=trans_data.get('subcategory', '').strip() if trans_data.get('subcategory') else None,
+                bank_account=trans_data.get('bank_account'),
+                owner=trans_data.get('owner'),
+                bank_account_type=trans_data.get('bank_account_type'),
+                is_expense=is_expense,
+                is_income=is_income,
+                year=trans_data.get('year'),
+                month=trans_data.get('month'),
+                year_month=trans_data.get('year_month'),
+                weekday=trans_data.get('weekday'),
+                transfer_pair_id=trans_data.get('transfer_pair_id'),
+                confidence_score=confidence_score,
+                review_needed=not category_id
+            )
+            
+            self.db.add(transaction)
+            
+            # Progress update every 100 transactions
+            if idx % 100 == 0:
+                update_job(job_id, {
+                    "progress": idx,
+                    "total": len(transactions_data),
+                    "message": f"Inserted {idx}/{len(transactions_data)} transactions..."
+                })
+        
+        # ✅ COMMIT ALL TRANSACTIONS
+        await self.db.commit()
+        print(f"✅ Inserted {len(transactions_data)} transactions into database")
+        
+        # Transfer detection
+        update_job(job_id, {
+            "current_step": "transfers",
+            "message": "Detecting transfer pairs..."
+        })
+        
+        from .transfer_detector import TransferDetector
+        detector = TransferDetector(self.db, self.user)
+        pairs_found = await detector.detect_pairs()
+        
+        # ✅ Train categories WITH CALLBACK
+        update_job(job_id, {
+            "current_step": "training",
+            "progress": 0,
+            "total": 0,
+            "message": "Training categories..."
+        })
+        
+        from .category_training import CategoryTrainingService
+        trainer = CategoryTrainingService(self.db, self.user)
+        
+        training_log = []
+        
+        async def progress_callback(current, total, category_name):
+            msg = f"Training {category_name}"
+            training_log.append(msg)
+            
+            update_job(job_id, {
+                "progress": current,
+                "total": total,
+                "message": msg
+            })
+        
+        trained_count = await trainer.train_all_categories(progress_callback)
+        
+        return {
+            "stats": {
+                "categorization": categorization_stats,
+                "auto_categorized": categorization_stats['auto_created'],
+                "transfer_pairs_found": pairs_found,
+                "categories_trained": trained_count,
+                "training_log": training_log
+            }
+        }
+    
+    async def _import_to_account_with_progress(
+        self, transactions_data: List[Dict], import_batch: ImportBatch,
+        account_id: str, job_id: str
+    ) -> Dict[str, Any]:
+        """Import uncategorized bank data directly to account WITH PROGRESS"""
+        
+        # Verify account
+        update_job(job_id, {
+            "current_step": "verifying",
+            "message": "Verifying account..."
+        })
+        
+        account_query = select(Account).where(
+            and_(Account.id == account_id, Account.user_id == self.user.id)
+        )
+        account_result = await self.db.execute(account_query)
+        account = account_result.scalar_one_or_none()
+        
+        if not account:
+            raise Exception(f"Account {account_id} not found")
+        
+        print(f"✅ Importing to account: {account.name}")
+        
+        # Insert transactions
+        update_job(job_id, {
+            "current_step": "inserting",
+            "progress": 0,
+            "total": len(transactions_data),
+            "message": f"Inserting {len(transactions_data)} transactions..."
+        })
+        
+        for idx, trans_data in enumerate(transactions_data):
+            transaction = Transaction(
+                id=str(uuid.uuid4()),
+                user_id=str(self.user.id),
+                account_id=str(account.id),
+                posted_at=trans_data['posted_at'],
+                amount=trans_data['amount'],
+                currency=trans_data.get('currency', 'EUR'),
+                merchant=trans_data.get('merchant'),
+                memo=trans_data.get('memo'),
+                category_id=None,
+                import_batch_id=str(import_batch.id),
+                hash_dedupe=trans_data['hash_dedupe'],
+                source_category='imported',
+                main_category=None,
+                category=None,
+                subcategory=None,
+                bank_account=None,
+                owner=None,
+                bank_account_type=None,
+                is_expense=trans_data['amount'] < 0,
+                is_income=trans_data['amount'] > 0,
+                year=trans_data.get('year'),
+                month=trans_data.get('month'),
+                year_month=trans_data.get('year_month'),
+                weekday=trans_data.get('weekday'),
+                transfer_pair_id=None,
+                confidence_score=None,
+                review_needed=True
+            )
+            
+            self.db.add(transaction)
+            
+            # Progress update every 100 transactions
+            if idx % 100 == 0:
+                update_job(job_id, {
+                    "progress": idx,
+                    "message": f"Inserted {idx}/{len(transactions_data)} transactions..."
+                })
+        
+        await self.db.commit()
+        
+        # Transfer detection
+        update_job(job_id, {
+            "current_step": "transfers",
+            "message": "Detecting transfer pairs..."
+        })
+        
+        from .transfer_detector import TransferDetector
+        detector = TransferDetector(self.db, self.user)
+        pairs_found = await detector.detect_pairs()
+        
+        # LLM categorization
+        update_job(job_id, {
+            "current_step": "llm_categorizing",
+            "progress": 0,
+            "total": len(transactions_data),
+            "message": "AI categorizing transactions..."
+        })
+        
+        from .llm_categorizer import LLMCategorizationService
+        llm_service = LLMCategorizationService(self.db, self.user)
+        
+        uncategorized_query = select(Transaction).where(
+            and_(
+                Transaction.import_batch_id == import_batch.id,
+                Transaction.category_id.is_(None)
+            )
+        )
+        uncategorized_result = await self.db.execute(uncategorized_query)
+        uncategorized = uncategorized_result.scalars().all()
+        
+        categorized_by_llm = 0
+        
+        for idx, transaction in enumerate(uncategorized):
+            result = await llm_service.categorize_transaction(
+                merchant=transaction.merchant,
+                memo=transaction.memo,
+                amount=float(transaction.amount),
+                csv_main=None,
+                category=None,
+                subcategory=None
+            )
+            
+            if result['category_id']:
+                transaction.category_id = result['category_id']
+                transaction.source_category = result['method']
+                transaction.confidence_score = result['confidence']
+                transaction.review_needed = result['confidence'] < 0.7
+                categorized_by_llm += 1
+            
+            # Progress update every 10 transactions
+            if idx % 10 == 0:
+                update_job(job_id, {
+                    "progress": idx,
+                    "total": len(uncategorized),
+                    "message": f"AI categorized {idx}/{len(uncategorized)}..."
+                })
+        
+        await self.db.commit()
+        
+        # Train categories
+        update_job(job_id, {
+            "current_step": "training",
+            "progress": 0,
+            "total": 0,
+            "message": "Training categories..."
+        })
+        
+        from .category_training import CategoryTrainingService
+        trainer = CategoryTrainingService(self.db, self.user)
+        
+        training_log = []
+        
+        async def progress_callback(current, total, category_name):
+            msg = f"Training {category_name}"
+            training_log.append(msg)
+            
+            update_job(job_id, {
+                "progress": current,
+                "total": total,
+                "message": msg
+            })
+        
+        trained_count = await trainer.train_all_categories(progress_callback)
+        
+        return {
+            "stats": {
+                "uncategorized": len(transactions_data),
+                "transfer_pairs_found": pairs_found,
+                "llm_categorized": categorized_by_llm,
+                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm,
+                "categories_trained": trained_count,
+                "training_log": training_log
+            }
+        }
+
     async def _import_training_data(
         self, transactions_data: List[Dict], import_batch: ImportBatch,
         auto_categorize: bool

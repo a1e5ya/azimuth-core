@@ -200,6 +200,25 @@ async def get_filtered_summary(
         "total_amount": float(stats.total_amount or 0)
     }
 
+@router.get("/import/status/{job_id}")
+async def get_import_status(
+    job_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Get import job status for polling"""
+    from ..services.import_jobs import get_job
+    
+    job = get_job(job_id)
+    
+    if not job:
+        raise HTTPException(404, "Job not found")
+    
+    # Verify job belongs to user
+    if job["user_id"] != str(current_user.id):
+        raise HTTPException(403, "Access denied")
+    
+    return job
+
 @router.post("/import")
 async def import_transactions(
     file: UploadFile = File(...),

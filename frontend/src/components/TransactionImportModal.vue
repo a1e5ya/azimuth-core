@@ -135,6 +135,7 @@ import { ref, computed, watch } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
 import AppIcon from './AppIcon.vue'
+import { onUnmounted } from 'vue'
 
 export default {
   name: 'TransactionImportModal',
@@ -158,6 +159,9 @@ export default {
     const importing = ref(false)
     const loadingAccounts = ref(false)
     const accounts = ref([])
+
+    const pollInterval = ref(null)
+    const importStatus = ref(null)
 
     const hasAccounts = computed(() => accounts.value.length > 0)
 
@@ -245,42 +249,97 @@ export default {
             formData.append('account_id', selectedAccountId.value)
           }
           
+          // ✅ START IMPORT - GET JOB_ID
           const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
             headers: {
               'Authorization': `Bearer ${authStore.token}`,
               'Content-Type': 'multipart/form-data'
-            },
-            timeout: 300000
-          })
-          
-          const stats = response.data.summary
-          
-          // ✅ Emit chat message with training log
-          let message = `Imported ${stats.rows_inserted || 0} transactions!\n\n`
-          
-          if (stats.categories_trained) {
-            message += `🎓 Trained ${stats.categories_trained} categories\n`
-            if (stats.training_log && stats.training_log.length > 0) {
-              const lastItems = stats.training_log.slice(-5)
-              message += lastItems.map(item => `   • ${item}`).join('\n')
             }
-          }
-          
-          emit('import-complete', { 
-            success: true, 
-            fileCount: selectedFiles.value.length,
-            message: message  // ✅ Pass to parent
           })
+          
+          const jobId = response.data.job_id
+          
+          // ✅ START POLLING
+          await pollJobStatus(jobId, file.name)
         }
         
         emit('close')
         
-
+      } catch (error) {
+        console.error('Import failed:', error)
       } finally {
         importing.value = false
         selectedFiles.value = []
       }
     }
+
+    const pollJobStatus = async (jobId, filename) => {
+      return new Promise((resolve, reject) => {
+        const interval = setInterval(async () => {
+          try {
+            const response = await axios.get(
+              `${API_BASE}/transactions/import/status/${jobId}`,
+              { headers: { 'Authorization': `Bearer ${authStore.token}` } }
+            )
+            
+            const status = response.data
+            importStatus.value = status
+            
+            // ✅ EMIT PROGRESS TO PARENT
+            if (status.message) {
+              emit('import-progress', {
+                filename,
+                message: status.message,
+                progress: status.progress,
+                total: status.total,
+                step: status.current_step
+              })
+            }
+            
+            // ✅ CHECK IF DONE
+            if (status.status === 'complete') {
+              clearInterval(interval)
+              
+              const result = status.result || {}
+              const stats = result.summary || {}
+              
+              // Build detailed message
+              let message = `Imported ${stats.rows_inserted || 0} transactions!\n\n`
+              
+              if (stats.categories_trained) {
+                message += `🎓 Trained ${stats.categories_trained} categories\n`
+                if (stats.training_log && stats.training_log.length > 0) {
+                  const lastItems = stats.training_log.slice(-5)
+                  message += lastItems.map(item => `   • ${item}`).join('\n')
+                }
+              }
+              
+              emit('import-complete', {
+                success: true,
+                message: message
+              })
+              
+              resolve()
+            } else if (status.status === 'failed') {
+              clearInterval(interval)
+              reject(new Error(status.error || 'Import failed'))
+            }
+            
+          } catch (error) {
+            clearInterval(interval)
+            reject(error)
+          }
+        }, 2000) // Poll every 2 seconds
+      })
+    }
+
+    // Cleanup on unmount
+    
+    onUnmounted(() => {
+      if (pollInterval.value) {
+        clearInterval(pollInterval.value)
+      }
+    })
 
     watch(() => props.show, (newVal) => {
       if (newVal) {
