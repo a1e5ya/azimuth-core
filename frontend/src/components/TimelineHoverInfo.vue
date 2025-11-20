@@ -5,15 +5,16 @@
     </div>
     
     <template v-else>
+      <!-- Header with period name and total balance -->
       <div class="hover-info-header">
         <div class="hover-header-left">
           <h4>{{ hoveredData.periodName }}</h4>
         </div>
         <div></div>
         <div class="hover-header-right">
-          <span class="hover-balance-label">Balance</span>
-          <span class="hover-balance-value" :class="hoveredData.balance >= 0 ? 'positive' : 'negative'">
-            {{ formatCurrency(hoveredData.balance) }}
+          <span class="hover-balance-label">Total Balance</span>
+          <span class="hover-balance-value" :class="totalBalance >= 0 ? 'positive' : 'negative'">
+            {{ formatCurrency(totalBalance) }}
           </span>
         </div>
         
@@ -22,86 +23,101 @@
         </button>
       </div>
       
-      <div class="hover-info-content">
-        <!-- 2-Column Grid: Income+Transfers | Expenses -->
-        <div class="hover-info-grid">
-          <!-- LEFT COLUMN: Income + Transfers -->
-          <div class="hover-info-column">
-            <!-- INCOME Section -->
-            <div v-if="hoveredData.income > 0" class="hover-info-type-section">
-              <div class="hover-type-header">
-                <AppIcon name="apps-add" size="small" />
-                <span class="hover-type-label">INCOME</span>
-                <span class="hover-type-total positive">{{ formatCurrency(hoveredData.income) }}</span>
-              </div>
-              
-              <div class="hover-info-tree" v-if="hoveredData.incomeByCategory">
-                <template v-for="item in buildCategoryTree(hoveredData.incomeByCategory, 'income')" :key="item.id">
-                  <div class="hover-tree-main">
-                    <AppIcon :name="item.icon" size="small" />
-                    <span class="hover-tree-name">{{ item.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
-                  </div>
-                  
-                  <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
-                    <AppIcon :name="subcat.icon" size="small" />
-                    <span class="hover-tree-name">{{ subcat.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
-                  </div>
-                </template>
-              </div>
-            </div>
-
-            <!-- TRANSFERS Section -->
-            <div v-if="hoveredData.transfers > 0" class="hover-info-type-section">
-              <div class="hover-type-header">
-                <AppIcon name="apps-sort" size="small" />
-                <span class="hover-type-label">TRANSFERS</span>
-                <span class="hover-type-total neutral">{{ formatCurrency(hoveredData.transfers) }}</span>
-              </div>
-              
-              <div class="hover-info-tree" v-if="hoveredData.transfersByCategory">
-                <template v-for="item in buildCategoryTree(hoveredData.transfersByCategory, 'transfers')" :key="item.id">
-                  <div class="hover-tree-main">
-                    <AppIcon :name="item.icon" size="small" />
-                    <span class="hover-tree-name">{{ item.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
-                  </div>
-                  
-                  <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
-                    <AppIcon :name="subcat.icon" size="small" />
-                    <span class="hover-tree-name">{{ subcat.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
-                  </div>
-                </template>
-              </div>
-            </div>
+      <!-- Breakdown sections - multi-column when multiple breakdowns -->
+      <div class="hover-info-content" :class="contentGridClass">
+        <div 
+          v-for="(data, key) in hoveredData.breakdownData" 
+          :key="key"
+          class="breakdown-section"
+        >
+          <!-- Breakdown header (Owner/Account name) -->
+          <div v-if="hoveredData.breakdownMode !== 'all'" class="breakdown-header">
+            <h5>{{ key }}</h5>
+            <span class="breakdown-balance" :class="data.balance >= 0 ? 'positive' : 'negative'">
+              {{ formatCurrency(data.balance) }}
+            </span>
           </div>
-
-          <!-- RIGHT COLUMN: Expenses -->
-          <div class="hover-info-column">
-            <!-- EXPENSES Section -->
-            <div v-if="hoveredData.expenses > 0" class="hover-info-type-section">
-              <div class="hover-type-header">
-                <AppIcon name="apps-delete" size="small" />
-                <span class="hover-type-label">EXPENSES</span>
-                <span class="hover-type-total negative">{{ formatCurrency(hoveredData.expenses) }}</span>
+          
+          <!-- 2-Column Grid: Income+Transfers | Expenses -->
+          <div class="hover-info-grid">
+            <!-- LEFT COLUMN -->
+            <div class="hover-info-column">
+              <!-- INCOME -->
+              <div v-if="data.income > 0" class="hover-info-type-section">
+                <div class="hover-type-header">
+                  <AppIcon name="apps-add" size="small" />
+                  <span class="hover-type-label">INCOME</span>
+                  <span class="hover-type-total positive">{{ formatCurrency(data.income) }}</span>
+                </div>
+                
+                <div class="hover-info-tree" v-if="data.incomeByCategory">
+                  <template v-for="item in buildCategoryTree(data.incomeByCategory, 'income')" :key="item.id">
+                    <div class="hover-tree-main">
+                      <AppIcon :name="item.icon" size="small" />
+                      <span class="hover-tree-name">{{ item.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
+                    </div>
+                    
+                    <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
+                      <AppIcon :name="subcat.icon" size="small" />
+                      <span class="hover-tree-name">{{ subcat.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
+                    </div>
+                  </template>
+                </div>
               </div>
-              
-              <div class="hover-info-tree" v-if="hoveredData.expensesByCategory">
-                <template v-for="item in buildCategoryTree(hoveredData.expensesByCategory, 'expenses')" :key="item.id">
-                  <div class="hover-tree-main">
-                    <AppIcon :name="item.icon" size="small" />
-                    <span class="hover-tree-name">{{ item.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
-                  </div>
-                  
-                  <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
-                    <AppIcon :name="subcat.icon" size="small" />
-                    <span class="hover-tree-name">{{ subcat.name }}</span>
-                    <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
-                  </div>
-                </template>
+
+              <!-- TRANSFERS -->
+              <div v-if="data.transfers > 0" class="hover-info-type-section">
+                <div class="hover-type-header">
+                  <AppIcon name="apps-sort" size="small" />
+                  <span class="hover-type-label">TRANSFERS</span>
+                  <span class="hover-type-total neutral">{{ formatCurrency(data.transfers) }}</span>
+                </div>
+                
+                <div class="hover-info-tree" v-if="data.transfersByCategory">
+                  <template v-for="item in buildCategoryTree(data.transfersByCategory, 'transfers')" :key="item.id">
+                    <div class="hover-tree-main">
+                      <AppIcon :name="item.icon" size="small" />
+                      <span class="hover-tree-name">{{ item.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
+                    </div>
+                    
+                    <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
+                      <AppIcon :name="subcat.icon" size="small" />
+                      <span class="hover-tree-name">{{ subcat.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Expenses -->
+            <div class="hover-info-column">
+              <!-- EXPENSES -->
+              <div v-if="data.expenses > 0" class="hover-info-type-section">
+                <div class="hover-type-header">
+                  <AppIcon name="apps-delete" size="small" />
+                  <span class="hover-type-label">EXPENSES</span>
+                  <span class="hover-type-total negative">{{ formatCurrency(data.expenses) }}</span>
+                </div>
+                
+                <div class="hover-info-tree" v-if="data.expensesByCategory">
+                  <template v-for="item in buildCategoryTree(data.expensesByCategory, 'expenses')" :key="item.id">
+                    <div class="hover-tree-main">
+                      <AppIcon :name="item.icon" size="small" />
+                      <span class="hover-tree-name">{{ item.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
+                    </div>
+                    
+                    <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
+                      <AppIcon :name="subcat.icon" size="small" />
+                      <span class="hover-tree-name">{{ subcat.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
+                    </div>
+                  </template>
+                </div>
               </div>
             </div>
           </div>
@@ -132,20 +148,35 @@ export default {
   setup(props) {
     const categoryStore = useCategoryStore()
     
-    /**
-     * Find category info by name
-     */
+    // Calculate total balance across all breakdowns
+    const totalBalance = computed(() => {
+      if (!props.hoveredData?.breakdownData) return 0
+      
+      return Object.values(props.hoveredData.breakdownData).reduce((sum, data) => {
+        return sum + (data.balance || 0)
+      }, 0)
+    })
+    
+    // Determine grid columns based on number of breakdowns
+    const contentGridClass = computed(() => {
+      if (!props.hoveredData?.breakdownData) return ''
+      
+      const count = Object.keys(props.hoveredData.breakdownData).length
+      
+      if (count === 1) return 'grid-single'
+      if (count === 2) return 'grid-two'
+      return 'grid-three' // 3+ breakdowns
+    })
+    
     function findCategory(categoryName, typeCode) {
       if (!categoryStore.categories) return null
       
       const type = categoryStore.categories.find(t => t.code === typeCode)
       if (!type?.children) return null
       
-      // Search in main categories
       for (const mainCat of type.children) {
         if (mainCat.name === categoryName) return mainCat
         
-        // Search in subcategories
         if (mainCat.children) {
           for (const subcat of mainCat.children) {
             if (subcat.name === categoryName) return subcat
@@ -156,24 +187,18 @@ export default {
       return null
     }
     
-    /**
-     * Build hierarchical tree from flat category list
-     */
     function buildCategoryTree(categoryData, typeCode) {
       if (!categoryData) return []
       
       const mainCategories = {}
       
-      // Group by main category
       Object.entries(categoryData).forEach(([catName, amount]) => {
         if (amount <= 0) return
         
         const catInfo = findCategory(catName, typeCode)
         if (!catInfo) return
         
-        // Check if this is a subcategory
         if (catInfo.parent_id) {
-          // Find parent
           const type = categoryStore.categories?.find(t => t.code === typeCode)
           const parent = type?.children?.find(c => c.id === catInfo.parent_id)
           
@@ -197,7 +222,6 @@ export default {
             })
           }
         } else {
-          // This is a main category
           if (!mainCategories[catInfo.id]) {
             mainCategories[catInfo.id] = {
               id: catInfo.id,
@@ -212,18 +236,18 @@ export default {
         }
       })
       
-      // Sort subcategories by amount
       Object.values(mainCategories).forEach(mainCat => {
         mainCat.subcategories.sort((a, b) => b.amount - a.amount)
       })
       
-      // Sort main categories by total
       return Object.values(mainCategories).sort((a, b) => b.total - a.total)
     }
     
     return {
       formatCurrency,
-      buildCategoryTree
+      buildCategoryTree,
+      totalBalance,
+      contentGridClass
     }
   }
 }
@@ -236,6 +260,49 @@ export default {
   padding: var(--gap-standard);
   border: 2px solid var(--color-background-dark);
   min-height: 8rem;
+}
+
+.breakdown-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-small);
+}
+
+.breakdown-section + .breakdown-section {
+  margin-top: var(--gap-large);
+  padding-top: var(--gap-large);
+  border-top: 2px solid var(--color-background-dark);
+}
+
+.breakdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--gap-small);
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  margin-bottom: var(--gap-small);
+}
+
+.breakdown-header h5 {
+  margin: 0;
+  font-size: var(--text-medium);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.breakdown-balance {
+  font-size: var(--text-large);
+  font-weight: 700;
+}
+
+.breakdown-balance.positive {
+  color: rgb(30, 155, 126);
+}
+
+.breakdown-balance.negative {
+  color: rgb(106, 91, 155);
 }
 
 .hover-info-empty {
@@ -303,6 +370,27 @@ export default {
 .hover-info-content {
   display: flex;
   flex-direction: column;
+}
+
+/* Multi-column grid layouts for multiple breakdowns */
+.hover-info-content.grid-two {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-large);
+}
+
+.hover-info-content.grid-three {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-large);
+}
+
+/* Remove vertical spacing when using grid */
+.grid-two .breakdown-section + .breakdown-section,
+.grid-three .breakdown-section + .breakdown-section {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
 }
 
 .hover-info-grid {
@@ -393,7 +481,7 @@ export default {
 }
 
 .hover-tree-main .hover-tree-name {
-font-weight: 600;
+  font-weight: 600;
 }
 
 .hover-tree-amount {

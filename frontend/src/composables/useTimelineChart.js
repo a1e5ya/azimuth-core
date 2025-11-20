@@ -19,7 +19,6 @@ function getPeriodName(date, grouping) {
   } else if (grouping === 'month') {
     return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
   } else if (grouping === 'quarter') {
-    // Show month range instead of Q1
     const quarter = Math.floor(d.getMonth() / 3)
     const startMonth = quarter * 3
     const endMonth = startMonth + 2
@@ -35,7 +34,7 @@ function getPeriodName(date, grouping) {
 }
 
 /**
- * Composable for managing timeline chart configuration and series
+ * Composable for managing timeline chart configuration and series WITH BREAKDOWN
  */
 export function useTimelineChart(
   timelineData,
@@ -45,13 +44,15 @@ export function useTimelineChart(
   categoryStore,
   visibilityState,
   customVisibleRange = null,
-  chartRef = null
+  chartRef = null,
+  breakdownMode = ref('all'),
+  selectedOwners = ref([]),
+  selectedAccounts = ref([])
 ) {
   const hoveredData = ref(null)
   const isPinned = ref(false)
   const yAxisValues = ref({ maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false })
   
-  // Memoization for expensive category builds
   const memoizedCategoryData = ref(null)
   const lastVisibilityHash = ref('')
   
@@ -62,7 +63,6 @@ export function useTimelineChart(
     isCategoryExpanded
   } = visibilityState
   
-  // Get category arrays
   const expenseCategories = computed(() => {
     const expenseType = categoryStore.categories?.find(t => t.code === 'expenses')
     return expenseType?.children || []
@@ -83,7 +83,6 @@ export function useTimelineChart(
     return targetType?.children || []
   })
   
-  // Calculate visible date range
   const visibleDateRange = computed(() => {
     if (customVisibleRange && customVisibleRange.value) {
       return {
@@ -99,44 +98,56 @@ export function useTimelineChart(
     )
   })
   
-  // Get current grouping
   const currentGrouping = computed(() => {
     if (!timelineData.value[0] || !timelineData.value[1]) return 'quarter'
     const diff = timelineData.value[1]?.date - timelineData.value[0]?.date
-    if (diff > 86400000 * 300) return 'year' // More than ~300 days = year
+    if (diff > 86400000 * 300) return 'year'
     if (diff > 86400000 * 60) return 'quarter'
     return 'month'
   })
   
   /**
-   * Create hash of current visibility state for memoization
+   * Get breakdown keys based on mode
    */
+  const breakdownKeys = computed(() => {
+    if (breakdownMode.value === 'all') {
+      return ['all']
+    } else if (breakdownMode.value === 'owner') {
+      return selectedOwners.value
+    } else if (breakdownMode.value === 'account') {
+      return selectedAccounts.value
+    }
+    return ['all']
+  })
+  
   function getVisibilityHash() {
     return JSON.stringify({
       types: visibilityState.visibleTypes.value.slice().sort(),
       cats: visibilityState.visibleCategories.value.slice().sort(),
       subcats: visibilityState.visibleSubcategories.value.slice().sort(),
-      expanded: visibilityState.expandedCategories.value.slice().sort()
+      expanded: visibilityState.expandedCategories.value.slice().sort(),
+      breakdown: breakdownMode.value,
+      owners: selectedOwners.value.slice().sort(),
+      accounts: selectedAccounts.value.slice().sort()
     })
   }
   
   /**
-   * OPTIMIZED: Single-pass category builder
-   * Processes all transactions once instead of 3 separate loops
+   * Build categories WITH BREAKDOWN - separate by owner/account
    */
   function buildAllCategoriesSinglePass() {
     const currentVisibilityHash = getVisibilityHash()
     
-    // Return memoized data if visibility hasn't changed
     if (memoizedCategoryData.value && lastVisibilityHash.value === currentVisibilityHash) {
       return memoizedCategoryData.value
     }
     
-    const expensesByCategory = {}
-    const incomeByCategory = {}
-    const transfersByCategory = {}
-    const currentGroupingValue = currentGrouping.value
+    // Structure: { breakdownKey: { categoryName: Map<date, amount> } }
+    const expensesByBreakdown = {}
+    const incomeByBreakdown = {}
+    const transfersByBreakdown = {}
     
+    const currentGroupingValue = currentGrouping.value
     const allCategories = [
       ...expenseCategories.value,
       ...incomeCategories.value,
@@ -144,15 +155,32 @@ export function useTimelineChart(
       ...targetCategories.value
     ]
     
-    // SINGLE PASS through all transactions
+    // Initialize breakdown keys
+    breakdownKeys.value.forEach(key => {
+      expensesByBreakdown[key] = {}
+      incomeByBreakdown[key] = {}
+      transfersByBreakdown[key] = {}
+    })
+    
     transactions.value.forEach(t => {
+      // Determine breakdown key for this transaction
+      let breakdownKey = 'all'
+      if (breakdownMode.value === 'owner') {
+        if (!t.owner) return // Skip if no owner
+        breakdownKey = t.owner
+        if (!selectedOwners.value.includes(breakdownKey)) return
+      } else if (breakdownMode.value === 'account') {
+        if (!t.owner || !t.bank_account_type) return // Skip if missing owner or account type
+        breakdownKey = `${t.owner}_${t.bank_account_type}`
+        if (!selectedAccounts.value.includes(breakdownKey)) return
+      }
+      
       const mainCat = (t.main_category || '').toUpperCase()
       const subcategoryName = t.subcategory
       const categoryName = t.category || 'Uncategorized'
       const amount = Math.abs(parseFloat(t.amount))
       const rawAmount = parseFloat(t.amount)
       
-      // Determine display name and visibility
       const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
       let displayName = categoryName
       let shouldInclude = true
@@ -187,7 +215,6 @@ export function useTimelineChart(
       
       if (!shouldInclude) return
       
-      // Calculate date key once
       const date = new Date(t.posted_at)
       let key
       
@@ -205,36 +232,34 @@ export function useTimelineChart(
         key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
       }
       
-      // Add to appropriate category map
       if (mainCat === 'EXPENSES') {
-        if (!expensesByCategory[displayName]) {
-          expensesByCategory[displayName] = new Map()
+        if (!expensesByBreakdown[breakdownKey][displayName]) {
+          expensesByBreakdown[breakdownKey][displayName] = new Map()
         }
-        expensesByCategory[displayName].set(
+        expensesByBreakdown[breakdownKey][displayName].set(
           key,
-          (expensesByCategory[displayName].get(key) || 0) + amount
+          (expensesByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
         )
       } else if (mainCat === 'INCOME') {
-        if (!incomeByCategory[displayName]) {
-          incomeByCategory[displayName] = new Map()
+        if (!incomeByBreakdown[breakdownKey][displayName]) {
+          incomeByBreakdown[breakdownKey][displayName] = new Map()
         }
-        incomeByCategory[displayName].set(
+        incomeByBreakdown[breakdownKey][displayName].set(
           key,
-          (incomeByCategory[displayName].get(key) || 0) + amount
+          (incomeByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
         )
       } else if (mainCat === 'TRANSFERS') {
-        if (!transfersByCategory[displayName]) {
-          transfersByCategory[displayName] = new Map()
+        if (!transfersByBreakdown[breakdownKey][displayName]) {
+          transfersByBreakdown[breakdownKey][displayName] = new Map()
         }
-        transfersByCategory[displayName].set(
+        transfersByBreakdown[breakdownKey][displayName].set(
           key,
-          (transfersByCategory[displayName].get(key) || 0) + rawAmount
+          (transfersByBreakdown[breakdownKey][displayName].get(key) || 0) + rawAmount
         )
       }
     })
     
-    // Memoize result
-    const result = { expensesByCategory, incomeByCategory, transfersByCategory }
+    const result = { expensesByBreakdown, incomeByBreakdown, transfersByBreakdown }
     memoizedCategoryData.value = result
     lastVisibilityHash.value = currentVisibilityHash
     
@@ -242,145 +267,111 @@ export function useTimelineChart(
   }
   
   /**
-   * Build expenses by category for chart series (DEPRECATED - now uses single pass)
-   */
-  function buildExpensesByCategory() {
-    return buildAllCategoriesSinglePass().expensesByCategory
-  }
-  
-  /**
-   * Build income by category for chart series (DEPRECATED - now uses single pass)
-   */
-  function buildIncomeByCategory() {
-    return buildAllCategoriesSinglePass().incomeByCategory
-  }
-  
-  /**
-   * Build transfers by category for chart series (DEPRECATED - now uses single pass)
-   */
-  function buildTransfersByCategory() {
-    return buildAllCategoriesSinglePass().transfersByCategory
-  }
-  
-  /**
-   * Build chart series - TWO Y-AXES VERSION
+   * Build chart series WITH BREAKDOWN - single stack per breakdown
    */
   const chartSeries = computed(() => {
     if (!timelineData.value.length) return []
     
+    const { expensesByBreakdown, incomeByBreakdown, transfersByBreakdown } = buildAllCategoriesSinglePass()
     const series = []
     
-    // ========== NEGATIVE AXIS (expenses + negative transfers) ==========
-    const expenseSeries = []
-    const negativeTransferSeries = []
-    
-    if (isTypeVisible('expenses')) {
-      const expensesByCategory = buildExpensesByCategory()
+    // For each breakdown key, create separate series with ONE stack group per breakdown
+    breakdownKeys.value.forEach((breakdownKey, breakdownIndex) => {
+      const suffix = breakdownMode.value === 'all' ? '' : ` - ${breakdownKey}`
+      const stackGroup = breakdownMode.value === 'all' ? 'all' : `breakdown-${breakdownIndex}`
       
-      Object.entries(expensesByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const data = timelineData.value.map(d => ({
-          x: d.date,
-          y: -(dateMap.get(d.date) || 0)
-        }))
-        
-        expenseSeries.push({
-          name: categoryName,
-          type: 'bar',
-          data: data,
-          color: color
-        })
-      })
-    }
-    
-    if (isTypeVisible('transfers')) {
-      const transfersByCategory = buildTransfersByCategory()
-      
-      Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const negativeData = timelineData.value.map(d => {
-          const value = dateMap.get(d.date) || 0
-          return { x: d.date, y: value < 0 ? value : 0 }
-        })
-        
-        if (negativeData.some(p => p.y < 0)) {
-          negativeTransferSeries.push({
-            name: `${categoryName} (Out)`,
+      // EXPENSES - all go into same stack group
+      if (isTypeVisible('expenses') && expensesByBreakdown[breakdownKey]) {
+        Object.entries(expensesByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+          const color = getCategoryColor(categoryStore.categories, categoryName)
+          
+          const data = timelineData.value.map(d => ({
+            x: d.date,
+            y: -(dateMap.get(d.date) || 0)
+          }))
+          
+          series.push({
+            name: `${categoryName}${suffix}`,
             type: 'bar',
-            data: negativeData,
-            color: color
+            data: data,
+            color: color,
+            breakdownKey: breakdownKey,
+            group: stackGroup
           })
-        }
-      })
-    }
-    
-    expenseSeries.sort((a, b) => a.name.localeCompare(b.name))
-    negativeTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
-    
-    series.push(...expenseSeries)
-    series.push(...negativeTransferSeries)
-    
-    // ========== POSITIVE AXIS (income + positive transfers) ==========
-    const incomeSeries = []
-    const positiveTransferSeries = []
-    
-    if (isTypeVisible('income')) {
-      const incomeByCategory = buildIncomeByCategory()
-      
-      Object.entries(incomeByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const data = timelineData.value.map(d => ({
-          x: d.date,
-          y: Math.abs(dateMap.get(d.date) || 0)
-        }))
-        
-        incomeSeries.push({
-          name: categoryName,
-          type: 'bar',
-          data: data,
-          color: color
         })
-      })
-    }
-    
-    if (isTypeVisible('transfers')) {
-      const transfersByCategory = buildTransfersByCategory()
+      }
       
-      Object.entries(transfersByCategory).forEach(([categoryName, dateMap]) => {
-        const color = getCategoryColor(categoryStore.categories, categoryName)
-        
-        const positiveData = timelineData.value.map(d => {
-          const value = dateMap.get(d.date) || 0
-          return { x: d.date, y: value > 0 ? value : 0 }
+      // NEGATIVE TRANSFERS - same stack group
+      if (isTypeVisible('transfers') && transfersByBreakdown[breakdownKey]) {
+        Object.entries(transfersByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+          const color = getCategoryColor(categoryStore.categories, categoryName)
+          
+          const negativeData = timelineData.value.map(d => {
+            const value = dateMap.get(d.date) || 0
+            return { x: d.date, y: value < 0 ? value : 0 }
+          })
+          
+          if (negativeData.some(p => p.y < 0)) {
+            series.push({
+              name: `${categoryName} (Out)${suffix}`,
+              type: 'bar',
+              data: negativeData,
+              color: color,
+              breakdownKey: breakdownKey,
+              group: stackGroup
+            })
+          }
         })
-        
-        if (positiveData.some(p => p.y > 0)) {
-          positiveTransferSeries.push({
-            name: `${categoryName} (In)`,
+      }
+      
+      // INCOME - same stack group
+      if (isTypeVisible('income') && incomeByBreakdown[breakdownKey]) {
+        Object.entries(incomeByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+          const color = getCategoryColor(categoryStore.categories, categoryName)
+          
+          const data = timelineData.value.map(d => ({
+            x: d.date,
+            y: Math.abs(dateMap.get(d.date) || 0)
+          }))
+          
+          series.push({
+            name: `${categoryName}${suffix}`,
             type: 'bar',
-            data: positiveData,
-            color: color
+            data: data,
+            color: color,
+            breakdownKey: breakdownKey,
+            group: stackGroup
           })
-        }
-      })
-    }
-    
-    incomeSeries.sort((a, b) => a.name.localeCompare(b.name))
-    positiveTransferSeries.sort((a, b) => a.name.localeCompare(b.name))
-    
-    series.push(...incomeSeries)
-    series.push(...positiveTransferSeries)
+        })
+      }
+      
+      // POSITIVE TRANSFERS - same stack group
+      if (isTypeVisible('transfers') && transfersByBreakdown[breakdownKey]) {
+        Object.entries(transfersByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+          const color = getCategoryColor(categoryStore.categories, categoryName)
+          
+          const positiveData = timelineData.value.map(d => {
+            const value = dateMap.get(d.date) || 0
+            return { x: d.date, y: value > 0 ? value : 0 }
+          })
+          
+          if (positiveData.some(p => p.y > 0)) {
+            series.push({
+              name: `${categoryName} (In)${suffix}`,
+              type: 'bar',
+              data: positiveData,
+              color: color,
+              breakdownKey: breakdownKey,
+              group: stackGroup
+            })
+          }
+        })
+      }
+    })
     
     return series
   })
   
-  /**
-   * Calculate max Y-axis values from chart series
-   * For level 1, only calculate from visible date range
-   */
   function calculateYAxisMax() {
     if (!chartSeries.value.length || !timelineData.value.length) {
       return { maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false }
@@ -391,7 +382,6 @@ export function useTimelineChart(
     let hasPositive = false
     let hasNegative = false
     
-    // Filter to visible range if on level 1
     const visibleRange = visibleDateRange.value
     const dataToAnalyze = (currentZoomLevel.value === 1 && visibleRange)
       ? timelineData.value.filter(d => {
@@ -401,32 +391,40 @@ export function useTimelineChart(
       : timelineData.value
     
     dataToAnalyze.forEach((dataPoint, index) => {
-      // Find actual index in full timeline for series lookup
       const actualIndex = timelineData.value.findIndex(d => d.date === dataPoint.date)
       if (actualIndex === -1) return
       
-      let cumulativePositive = 0
-      let cumulativeNegative = 0
+      // Group series by breakdown to calculate stacked totals per group
+      const groupTotals = {}
       
       chartSeries.value.forEach(series => {
         const point = series.data[actualIndex]
         if (point && point.y) {
+          const group = series.group || 'all'
+          
+          if (!groupTotals[group]) {
+            groupTotals[group] = { positive: 0, negative: 0 }
+          }
+          
           if (point.y > 0) {
-            cumulativePositive += point.y
+            groupTotals[group].positive += point.y
             hasPositive = true
           } else if (point.y < 0) {
-            cumulativeNegative += point.y
+            groupTotals[group].negative += point.y
             hasNegative = true
           }
         }
       })
       
-      if (cumulativePositive > maxPositive) {
-        maxPositive = cumulativePositive
-      }
-      if (cumulativeNegative < maxNegative) {
-        maxNegative = cumulativeNegative
-      }
+      // Find max across all groups
+      Object.values(groupTotals).forEach(totals => {
+        if (totals.positive > maxPositive) {
+          maxPositive = totals.positive
+        }
+        if (totals.negative < maxNegative) {
+          maxNegative = totals.negative
+        }
+      })
     })
     
     maxPositive = maxPositive * 1.15
@@ -440,42 +438,104 @@ export function useTimelineChart(
     }
   }
   
-  /**
-   * Handle chart hover event
-   */
   function handleChartHover(config) {
     if (!config || config.dataPointIndex === -1) return
     
     const dataPoint = timelineData.value[config.dataPointIndex]
     if (!dataPoint) return
     
+    // Build breakdown data
+    const breakdownData = {}
+    
+    if (breakdownMode.value === 'all') {
+      // For 'all' mode, use simple structure compatible with old hover info
+      breakdownData.all = {
+        income: dataPoint.income || 0,
+        expenses: dataPoint.expenses || 0,
+        transfers: dataPoint.transfers || 0,
+        balance: (dataPoint.income || 0) - (dataPoint.expenses || 0),
+        incomeByCategory: dataPoint.incomeByCategory || {},
+        expensesByCategory: dataPoint.expensesByCategory || {},
+        transfersByCategory: dataPoint.transfersByCategory || {}
+      }
+    } else {
+      // Calculate per breakdown key
+      breakdownKeys.value.forEach(key => {
+        const keyTransactions = transactions.value.filter(t => {
+          const tDate = new Date(t.posted_at)
+          const tKey = breakdownMode.value === 'owner' 
+            ? t.owner 
+            : `${t.owner}_${t.bank_account_type}`
+          
+          // Check if transaction matches date period
+          const grouping = currentGrouping.value
+          let periodMatches = false
+          
+          if (grouping === 'year') {
+            periodMatches = tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+          } else if (grouping === 'quarter') {
+            const tQuarter = Math.floor(tDate.getMonth() / 3)
+            const pQuarter = Math.floor(new Date(dataPoint.date).getMonth() / 3)
+            periodMatches = tQuarter === pQuarter && tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+          } else {
+            periodMatches = tDate.getMonth() === new Date(dataPoint.date).getMonth() && tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+          }
+          
+          return tKey === key && periodMatches
+        })
+        
+        let income = 0
+        let expenses = 0
+        let transfers = 0
+        const incomeByCategory = {}
+        const expensesByCategory = {}
+        const transfersByCategory = {}
+        
+        keyTransactions.forEach(t => {
+          const amount = Math.abs(parseFloat(t.amount))
+          const category = t.subcategory || t.category || 'Uncategorized'
+          const mainCat = (t.main_category || '').toUpperCase()
+          
+          if (mainCat === 'INCOME') {
+            income += amount
+            incomeByCategory[category] = (incomeByCategory[category] || 0) + amount
+          } else if (mainCat === 'EXPENSES') {
+            expenses += amount
+            expensesByCategory[category] = (expensesByCategory[category] || 0) + amount
+          } else if (mainCat === 'TRANSFERS') {
+            transfers += amount
+            transfersByCategory[category] = (transfersByCategory[category] || 0) + amount
+          }
+        })
+        
+        breakdownData[key] = {
+          income,
+          expenses,
+          transfers,
+          balance: income - expenses,
+          incomeByCategory,
+          expensesByCategory,
+          transfersByCategory
+        }
+      })
+    }
+    
     hoveredData.value = {
       date: dataPoint.date,
       periodName: getPeriodName(dataPoint.date, currentGrouping.value),
-      income: dataPoint.income,
-      expenses: dataPoint.expenses,
-      transfers: dataPoint.transfers,
-      balance: dataPoint.income - dataPoint.expenses,
-      incomeByCategory: dataPoint.incomeByCategory,
-      expensesByCategory: dataPoint.expensesByCategory,
-      transfersByCategory: dataPoint.transfersByCategory
+      breakdownMode: breakdownMode.value,
+      breakdownData: breakdownData
     }
     
-    // Update line annotation without rebuilding entire chart
     updateLineAnnotation()
   }
   
-  /**
-   * Update vertical line annotation
-   */
   function updateLineAnnotation() {
-    // Direct annotation update is faster than recomputing entire chartOptions
     const chart = chartRef?.value?.chart
     if (!chart || !hoveredData.value) return
     
     chart.clearAnnotations()
     
-    // Add horizontal line at zero
     chart.addYaxisAnnotation({
       y: 0,
       borderColor: '#374151',
@@ -483,7 +543,6 @@ export function useTimelineChart(
       opacity: 0.2
     })
     
-    // Add vertical line at hovered position
     chart.addXaxisAnnotation({
       x: hoveredData.value.date,
       borderColor: isPinned.value ? '#3a3a3aff' : '#5b636eff',
@@ -493,9 +552,6 @@ export function useTimelineChart(
     })
   }
   
-  /**
-   * Unpin hover data
-   */
   function unpinHoverData() {
     isPinned.value = false
     hoveredData.value = null
@@ -512,52 +568,47 @@ export function useTimelineChart(
     }
   }
   
-  // Watch for pin state changes
   watch(() => isPinned.value, () => {
     if (hoveredData.value) {
       updateLineAnnotation()
     }
   })
   
-  // Debounced visibility watcher - only recalculate after 50ms of no changes
   let visibilityDebounceTimer = null
   watch([
     () => visibilityState.visibleCategories.value,
     () => visibilityState.visibleSubcategories.value,
-    () => visibilityState.expandedCategories.value
+    () => visibilityState.expandedCategories.value,
+    breakdownMode,
+    selectedOwners,
+    selectedAccounts
   ], () => {
     if (visibilityDebounceTimer) {
       clearTimeout(visibilityDebounceTimer)
     }
     visibilityDebounceTimer = setTimeout(() => {
-      // Invalidate memoization cache
       memoizedCategoryData.value = null
       yAxisValues.value = calculateYAxisMax()
-      console.log('📏 Y-axis recalculated after visibility change')
+      console.log('📏 Y-axis recalculated after visibility/breakdown change')
     }, 50)
   }, { deep: true })
   
-  // Recalculate Y-axis ONLY on zoom (immediate, no debounce)
   watch(currentZoomLevel, () => {
-    memoizedCategoryData.value = null // Invalidate cache
+    memoizedCategoryData.value = null
     yAxisValues.value = calculateYAxisMax()
     console.log('📏 Y-axis recalculated on zoom')
   })
   
-  // Update X-axis range via updateOptions when scrollbar changes (no rebuild)
   watch(() => visibleDateRange.value, (newRange, oldRange) => {
     const chart = chartRef?.value?.chart
     if (!chart || !newRange) return
     
-    // On level 1, recalculate Y-axis for the visible range whenever it changes
     if (currentZoomLevel.value === 1) {
-      // Force recalculation by invalidating cache
       memoizedCategoryData.value = null
       yAxisValues.value = calculateYAxisMax()
       console.log('📏 Y-axis recalculated for year range:', yAxisValues.value)
     }
     
-    // Update x-axis without animation
     chart.updateOptions({
       xaxis: {
         min: newRange.start.getTime(),
@@ -571,184 +622,183 @@ export function useTimelineChart(
           ? Math.max(yAxisValues.value.maxPositive, yAxisValues.value.maxNegative)
           : yAxisValues.value.hasPositive ? yAxisValues.value.maxPositive : 0
       }
-    }, false, false) // false = no redraw, false = no animation
+    }, false, false)
     
     console.log('📊 X-axis and Y-axis updated')
   }, { deep: true })
   
-  /**
-   * Build chart options - TWO Y-AXES VERSION
-   */
-const chartOptions = computed(() => {
-  const range = visibleDateRange.value
-  const yAxis = yAxisValues.value
-  
-  // Dynamic zero-line positioning
-  let yMin, yMax
-  
-  if (yAxis.hasPositive && yAxis.hasNegative) {
-    const maxRange = Math.max(yAxis.maxPositive, yAxis.maxNegative)
-    yMin = -maxRange
-    yMax = maxRange
-  } else if (yAxis.hasPositive && !yAxis.hasNegative) {
-    yMin = 0
-    yMax = yAxis.maxPositive
-  } else if (!yAxis.hasPositive && yAxis.hasNegative) {
-    yMin = -yAxis.maxNegative
-    yMax = 0
-  } else {
-    yMin = -1000
-    yMax = 1000
-  }
-  
-  return {
-    chart: {
-      id: 'timeline-main',
-      type: 'bar',
-      height: 500,
-      stacked: true,
-      stackType: 'normal',
-      toolbar: {
+  const chartOptions = computed(() => {
+    const range = visibleDateRange.value
+    const yAxis = yAxisValues.value
+    
+    let yMin, yMax
+    
+    if (yAxis.hasPositive && yAxis.hasNegative) {
+      const maxRange = Math.max(yAxis.maxPositive, yAxis.maxNegative)
+      yMin = -maxRange
+      yMax = maxRange
+    } else if (yAxis.hasPositive && !yAxis.hasNegative) {
+      yMin = 0
+      yMax = yAxis.maxPositive
+    } else if (!yAxis.hasPositive && yAxis.hasNegative) {
+      yMin = -yAxis.maxNegative
+      yMax = 0
+    } else {
+      yMin = -1000
+      yMax = 1000
+    }
+    
+    // Adjust column width based on breakdown count
+    const numBreakdowns = breakdownKeys.value.length
+    // All mode: 98%, multiple breakdowns: 60% each for better visibility
+    const columnWidth = breakdownMode.value === 'all' ? '90%' : '90%'
+    
+    return {
+      chart: {
+        id: 'timeline-main',
+        type: 'bar',
+        height: 500,
+        stacked: true,
+        stackType: 'normal',
+        toolbar: {
+          show: false
+        },
+        zoom: {
+          enabled: false
+        },
+        animations: {
+          enabled: false,
+          easing: 'linear',
+          speed: 0,
+          animateGradually: {
+            enabled: false,
+            delay: 0
+          },
+          dynamicAnimation: {
+            enabled: false,
+            speed: 0
+          }
+        },
+        events: {
+          dataPointSelection: (event, chartContext, config) => {
+            if (config.dataPointIndex >= 0) {
+              isPinned.value = true
+              handleChartHover(config)
+            }
+          },
+          mouseMove: (event, chartContext, config) => {
+            if (!isPinned.value && config.dataPointIndex >= 0) {
+              handleChartHover(config)
+            }
+          },
+          mouseLeave: () => {
+            if (!isPinned.value) {
+              hoveredData.value = null
+            }
+          }
+        },
+        selection: {
+          enabled: false
+        }
+      },
+      states: {
+        normal: {
+          filter: {
+            type: 'none'
+          }
+        },
+        hover: {
+          filter: {
+            type: 'none'
+          }
+        },
+        active: {
+          filter: {
+            type: 'none'
+          }
+        }
+      },
+      fill: {
+        opacity: 1,
+        type: 'solid'
+      },
+      plotOptions: {
+        bar: {
+          horizontal: false,
+          columnWidth: columnWidth,
+          borderRadius: 0,
+          borderRadiusApplication: 'end',
+          borderRadiusWhenStacked: 'last',
+          dataLabels: {
+            position: 'center'
+          }
+        }
+      },
+      stroke: {
+        show: true,
+        width: 0,
+        colors: ['transparent']
+      },
+      dataLabels: {
+        enabled: false
+      },
+      legend: {
         show: false
       },
-      zoom: {
-        enabled: false
-      },
-      animations: {
-        enabled: false,
-        easing: 'linear',
-        speed: 0,
-        animateGradually: {
-          enabled: false,
-          delay: 0
-        },
-        dynamicAnimation: {
-          enabled: false,
-          speed: 0
-        }
-      },
-      events: {
-        dataPointSelection: (event, chartContext, config) => {
-          if (config.dataPointIndex >= 0) {
-            // Pin to new position
-            isPinned.value = true
-            handleChartHover(config)
+      grid: {
+        borderColor: '#e5e7eb',
+        strokeDashArray: 5,
+        xaxis: {
+          lines: {
+            show: true
           }
         },
-        mouseMove: (event, chartContext, config) => {
-          // Only update hover if not pinned
-          if (!isPinned.value && config.dataPointIndex >= 0) {
-            handleChartHover(config)
-          }
-        },
-        mouseLeave: () => {
-          if (!isPinned.value) {
-            hoveredData.value = null
+        yaxis: {
+          lines: {
+            show: true
           }
         }
       },
-      selection: {
-        enabled: false
-      }
-    },
-    states: {
-      normal: {
-        filter: {
-          type: 'none'
-        }
-      },
-      hover: {
-        filter: {
-          type: 'none'
-        }
-      },
-      active: {
-        filter: {
-          type: 'none'
-        }
-      }
-    },
-    fill: {
-      opacity: 1,
-      type: 'solid'
-    },
-    plotOptions: {
-      bar: {
-        horizontal: false,
-        columnWidth: '98%',
-        borderRadius: 0,
-        borderRadiusApplication: 'end',
-        borderRadiusWhenStacked: 'last',
-        dataLabels: {
-          position: 'center'
-        }
-      }
-    },
-    stroke: {
-      show: true,
-      width: 0,
-      colors: ['transparent']
-    },
-    dataLabels: {
-      enabled: false
-    },
-    legend: {
-      show: false
-    },
-    grid: {
-      borderColor: '#e5e7eb',
-      strokeDashArray: 5,
       xaxis: {
-        lines: {
-          show: true
+        type: 'datetime',
+        min: range?.start?.getTime(),
+        max: range?.end?.getTime(),
+        labels: {
+          datetimeUTC: false,
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          }
         }
       },
       yaxis: {
-        lines: {
-          show: true
-        }
-      }
-    },
-    xaxis: {
-      type: 'datetime',
-      min: range?.start?.getTime(),
-      max: range?.end?.getTime(),
-      labels: {
-        datetimeUTC: false,
-        style: {
-          colors: '#6b7280',
-          fontSize: '12px'
-        }
-      }
-    },
-    yaxis: {
-      title: {
-        text: 'Amount (€)',
-        style: {
-          color: '#6b7280',
-          fontSize: '12px',
-          fontWeight: 500
-        }
-      },
-      labels: {
-        formatter: (val) => {
-          if (val === 0) return '€0'
-          const absVal = Math.abs(val)
-          return (val < 0 ? '-' : '') + '€' + Math.round(absVal).toLocaleString()
+        title: {
+          text: 'Amount (€)',
+          style: {
+            color: '#6b7280',
+            fontSize: '12px',
+            fontWeight: 500
+          }
         },
-        style: {
-          colors: '#6b7280',
-          fontSize: '12px'
-        }
+        labels: {
+          formatter: (val) => {
+            if (val === 0) return '€0'
+            const absVal = Math.abs(val)
+            return (val < 0 ? '-' : '') + '€' + Math.round(absVal).toLocaleString()
+          },
+          style: {
+            colors: '#6b7280',
+            fontSize: '12px'
+          }
+        },
+        min: yMin,
+        max: yMax
       },
-      min: yMin,
-      max: yMax
-    },
-    tooltip: {
-      enabled: false
+      tooltip: {
+        enabled: false
+      }
     }
-  }
-})
+  })
   
   return {
     hoveredData,

@@ -1,5 +1,16 @@
 <template>
   <div class="timeline-container">
+    <!-- Filter Bar -->
+    <TimelineFilterBar
+      :breakdownMode="breakdownMode"
+      :selectedOwners="selectedOwners"
+      :selectedAccounts="selectedAccounts"
+      :transactions="transactions"
+      @update:breakdownMode="breakdownMode = $event"
+      @update:selectedOwners="selectedOwners = $event"
+      @update:selectedAccounts="selectedAccounts = $event"
+    />
+
     <!-- Main Content: Legend + Chart Area -->
     <div class="timeline-main-content">
       <!-- Compact Legend - Left Side -->
@@ -72,6 +83,7 @@ import { useCategoryStore } from '@/stores/categories'
 import { useTimelineData } from '@/composables/useTimelineData'
 import { useTimelineVisibility } from '@/composables/useTimelineVisibility'
 import { useTimelineChart } from '@/composables/useTimelineChart'
+import TimelineFilterBar from './TimelineFilterBar.vue'
 import TimelineCategoryLegend from './TimelineCategoryLegend.vue'
 import TimelineChart from './TimelineChart.vue'
 import TimelineControls from './TimelineControls.vue'
@@ -81,6 +93,7 @@ import TimelineHoverInfo from './TimelineHoverInfo.vue'
 export default {
   name: 'TimelineTab',
   components: {
+    TimelineFilterBar,
     TimelineCategoryLegend,
     TimelineChart,
     TimelineControls,
@@ -102,6 +115,9 @@ export default {
       currentZoomLevel,
       hasData,
       timelineData,
+      breakdownMode,
+      selectedOwners,
+      selectedAccounts,
       loadTransactions,
       zoomIn,
       zoomOut,
@@ -167,7 +183,6 @@ export default {
       }
     )
     
-    // Get chartRef from child component
     const chartRef = computed(() => chartComponentRef.value?.chartRef)
     
     const {
@@ -197,7 +212,10 @@ export default {
         isCategoryExpanded: (categoryId) => expandedCategories.value.includes(categoryId)
       },
       customVisibleRange,
-      chartRef
+      chartRef,
+      breakdownMode,
+      selectedOwners,
+      selectedAccounts
     )
     
     function setMode(mode) {
@@ -238,7 +256,7 @@ export default {
     watch(() => currentZoomLevel.value, (newLevel) => {
       console.log('Zoom level:', newLevel)
       unpinHoverData()
-      customVisibleRange.value = null // Reset custom range on zoom change
+      customVisibleRange.value = null
     })
     
     watch(() => currentMode.value, (newMode) => {
@@ -290,7 +308,11 @@ export default {
       handleResetZoom,
       unpinHoverData,
       setMode,
-      handleScrollTo
+      handleScrollTo,
+      breakdownMode,
+      selectedOwners,
+      selectedAccounts,
+      transactions
     }
   }
 }

@@ -12,27 +12,21 @@ export function useTimelineVisibility(
   transferCategoriesGetter,
   targetCategoriesGetter
 ) {
-  // Visibility state - NOW INCLUDES 'targets'
   const visibleTypes = ref(['income', 'expenses', 'transfers', 'targets'])
   const visibleCategories = ref([])
   const visibleSubcategories = ref([])
   const expandedCategories = ref([])
   
-  // Convert getters to computed properties
   const expenseCategories = computed(() => expenseCategoriesGetter())
   const incomeCategories = computed(() => incomeCategoriesGetter())
   const transferCategories = computed(() => transferCategoriesGetter())
   const targetCategories = computed(() => targetCategoriesGetter())
   
-  // Check visibility
   const isTypeVisible = (typeId) => visibleTypes.value.includes(typeId)
   const isCategoryVisible = (categoryId) => visibleCategories.value.includes(categoryId)
   const isSubcategoryVisible = (subcategoryId) => visibleSubcategories.value.includes(subcategoryId)
   const isCategoryExpanded = (categoryId) => expandedCategories.value.includes(categoryId)
   
-  /**
-   * Toggle category expansion state
-   */
   function toggleCategoryExpanded(categoryId) {
     const index = expandedCategories.value.indexOf(categoryId)
     if (index > -1) {
@@ -42,17 +36,12 @@ export function useTimelineVisibility(
     }
   }
   
-  /**
-   * Toggle type visibility (income, expenses, transfers, targets)
-   */
   function toggleType(typeId) {
     const index = visibleTypes.value.indexOf(typeId)
     
     if (index > -1) {
-      // Hide type
       visibleTypes.value.splice(index, 1)
       
-      // Get categories for this type
       let categories = []
       if (typeId === 'expenses') {
         categories = expenseCategories.value
@@ -64,7 +53,6 @@ export function useTimelineVisibility(
         categories = targetCategories.value
       }
       
-      // Hide all categories and subcategories
       categories.forEach(cat => {
         const catIndex = visibleCategories.value.indexOf(cat.id)
         if (catIndex > -1) {
@@ -81,10 +69,8 @@ export function useTimelineVisibility(
         }
       })
     } else {
-      // Show type
       visibleTypes.value.push(typeId)
       
-      // Get categories for this type
       let categories = []
       if (typeId === 'expenses') {
         categories = expenseCategories.value
@@ -96,7 +82,6 @@ export function useTimelineVisibility(
         categories = targetCategories.value
       }
       
-      // Show all categories and subcategories
       categories.forEach(cat => {
         if (!visibleCategories.value.includes(cat.id)) {
           visibleCategories.value.push(cat.id)
@@ -113,13 +98,9 @@ export function useTimelineVisibility(
     }
   }
   
-  /**
-   * Toggle category visibility
-   */
   function toggleCategory(categoryId) {
     const index = visibleCategories.value.indexOf(categoryId)
     
-    // Find the category - NOW INCLUDES targetCategories
     let category = null
     for (const categories of [
       expenseCategories.value, 
@@ -134,10 +115,8 @@ export function useTimelineVisibility(
     if (!category) return
     
     if (index > -1) {
-      // Hide category
       visibleCategories.value.splice(index, 1)
       
-      // Hide all subcategories
       if (category.children) {
         category.children.forEach(subcat => {
           const subcatIndex = visibleSubcategories.value.indexOf(subcat.id)
@@ -147,10 +126,8 @@ export function useTimelineVisibility(
         })
       }
     } else {
-      // Show category
       visibleCategories.value.push(categoryId)
       
-      // Show all subcategories
       if (category.children) {
         category.children.forEach(subcat => {
           if (!visibleSubcategories.value.includes(subcat.id)) {
@@ -161,9 +138,6 @@ export function useTimelineVisibility(
     }
   }
   
-  /**
-   * Toggle subcategory visibility
-   */
   function toggleSubcategory(subcategoryId) {
     const index = visibleSubcategories.value.indexOf(subcategoryId)
     
@@ -174,10 +148,6 @@ export function useTimelineVisibility(
     }
   }
   
-  /**
-   * Initialize visibility - show all categories and subcategories
-   * NOW INCLUDES targetCategories
-   */
   function initializeVisibility() {
     visibleCategories.value = []
     visibleSubcategories.value = []
@@ -201,19 +171,14 @@ export function useTimelineVisibility(
   }
   
   return {
-    // State
     visibleTypes,
     visibleCategories,
     visibleSubcategories,
     expandedCategories,
-    
-    // Checkers
     isTypeVisible,
     isCategoryVisible,
     isSubcategoryVisible,
     isCategoryExpanded,
-    
-    // Actions
     toggleType,
     toggleCategory,
     toggleSubcategory,

@@ -5,7 +5,7 @@ import { groupTransactionsByPeriod, getGroupingByZoomLevel } from '@/utils/timel
 
 /**
  * Composable for managing timeline data
- * Handles transaction loading, grouping, and date range management
+ * Handles transaction loading, grouping, breakdown filtering, and date range management
  */
 export function useTimelineData() {
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
@@ -13,6 +13,11 @@ export function useTimelineData() {
   const loading = ref(false)
   const transactions = ref([])
   const currentZoomLevel = ref(0) // Start at quarter view
+  
+  // Breakdown state
+  const breakdownMode = ref('all') // 'all' | 'owner' | 'account'
+  const selectedOwners = ref([])
+  const selectedAccounts = ref([])
   
   const dateRange = ref({
     start: null,
@@ -26,9 +31,31 @@ export function useTimelineData() {
     return getGroupingByZoomLevel(currentZoomLevel.value)
   })
   
+  // Filtered transactions based on breakdown mode
+  const filteredTransactions = computed(() => {
+    if (breakdownMode.value === 'all') {
+      return transactions.value
+    }
+    
+    if (breakdownMode.value === 'owner') {
+      if (selectedOwners.value.length === 0) return transactions.value
+      return transactions.value.filter(t => selectedOwners.value.includes(t.owner))
+    }
+    
+    if (breakdownMode.value === 'account') {
+      if (selectedAccounts.value.length === 0) return transactions.value
+      return transactions.value.filter(t => {
+        const accountKey = `${t.owner}_${t.bank_account_type}`
+        return selectedAccounts.value.includes(accountKey)
+      })
+    }
+    
+    return transactions.value
+  })
+  
   const timelineData = computed(() => {
-    if (!transactions.value.length) return []
-    return groupTransactionsByPeriod(transactions.value, currentGrouping.value)
+    if (!filteredTransactions.value.length) return []
+    return groupTransactionsByPeriod(filteredTransactions.value, currentGrouping.value)
   })
   
   /**
@@ -74,6 +101,9 @@ export function useTimelineData() {
         const dates = allTransactions.map(t => new Date(t.posted_at))
         dateRange.value.start = new Date(Math.min(...dates))
         dateRange.value.end = new Date(Math.max(...dates))
+        
+        // Initialize breakdown selections with first available options
+        initializeBreakdownSelections()
       }
       
       console.log('Timeline loaded:', allTransactions.length, 'transactions')
@@ -82,6 +112,33 @@ export function useTimelineData() {
       console.error('Failed to load transactions:', error)
     } finally {
       loading.value = false
+    }
+  }
+  
+  /**
+   * Initialize breakdown selections with first available owner/account
+   */
+  function initializeBreakdownSelections() {
+    // Get unique owners
+    const owners = new Set()
+    transactions.value.forEach(t => {
+      if (t.owner) owners.add(t.owner)
+    })
+    
+    // Get unique accounts
+    const accounts = new Set()
+    transactions.value.forEach(t => {
+      if (t.owner && t.bank_account_type) {
+        accounts.add(`${t.owner}_${t.bank_account_type}`)
+      }
+    })
+    
+    // Select first owner and account by default
+    if (owners.size > 0) {
+      selectedOwners.value = [Array.from(owners).sort()[0]]
+    }
+    if (accounts.size > 0) {
+      selectedAccounts.value = [Array.from(accounts).sort()[0]]
     }
   }
   
@@ -118,11 +175,15 @@ export function useTimelineData() {
     transactions,
     dateRange,
     currentZoomLevel,
+    breakdownMode,
+    selectedOwners,
+    selectedAccounts,
     
     // Computed
     hasData,
     currentGrouping,
     timelineData,
+    filteredTransactions,
     
     // Actions
     loadTransactions,
