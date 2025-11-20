@@ -1,10 +1,10 @@
 <template>
   <div class="categories-layout">
     
-    <!-- Vertical Type Tabs - Left Side -->
-    <div class="vertical-tabs">
+    <!-- ALWAYS show sidebar if we have types -->
+    <div v-if="typeCategories.length > 0" class="vertical-tabs">
       <button
-        v-for="type in categories"
+        v-for="type in typeCategories"
         :key="type.id"
         class="vertical-tab"
         :class="{ active: activeTypeId === type.id }"
@@ -16,15 +16,28 @@
       </button>
     </div>
     
-
-    <!-- Scrollable Content - All Categories -->
-    <div class="categories-scroll-container" ref="scrollContainer">
-      <div class="add-category-button" style="margin-bottom: 1rem;">
+    <!-- Main Content Area -->
+    <div class="categories-scroll-container" :class="{ 'no-sidebar': typeCategories.length === 0 }" ref="scrollContainer">
+      
+      <!-- Top Action Menu (ALWAYS visible) -->
+      <div class="add-category-button">
         <button 
           class="btn-menu-dots always-visible"
           @click="showCreateMenu = !showCreateMenu"
         >
           <AppIcon name="menu-dots" size="small" />
+        </button>
+        
+        <!-- Retrain Button (only if trained categories exist) -->
+        <button 
+          v-if="trainedCategories.length > 0"
+          class="btn btn-small" 
+          @click="startTraining"
+          :disabled="training"
+          title="Retrain all categories"
+        >
+          <AppIcon name="graduation-cap" size="small" />
+          {{ training ? 'Training...' : 'Retrain' }}
         </button>
         
         <!-- Create Menu Dropdown -->
@@ -46,99 +59,152 @@
         <!-- Backdrop to close menu -->
         <div v-if="showCreateMenu" class="menu-backdrop" @click="showCreateMenu = false"></div>
       </div>
-      
-      <!-- Loading State -->
-      <div v-if="loading" class="loading-state">
-        <div class="loading-spinner">⟳</div>
-        <div>Loading categories...</div>
+
+      <!-- STATE 1: No transactions - Show drop zone -->
+      <div v-if="!hasTransactions" class="empty-state-wrapper">
+        <div v-if="loading" class="loading-state">
+          <div class="loading-spinner">⟳</div>
+          <div>Importing training data...</div>
+        </div>
+        <div v-else 
+             class="file-drop-zone" 
+             @drop.prevent="handleDrop" 
+             @dragover.prevent
+             @click="triggerFileInput">
+          <AppIcon name="file-add" size="large" />
+          <p>Drop training data here or click to browse</p>
+          <p class="help-text">CSV files with categories supported</p>
+        </div>
+        <input 
+          ref="fileInput" 
+          type="file" 
+          accept=".csv,.xlsx"
+          multiple
+          @change="handleFileSelect"
+          style="display: none"
+        >
       </div>
 
-      <!-- All Type Sections -->
-      <div v-else class="all-categories">
-        <section
-          v-for="type in categories"
-          :key="type.id"
-          :id="`type-${type.id}`"
-          class="type-section"
-        >
-          <div class="categories-grid">
-            <div
-              v-for="mainCat in type.children"
-              :key="mainCat.id"
-              class="category-card"
-              :style="{ backgroundColor: hexToRgba(mainCat.color, 0.1) }"
-            >
-              <div class="category-header">
-                <div class="category-title">
-                  <AppIcon 
-                    :name="mainCat.icon" 
-                    size="medium"
-                    :style="{ '--icon-hover-color': mainCat.color }"
-                  />
-                  <h4>{{ mainCat.name }}</h4>
-                </div>
-                <ActionsMenu
-                  :show-add="true"
-                  :show-edit="true"
-                  :show-delete="true"
-                  @edit="handleEdit(mainCat)"
-                  @add="handleAdd(mainCat)"
-                  @delete="handleDelete(mainCat)"
-                />
-              </div>
+<!-- STATE 2: Has transactions but not trained - Show Start Training button -->
+<div v-else-if="hasTransactions && trainedCategories.length === 0" class="empty-categories">
+        <AppIcon name="graduation-cap" size="large" />
+        <h3>Ready to Train Categories</h3>
+        <p>You have {{ transactionCount }} transactions ready for training.</p>
+        <button class="btn btn-primary" @click="startTraining" :disabled="training">
+          {{ training ? 'Training...' : 'Start Training' }}
+        </button>
+        
+        <div v-if="training" class="training-status">
+          <div class="status-text">{{ trainingMessage }}</div>
+        </div>
+      </div>
 
-              <div v-if="mainCat.children && mainCat.children.length > 0" class="subcategories">
-                <div
-                  v-for="subcat in mainCat.children"
-                  :key="subcat.id"
-                  class="subcategory"
-                  :style="{ backgroundColor: hexToRgba(subcat.color, 0.1) }"
-                >
-                  <div class="subcat-header">
-                    <div class="subcat-title">
-                      <AppIcon 
-                        :name="subcat.icon" 
-                        size="small"
-                        :style="{ '--icon-hover-color': subcat.color }"
-                      />
-                      <span>{{ subcat.name }}</span>
-                    </div>
-                    <ActionsMenu
-                      :show-add="false"
-                      :show-edit="true"
-                      :show-delete="true"
-                      @edit="handleEdit(subcat)"
-                      @delete="handleDelete(subcat)"
-                    />
-                  </div>
-
-                  <input
-                    type="text"
-                    class="keyword-input"
-                    placeholder="keywords..."
-                    :value="getKeywords(subcat.id)"
-                    @change="updateKeywords(subcat.id, $event.target.value)"
-                  >
-
-                  <div class="merchant-tags">
-                    <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag">
-                      {{ merchant }}
-                    </span>
-                    <span v-if="!getMerchants(subcat.id).length" class="text-muted">
-                      No merchants
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div v-else class="no-subcategories">
-                <button class="btn btn-small" @click="handleAdd(mainCat)">
-                  Add Subcategory
-                </button>
-              </div>
+      <!-- STATE 3: Trained categories exist - Show category tree -->
+      <div v-else>
+        <!-- Training Status Banner (only when actively training) -->
+        <div v-if="training" class="training-banner">
+          <div class="training-content">
+            <AppIcon name="graduation-cap" size="medium" />
+            <div class="training-text">
+              <div class="training-message">{{ trainingMessage }}</div>
             </div>
           </div>
-        </section>
+        </div>
+        
+        <!-- Loading State -->
+        <div v-if="loading" class="loading-state">
+          <div class="loading-spinner">⟳</div>
+          <div>Loading categories...</div>
+        </div>
+
+        <!-- Category Tree -->
+        <div v-else class="all-categories">
+          <section
+            v-for="type in typeCategories"
+            :key="type.id"
+            :id="`type-${type.id}`"
+            class="type-section"
+          >
+            <div class="categories-grid">
+              <div
+                v-for="mainCat in type.children"
+                :key="mainCat.id"
+                class="category-card"
+                :style="{ backgroundColor: hexToRgba(mainCat.color, 0.1) }"
+              >
+                <div class="category-header">
+                  <div class="category-title">
+                    <AppIcon 
+                      :name="mainCat.icon" 
+                      size="medium"
+                      :style="{ '--icon-hover-color': mainCat.color }"
+                    />
+                    <h4>{{ mainCat.name }}</h4>
+                  </div>
+                  <ActionsMenu
+                    :show-add="true"
+                    :show-edit="true"
+                    :show-delete="true"
+                    @edit="handleEdit(mainCat)"
+                    @add="handleAdd(mainCat)"
+                    @delete="handleDelete(mainCat)"
+                  />
+                </div>
+
+                <div v-if="mainCat.children && mainCat.children.length > 0" class="subcategories">
+                  <div
+                    v-for="subcat in mainCat.children"
+                    :key="subcat.id"
+                    class="subcategory"
+                    :style="{ backgroundColor: hexToRgba(subcat.color, 0.1) }"
+                  >
+                    <div class="subcat-header">
+                      <div class="subcat-title">
+                        <AppIcon 
+                          :name="subcat.icon" 
+                          size="small"
+                          :style="{ '--icon-hover-color': subcat.color }"
+                        />
+                        <span>{{ subcat.name }}</span>
+                      </div>
+                      <ActionsMenu
+                        :show-add="false"
+                        :show-edit="true"
+                        :show-delete="true"
+                        @edit="handleEdit(subcat)"
+                        @delete="handleDelete(subcat)"
+                      />
+                    </div>
+
+                    <input
+                      type="text"
+                      class="keyword-input"
+                      placeholder="keywords..."
+                      :value="getKeywords(subcat.id)"
+                      @blur="updateKeywords(subcat.id, $event.target.value)"
+                      @keyup.enter="$event.target.blur()"
+                    >
+
+                    <div class="merchant-tags">
+                      <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag">
+                        {{ merchant }}
+                      </span>
+                      <span v-if="!getMerchants(subcat.id).length" class="text-muted">
+                        No merchants
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <div v-else class="no-subcategories">
+                  <button class="btn btn-small" @click="handleAdd(mainCat)">
+                    Add Subcategory
+                  </button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
       </div>
     </div>
     
@@ -201,35 +267,36 @@ export default {
     ActionsMenu,
     CategoriesCRUD
   },
+  props: {
+    // Accept active tab prop to detect when this tab is shown
+    isActive: {
+      type: Boolean,
+      default: false
+    }
+  },
   emits: ['add-chat-message'],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
     
-    const categories = ref([])
+    const allCategories = ref([])
     const loading = ref(false)
     const activeTypeId = ref(null)
     const scrollContainer = ref(null)
     const crudComponent = ref(null)
     const showCreateMenu = ref(false)
     const showEditTypesModal = ref(false)
+    const fileInput = ref(null)
+    const hasTransactions = ref(false)
+    const transactionCount = ref(0)
+    const training = ref(false)
+    const trainingMessage = ref('')
     let scrollTimeout = null
 
-    const sortedCategories = computed(() => {
-      const cats = categories.value || []
-      const order = ['income', 'expenses', 'transfers', 'targets']
-      
-      return [...cats].sort((a, b) => {
-        const aIndex = order.indexOf(a.code)
-        const bIndex = order.indexOf(b.code)
-        return aIndex - bIndex
-      })
-    })
-
-    const sortedTypes = computed(() => {
-      // Get only types (categories without parent_id)
-      const types = (categories.value || []).filter(cat => !cat.parent_id)
+    // Type categories (level 0 - INCOME, EXPENSES, etc)
+    const typeCategories = computed(() => {
+      const types = (allCategories.value || []).filter(cat => !cat.parent_id)
       const order = ['income', 'expenses', 'transfers', 'targets']
       
       return [...types].sort((a, b) => {
@@ -237,6 +304,37 @@ export default {
         const bIndex = order.indexOf(b.code)
         return aIndex - bIndex
       })
+    })
+
+    // Trained categories (level 2+ with transaction_count > 0)
+    const trainedCategories = computed(() => {
+      const trained = []
+      
+      for (const type of allCategories.value) {
+        if (!type.children) continue
+        
+        for (const mainCat of type.children) {
+          if (mainCat.transaction_count > 0) {
+            trained.push(mainCat)
+          }
+          
+          if (mainCat.children) {
+            for (const subCat of mainCat.children) {
+              if (subCat.transaction_count > 0) {
+                trained.push(subCat)
+              }
+            }
+          }
+        }
+      }
+      
+      console.log('🎯 Trained categories:', trained.length, 'Has transactions:', hasTransactions.value, 'Transaction count:', transactionCount.value)
+      
+      return trained
+    })
+
+    const sortedTypes = computed(() => {
+      return typeCategories.value
     })
 
     const categoryPatterns = ref({})
@@ -284,6 +382,19 @@ export default {
       }, 100)
     }
 
+    async function checkTransactions() {
+      try {
+        const response = await axios.get(`${API_BASE}/transactions/summary`, {
+          headers: { Authorization: `Bearer ${authStore.token}` }
+        })
+        hasTransactions.value = response.data.total_transactions > 0
+        transactionCount.value = response.data.total_transactions || 0
+        console.log('📊 Transaction check:', hasTransactions.value, transactionCount.value)
+      } catch (error) {
+        console.error('Failed to check transactions:', error)
+      }
+    }
+
     async function loadCategories() {
       loading.value = true
       
@@ -292,11 +403,11 @@ export default {
           headers: { Authorization: `Bearer ${authStore.token}` }
         })
         
-        categories.value = response.data.tree || []
-        console.log('✅ Categories loaded:', categories.value.length)
+        allCategories.value = response.data.tree || []
+        console.log('✅ Categories loaded:', allCategories.value.length)
         
-        if (categories.value.length > 0 && !activeTypeId.value) {
-          activeTypeId.value = categories.value[0].id
+        if (typeCategories.value.length > 0 && !activeTypeId.value) {
+          activeTypeId.value = typeCategories.value[0].id
         }
         
       } catch (error) {
@@ -305,6 +416,100 @@ export default {
         if (error.response?.status === 401) {
           await authStore.verifyToken()
         }
+      } finally {
+        loading.value = false
+      }
+    }
+
+    async function startTraining() {
+      training.value = true
+      trainingMessage.value = 'Starting training...'
+      
+      try {
+        const response = await axios.post(`${API_BASE}/categories/train`, {}, {
+          headers: { Authorization: `Bearer ${authStore.token}` }
+        })
+        
+        trainingMessage.value = `Trained ${response.data.trained_count} categories!`
+        
+        emit('add-chat-message', {
+          message: 'Category training complete',
+          response: response.data.message
+        })
+        
+        // Auto-refresh
+        await loadCategories()
+        await loadAllPatterns()
+        
+        setTimeout(() => {
+          training.value = false
+        }, 2000)
+        
+      } catch (error) {
+        console.error('Training failed:', error)
+        trainingMessage.value = 'Training failed'
+        training.value = false
+        
+        emit('add-chat-message', {
+          response: 'Training failed. Please try again.'
+        })
+      }
+    }
+
+    function triggerFileInput() {
+      fileInput.value?.click()
+    }
+
+    function handleFileSelect(event) {
+      const files = Array.from(event.target.files)
+      processFiles(files)
+      event.target.value = ''
+    }
+
+    function handleDrop(event) {
+      const files = Array.from(event.dataTransfer.files)
+      const validFiles = files.filter(f => 
+        f.name.toLowerCase().endsWith('.csv') || 
+        f.name.toLowerCase().endsWith('.xlsx')
+      )
+      processFiles(validFiles)
+    }
+
+    async function processFiles(files) {
+      if (!files || files.length === 0) return
+
+      loading.value = true
+
+      try {
+        for (const file of files) {
+          const formData = new FormData()
+          formData.append('file', file)
+          formData.append('import_mode', 'training')
+          formData.append('auto_categorize', 'true')
+
+          await axios.post(`${API_BASE}/transactions/import`, formData, {
+            headers: {
+              'Authorization': `Bearer ${authStore.token}`,
+              'Content-Type': 'multipart/form-data'
+            },
+            timeout: 300000
+          })
+
+          console.log(`✅ Imported: ${file.name}`)
+        }
+
+        await checkTransactions()
+        
+        emit('add-chat-message', {
+          message: `Imported ${files.length} file(s)`,
+          response: 'Training data imported! Click "Start Training" to extract patterns.'
+        })
+        
+      } catch (error) {
+        console.error('Import failed:', error)
+        emit('add-chat-message', {
+          response: 'Import failed. Please try again.'
+        })
       } finally {
         loading.value = false
       }
@@ -339,6 +544,7 @@ export default {
 
     async function handleCategoryUpdated() {
       await loadCategories()
+      await loadAllPatterns()
     }
 
     async function handleCategoryDeleted() {
@@ -348,12 +554,6 @@ export default {
     function addChatMessage(messageData) {
       emit('add-chat-message', messageData)
     }
-
-
-    function updateKeywords(categoryId, keywords) {
-      console.log('Update keywords:', categoryId, keywords)
-    }
-
 
     async function loadCategoryPatterns(subcategoryId) {
       try {
@@ -367,6 +567,16 @@ export default {
       }
     }
 
+    async function loadAllPatterns() {
+      for (const type of typeCategories.value) {
+        for (const cat of type.children || []) {
+          for (const subcat of cat.children || []) {
+            await loadCategoryPatterns(subcat.id)
+          }
+        }
+      }
+    }
+
     function getKeywords(subcategoryId) {
       return categoryPatterns.value[subcategoryId]?.keywords?.join(', ') || ''
     }
@@ -375,29 +585,45 @@ export default {
       return categoryPatterns.value[subcategoryId]?.merchants || []
     }
 
-    // Load patterns when categories load
-    watch(categories, async (newCats) => {
-      for (const type of newCats) {
-        for (const cat of type.children || []) {
-          for (const subcat of cat.children || []) {
-            await loadCategoryPatterns(subcat.id)
-          }
+    async function updateKeywords(subcategoryId, value) {
+      const keywords = value.split(',').map(k => k.trim()).filter(k => k)
+      
+      try {
+        await axios.put(
+          `${API_BASE}/categories/${subcategoryId}/keywords`,
+          keywords,
+          { headers: { Authorization: `Bearer ${authStore.token}` } }
+        )
+        
+        // Update local cache
+        if (!categoryPatterns.value[subcategoryId]) {
+          categoryPatterns.value[subcategoryId] = {}
         }
+        categoryPatterns.value[subcategoryId].keywords = keywords
+        
+        console.log('✅ Keywords updated')
+      } catch (error) {
+        console.error('Failed to update keywords:', error)
+      }
+    }
+
+    // Watch for tab becoming active - reload data
+    watch(() => props.isActive, async (isActive) => {
+      if (isActive) {
+        console.log('🔄 Categories tab became active')
+        await checkTransactions()
+        await loadCategories()
       }
     })
 
-    watch(() => categoryStore.categories, async () => {
-      // Reload patterns when categories update
-      for (const type of categories.value) {
-        for (const cat of type.children || []) {
-          for (const subcat of cat.children || []) {
-            await loadCategoryPatterns(subcat.id)
-          }
-        }
+    watch(allCategories, async (newCats) => {
+      if (trainedCategories.value.length > 0) {
+        await loadAllPatterns()
       }
-    }, { deep: true })
+    })
 
     onMounted(async () => {
+      await checkTransactions()
       await loadCategories()
       scrollContainer.value?.addEventListener('scroll', handleScroll)
     })
@@ -408,7 +634,9 @@ export default {
     })
 
     return {
-      categories: sortedCategories,
+      allCategories,
+      typeCategories,
+      trainedCategories,
       sortedTypes,
       loading,
       activeTypeId,
@@ -416,10 +644,20 @@ export default {
       crudComponent,
       showCreateMenu,
       showEditTypesModal,
+      fileInput,
+      hasTransactions,
+      transactionCount,
+      training,
+      trainingMessage,
       hexToRgba,
       scrollToType,
       handleScroll,
       loadCategories,
+      checkTransactions,
+      startTraining,
+      triggerFileInput,
+      handleFileSelect,
+      handleDrop,
       handleEdit,
       handleDelete,
       handleAdd,
@@ -438,10 +676,127 @@ export default {
 </script>
 
 <style scoped>
+.categories-scroll-container {
+  flex: 1;
+  padding: var(--gap-large);
+  margin-left: 4rem;
+}
+
+.categories-scroll-container.no-sidebar {
+  margin-left: 0;
+}
+
+.empty-state-wrapper {
+  padding: var(--gap-xxl);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 50vh;
+}
+
+.empty-categories {
+  padding: var(--gap-xxl);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--gap-standard);
+  min-height: 50vh;
+  text-align: center;
+}
+
+.empty-categories h3 {
+  margin: 0;
+  font-size: var(--text-large);
+}
+
+.empty-categories p {
+  color: var(--color-text-muted);
+  margin: 0;
+}
+
+.training-status {
+  margin-top: var(--gap-standard);
+}
+
+.status-text {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.file-drop-zone {
+  border: 2px dashed rgba(0, 0, 0, 0.2);
+  border-radius: var(--radius);
+  padding: var(--gap-xxl);
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: var(--color-background-light);
+  max-width: 30rem;
+}
+
+.file-drop-zone:hover {
+  border-color: var(--color-button-active);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+.file-drop-zone p {
+  margin: var(--gap-small) 0;
+}
+
+.help-text {
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
+}
+
+.training-banner {
+  background: var(--color-background-light);
+  border-radius: var(--radius);
+  padding: var(--gap-standard);
+  margin-bottom: var(--gap-standard);
+  box-shadow: var(--shadow);
+}
+
+.training-content {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-small);
+}
+
+.training-text {
+  flex: 1;
+}
+
+.training-message {
+  font-weight: 600;
+  font-size: var(--text-small);
+}
+
+.loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gap-xxl);
+  gap: var(--gap-standard);
+  color: var(--color-text-muted);
+}
+
+.loading-spinner {
+  font-size: 2rem;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 .add-category-button {
   display: flex;
   justify-content: flex-end;
-  margin-bottom: -30px !important;
+  gap: var(--gap-small);
+  margin-bottom: var(--gap-standard);
   position: relative;
 }
 
@@ -547,7 +902,6 @@ export default {
   min-height: 100%;
 }
 
-/* Vertical Tabs - Left Sidebar */
 .vertical-tabs {
   position: fixed;
   left: 0;
@@ -607,7 +961,6 @@ export default {
   transform: rotate(180deg);
 }
 
-/* Scrollable Container */
 .categories-scroll-container {
   flex: 1;
   padding: var(--gap-large);
@@ -618,13 +971,11 @@ export default {
   margin: 0 auto;
 }
 
-/* Type Section */
 .type-section {
   margin-bottom: 3rem;
   scroll-margin-top: 20px;
 }
 
-/* Categories Grid */
 .categories-grid {
   display: grid;
   grid-template-columns: repeat(6, 1fr);
@@ -666,7 +1017,6 @@ export default {
   transition: color 0.2s;
 }
 
-/* Subcategories */
 .subcategories {
   display: flex;
   flex-direction: column;
@@ -743,26 +1093,5 @@ export default {
 .no-subcategories {
   text-align: center;
   padding: 0.5rem;
-}
-
-/* Loading State */
-.loading-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 50vh;
-  gap: var(--gap-standard);
-  color: var(--color-text-light);
-}
-
-.loading-spinner {
-  font-size: 2rem;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 </style>

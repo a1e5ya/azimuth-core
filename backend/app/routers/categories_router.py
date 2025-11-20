@@ -298,3 +298,51 @@ async def get_category_patterns(
         "keywords": category.training_keywords or [],
         "last_updated": category.last_training_update.isoformat() if category.last_training_update else None
     }
+
+@router.post("/train")
+async def train_categories(
+    category_service: CategoryService = Depends(get_category_service),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Train all categories - extract merchants and keywords"""
+    from ..services.category_training import CategoryTrainingService
+    
+    trainer = CategoryTrainingService(db, current_user)
+    trained_count = await trainer.train_all_categories()
+    
+    return {
+        "success": True,
+        "trained_count": trained_count,
+        "message": f"Trained {trained_count} categories"
+    }
+
+
+@router.put("/{category_id}/keywords")
+async def update_category_keywords(
+    category_id: str,
+    keywords: List[str],
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """Update category keywords"""
+    from datetime import datetime
+    
+    query = select(Category).where(
+        and_(
+            Category.id == category_id,
+            Category.user_id == current_user.id
+        )
+    )
+    result = await db.execute(query)
+    category = result.scalar_one_or_none()
+    
+    if not category:
+        raise HTTPException(status_code=404, detail="Category not found")
+    
+    category.training_keywords = keywords
+    category.last_training_update = datetime.utcnow()
+    
+    await db.commit()
+    
+    return {"success": True, "keywords": keywords}

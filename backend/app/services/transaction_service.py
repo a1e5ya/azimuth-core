@@ -258,30 +258,8 @@ class TransactionImportService:
         detector = TransferDetector(self.db, self.user)
         pairs_found = await detector.detect_pairs()
         
-        # ✅ Train categories WITH CALLBACK
-        update_job(job_id, {
-            "current_step": "training",
-            "progress": 0,
-            "total": 0,
-            "message": "Training categories..."
-        })
-        
-        from .category_training import CategoryTrainingService
-        trainer = CategoryTrainingService(self.db, self.user)
-        
+        trained_count = 0
         training_log = []
-        
-        async def progress_callback(current, total, category_name):
-            msg = f"Training {category_name}"
-            training_log.append(msg)
-            
-            update_job(job_id, {
-                "progress": current,
-                "total": total,
-                "message": msg
-            })
-        
-        trained_count = await trainer.train_all_categories(progress_callback)
         
         return {
             "stats": {

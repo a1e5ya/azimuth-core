@@ -78,36 +78,33 @@
         <DashboardTab v-if="currentTab === 'dashboard'" />
 
         <!-- Transactions Tab -->
-<TransactionsTab 
-  v-else-if="currentTab === 'transactions'"
-  :user="user"
-  :transactionCount="transactionCount"
-  :recentUploads="recentUploads"
-  :transactions="transactions"
-  :loading="loading"
-  :currentPage="currentPage"
-  :pageSize="pageSize"
-  :filters="filters"
-  :allCategories="allCategories"
-  :showFilters="showFilters"
-  @file-upload="handleFileUpload"
-  @refresh-transactions="refreshTransactions"
-  @change-page="changePage"
-  @categorize-transaction="categorizeTransaction"
-  @edit-transaction="editTransaction"
-  @update-transaction-count="updateTransactionCount"
-  @update-filters="updateFilters"
-  @add-chat-message="addChatMessage"
-  @update:showFilters="showFilters = $event"
-/>
-
+        <TransactionsTab 
+          v-else-if="currentTab === 'transactions'"
+          :user="user"
+          :transactionCount="transactionCount"
+          :recentUploads="recentUploads"
+          :transactions="transactions"
+          :loading="loading"
+          :currentPage="currentPage"
+          :pageSize="pageSize"
+          :filters="filters"
+          :allCategories="allCategories"
+          :showFilters="showFilters"
+          @file-upload="handleFileUpload"
+          @refresh-transactions="refreshTransactions"
+          @change-page="changePage"
+          @categorize-transaction="categorizeTransaction"
+          @edit-transaction="editTransaction"
+          @update-transaction-count="updateTransactionCount"
+          @update-filters="updateFilters"
+          @add-chat-message="addChatMessage"
+          @update:showFilters="showFilters = $event"
+        />
         <!-- Categories Tab -->
         <CategoriesTab 
           v-else-if="currentTab === 'categories'"
-          :categoriesData="categoriesData"
-          :selectedCategory="selectedCategory"
-          :expenseCategories="expenseCategories"
-          @select-category="selectCategory"
+          :is-active="currentTab === 'categories'"
+          @add-chat-message="addChatMessage"
         />
 
         <!-- Timeline Tab -->
