@@ -190,8 +190,6 @@ import CategoriesTab from '@/components/CategoriesTab.vue'
 import TimelineTab from '@/components/TimelineTab.vue'
 import SettingsTab from '@/components/SettingsTab.vue'
 
-// Data imports
-import { categoriesData, getCategoryById, getAllCategoriesWithSubcategories } from '@/data/categories.js'
 
 export default {
   name: 'App',
@@ -253,23 +251,6 @@ export default {
       return `Hello, ${userName}! I'm here to help you with your financial data. You can ask questions about budgeting, upload CSV files, or explore your transaction categories.`
     })
     
-    const expenseCategories = computed(() => getAllCategoriesWithSubcategories())
-    
-    const allCategories = computed(() => {
-      const categories = []
-      for (const mainCat of categoriesData) {
-        categories.push(mainCat)
-        if (mainCat.categories) {
-          for (const cat of mainCat.categories) {
-            categories.push(cat)
-            if (cat.children) {
-              categories.push(...cat.children)
-            }
-          }
-        }
-      }
-      return categories
-    })
 
     // Chat functions - DEFINED FIRST
     const scrollToBottom = async () => {
@@ -576,7 +557,7 @@ const clearChatHistory = () => {
         
         loadTransactions()
         
-        const category = getCategoryById(categoryId)
+        const category = null
         if (category) {
           addChatMessage({
             message: 'Transaction categorized',
@@ -701,10 +682,9 @@ const clearChatHistory = () => {
       showFilters,
       
       // Category state
-      categoriesData,
+
       selectedCategory,
-      expenseCategories,
-      allCategories,
+
       
       // Functions
       toggleHistory,

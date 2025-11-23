@@ -19,8 +19,8 @@
     <!-- Main Content Area -->
     <div class="categories-scroll-container" :class="{ 'no-sidebar': typeCategories.length === 0 }" ref="scrollContainer">
       
-      <!-- Top Action Menu (ALWAYS visible) -->
-      <div class="add-category-button">
+      <!-- Top Action Menu (ALWAYS visible when categories exist) -->
+      <div v-if="typeCategories.length > 0" class="add-category-button">
         <button 
           class="btn-menu-dots always-visible"
           @click="showCreateMenu = !showCreateMenu"
@@ -85,8 +85,8 @@
         >
       </div>
 
-<!-- STATE 2: Has transactions but not trained - Show Start Training button -->
-<div v-else-if="hasTransactions && trainedCategories.length === 0" class="empty-categories">
+      <!-- STATE 2: Has transactions but not trained - Show Start Training button -->
+      <div v-else-if="hasTransactions && trainedCategories.length === 0 && typeCategories.length > 0" class="empty-categories">
         <AppIcon name="graduation-cap" size="large" />
         <h3>Ready to Train Categories</h3>
         <p>You have {{ transactionCount }} transactions ready for training.</p>
@@ -100,7 +100,7 @@
       </div>
 
       <!-- STATE 3: Trained categories exist - Show category tree -->
-      <div v-else>
+      <div v-else-if="typeCategories.length > 0">
         <!-- Training Status Banner (only when actively training) -->
         <div v-if="training" class="training-banner">
           <div class="training-content">
@@ -306,7 +306,9 @@ export default {
       })
     })
 
-    // Trained categories (level 2+ with transaction_count > 0)
+    const categoryPatterns = ref({})
+
+    // Trained categories (subcategories with training patterns)
     const trainedCategories = computed(() => {
       const trained = []
       
@@ -314,13 +316,11 @@ export default {
         if (!type.children) continue
         
         for (const mainCat of type.children) {
-          if (mainCat.transaction_count > 0) {
-            trained.push(mainCat)
-          }
-          
           if (mainCat.children) {
             for (const subCat of mainCat.children) {
-              if (subCat.transaction_count > 0) {
+              // Check if has training merchants or keywords
+              const patterns = categoryPatterns.value[subCat.id]
+              if (patterns && (patterns.merchants?.length > 0 || patterns.keywords?.length > 0)) {
                 trained.push(subCat)
               }
             }
@@ -336,8 +336,6 @@ export default {
     const sortedTypes = computed(() => {
       return typeCategories.value
     })
-
-    const categoryPatterns = ref({})
 
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
@@ -499,6 +497,7 @@ export default {
         }
 
         await checkTransactions()
+        await loadCategories()
         
         emit('add-chat-message', {
           message: `Imported ${files.length} file(s)`,
@@ -613,11 +612,12 @@ export default {
         console.log('🔄 Categories tab became active')
         await checkTransactions()
         await loadCategories()
+        await loadAllPatterns()
       }
     })
 
     watch(allCategories, async (newCats) => {
-      if (trainedCategories.value.length > 0) {
+      if (typeCategories.value.length > 0) {
         await loadAllPatterns()
       }
     })
@@ -727,7 +727,7 @@ export default {
 .file-drop-zone {
   border: 2px dashed rgba(0, 0, 0, 0.2);
   border-radius: var(--radius);
-  padding: var(--gap-xxl);
+  padding: var(--gap-large);
   text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;

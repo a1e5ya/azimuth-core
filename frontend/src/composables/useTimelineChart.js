@@ -141,6 +141,15 @@ export function useTimelineChart(
     if (memoizedCategoryData.value && lastVisibilityHash.value === currentVisibilityHash) {
       return memoizedCategoryData.value
     }
+
+    if (!categoryStore.categories || categoryStore.categories.length === 0) {
+    console.warn('⚠️ Categories not loaded yet')
+    return { 
+      expensesByBreakdown: {}, 
+      incomeByBreakdown: {}, 
+      transfersByBreakdown: {} 
+    }
+  }
     
     // Structure: { breakdownKey: { categoryName: Map<date, amount> } }
     const expensesByBreakdown = {}

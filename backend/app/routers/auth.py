@@ -9,7 +9,6 @@ from ..auth.local_auth import (
     LocalAuthService, get_auth_service, get_current_user, get_current_user_optional,
     UserCreate, UserLogin, UserResponse, verify_password, get_password_hash
 )
-from ..services.category_service import CategoryService
 
 router = APIRouter()
 
@@ -40,15 +39,6 @@ async def register_user(
     try:
         result = await auth_service.register(user_data)
         print(f"✅ Registration successful for: {user_data.email}")
-        
-        # Initialize categories using CategoryService
-        try:
-            category_service = CategoryService(db, result["user"])
-            await category_service.initialize_default_categories()
-            print(f"✅ Categories initialized for: {user_data.email}")
-        except Exception as cat_error:
-            print(f"⚠️ Category initialization failed (non-fatal): {cat_error}")
-            traceback.print_exc()
         
         return AuthResponse(
             message="Registration successful",

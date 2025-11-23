@@ -1,265 +1,274 @@
 <template>
   <div class="timeline-legend-sidebar container">
-    <!-- EXPENSES Section -->
-    <div class="legend-section">
-      <div 
-        class="legend-type-header" 
-        @click="$emit('toggle-type', 'expenses')"
-      >
-        <span 
-          class="legend-indicator" 
-          :style="{ backgroundColor: isTypeVisible('expenses') ? getTypeColor('expenses') : '#fff' }"
-        ></span>
-        <span class="legend-type-name">EXPENSES</span>
-      </div>
-      
-      <div class="legend-categories-list">
+    <!-- Empty State -->
+    <div v-if="!hasCategories" class="legend-empty-state">
+      <AppIcon name="apps-sort" size="large" />
+      <p class="empty-text">No categories yet</p>
+      <p class="empty-subtext">Import transactions to populate categories</p>
+    </div>
+
+    <template v-else>
+      <!-- EXPENSES Section -->
+      <div v-if="expenseCategories.length > 0" class="legend-section">
         <div 
-          class="legend-category-item" 
-          v-for="category in expenseCategories" 
-          :key="category.id"
+          class="legend-type-header" 
+          @click="$emit('toggle-type', 'expenses')"
         >
-          <div class="legend-category-row">
-            <div 
-              class="legend-category-header"
-              @click="$emit('toggle-category', category.id)"
-            >
-              <span 
-                class="legend-indicator legend-indicator-small" 
-                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ category.name }}</span>
+          <span 
+            class="legend-indicator" 
+            :style="{ backgroundColor: isTypeVisible('expenses') ? getTypeColor('expenses') : '#fff' }"
+          ></span>
+          <span class="legend-type-name">EXPENSES</span>
+        </div>
+        
+        <div class="legend-categories-list">
+          <div 
+            class="legend-category-item" 
+            v-for="category in expenseCategories" 
+            :key="category.id"
+          >
+            <div class="legend-category-row">
+              <div 
+                class="legend-category-header"
+                @click="$emit('toggle-category', category.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-small" 
+                  :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ category.name }}</span>
+              </div>
+              
+              <button 
+                v-if="category.children && category.children.length > 0"
+                class="legend-expand-btn"
+                @click.stop="$emit('toggle-category-expanded', category.id)"
+              >
+                <AppIcon 
+                  :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                  size="small" 
+                />
+              </button>
             </div>
             
-            <button 
-              v-if="category.children && category.children.length > 0"
-              class="legend-expand-btn"
-              @click.stop="$emit('toggle-category-expanded', category.id)"
-            >
-              <AppIcon 
-                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
-                size="small" 
-              />
-            </button>
-          </div>
-          
-          <div 
-            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
-            class="legend-subcategories-list"
-          >
             <div 
-              class="legend-subcat-item" 
-              v-for="subcat in category.children" 
-              :key="subcat.id"
-              @click="$emit('toggle-subcategory', subcat.id)"
+              v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+              class="legend-subcategories-list"
             >
-              <span 
-                class="legend-indicator legend-indicator-tiny" 
-                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ subcat.name }}</span>
+              <div 
+                class="legend-subcat-item" 
+                v-for="subcat in category.children" 
+                :key="subcat.id"
+                @click="$emit('toggle-subcategory', subcat.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-tiny" 
+                  :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ subcat.name }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- INCOME Section -->
-    <div class="legend-section">
-      <div 
-        class="legend-type-header" 
-        @click="$emit('toggle-type', 'income')"
-      >
-        <span 
-          class="legend-indicator" 
-          :style="{ backgroundColor: isTypeVisible('income') ? getTypeColor('income') : '#fff' }"
-        ></span>
-        <span class="legend-type-name">INCOME</span>
-      </div>
-      
-      <div class="legend-categories-list">
+      <!-- INCOME Section -->
+      <div v-if="incomeCategories.length > 0" class="legend-section">
         <div 
-          class="legend-category-item" 
-          v-for="category in incomeCategories" 
-          :key="category.id"
+          class="legend-type-header" 
+          @click="$emit('toggle-type', 'income')"
         >
-          <div class="legend-category-row">
-            <div 
-              class="legend-category-header"
-              @click="$emit('toggle-category', category.id)"
-            >
-              <span 
-                class="legend-indicator legend-indicator-small" 
-                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ category.name }}</span>
+          <span 
+            class="legend-indicator" 
+            :style="{ backgroundColor: isTypeVisible('income') ? getTypeColor('income') : '#fff' }"
+          ></span>
+          <span class="legend-type-name">INCOME</span>
+        </div>
+        
+        <div class="legend-categories-list">
+          <div 
+            class="legend-category-item" 
+            v-for="category in incomeCategories" 
+            :key="category.id"
+          >
+            <div class="legend-category-row">
+              <div 
+                class="legend-category-header"
+                @click="$emit('toggle-category', category.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-small" 
+                  :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ category.name }}</span>
+              </div>
+              
+              <button 
+                v-if="category.children && category.children.length > 0"
+                class="legend-expand-btn"
+                @click.stop="$emit('toggle-category-expanded', category.id)"
+              >
+                <AppIcon 
+                  :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                  size="small" 
+                />
+              </button>
             </div>
             
-            <button 
-              v-if="category.children && category.children.length > 0"
-              class="legend-expand-btn"
-              @click.stop="$emit('toggle-category-expanded', category.id)"
-            >
-              <AppIcon 
-                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
-                size="small" 
-              />
-            </button>
-          </div>
-          
-          <div 
-            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
-            class="legend-subcategories-list"
-          >
             <div 
-              class="legend-subcat-item" 
-              v-for="subcat in category.children" 
-              :key="subcat.id"
-              @click="$emit('toggle-subcategory', subcat.id)"
+              v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+              class="legend-subcategories-list"
             >
-              <span 
-                class="legend-indicator legend-indicator-tiny" 
-                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ subcat.name }}</span>
+              <div 
+                class="legend-subcat-item" 
+                v-for="subcat in category.children" 
+                :key="subcat.id"
+                @click="$emit('toggle-subcategory', subcat.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-tiny" 
+                  :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ subcat.name }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- TRANSFERS Section -->
-    <div class="legend-section">
-      <div 
-        class="legend-type-header" 
-        @click="$emit('toggle-type', 'transfers')"
-      >
-        <span 
-          class="legend-indicator" 
-          :style="{ backgroundColor: isTypeVisible('transfers') ? getTypeColor('transfers') : '#fff' }"
-        ></span>
-        <span class="legend-type-name">TRANSFERS</span>
-      </div>
-      
-      <div class="legend-categories-list">
+      <!-- TRANSFERS Section -->
+      <div v-if="transferCategories.length > 0" class="legend-section">
         <div 
-          class="legend-category-item" 
-          v-for="category in transferCategories" 
-          :key="category.id"
+          class="legend-type-header" 
+          @click="$emit('toggle-type', 'transfers')"
         >
-          <div class="legend-category-row">
-            <div 
-              class="legend-category-header"
-              @click="$emit('toggle-category', category.id)"
-            >
-              <span 
-                class="legend-indicator legend-indicator-small" 
-                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ category.name }}</span>
+          <span 
+            class="legend-indicator" 
+            :style="{ backgroundColor: isTypeVisible('transfers') ? getTypeColor('transfers') : '#fff' }"
+          ></span>
+          <span class="legend-type-name">TRANSFERS</span>
+        </div>
+        
+        <div class="legend-categories-list">
+          <div 
+            class="legend-category-item" 
+            v-for="category in transferCategories" 
+            :key="category.id"
+          >
+            <div class="legend-category-row">
+              <div 
+                class="legend-category-header"
+                @click="$emit('toggle-category', category.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-small" 
+                  :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ category.name }}</span>
+              </div>
+              
+              <button 
+                v-if="category.children && category.children.length > 0"
+                class="legend-expand-btn"
+                @click.stop="$emit('toggle-category-expanded', category.id)"
+              >
+                <AppIcon 
+                  :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                  size="small" 
+                />
+              </button>
             </div>
             
-            <button 
-              v-if="category.children && category.children.length > 0"
-              class="legend-expand-btn"
-              @click.stop="$emit('toggle-category-expanded', category.id)"
-            >
-              <AppIcon 
-                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
-                size="small" 
-              />
-            </button>
-          </div>
-          
-          <div 
-            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
-            class="legend-subcategories-list"
-          >
             <div 
-              class="legend-subcat-item" 
-              v-for="subcat in category.children" 
-              :key="subcat.id"
-              @click="$emit('toggle-subcategory', subcat.id)"
+              v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+              class="legend-subcategories-list"
             >
-              <span 
-                class="legend-indicator legend-indicator-tiny" 
-                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ subcat.name }}</span>
+              <div 
+                class="legend-subcat-item" 
+                v-for="subcat in category.children" 
+                :key="subcat.id"
+                @click="$emit('toggle-subcategory', subcat.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-tiny" 
+                  :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ subcat.name }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
 
-    <!-- TARGETS Section -->
-    <div class="legend-section">
-      <div 
-        class="legend-type-header" 
-        @click="$emit('toggle-type', 'targets')"
-      >
-        <span 
-          class="legend-indicator" 
-          :style="{ backgroundColor: isTypeVisible('targets') ? getTypeColor('targets') : '#fff' }"
-        ></span>
-        <span class="legend-type-name">TARGETS</span>
-      </div>
-      
-      <div class="legend-categories-list">
+      <!-- TARGETS Section -->
+      <div v-if="targetCategories.length > 0" class="legend-section">
         <div 
-          class="legend-category-item" 
-          v-for="category in targetCategories" 
-          :key="category.id"
+          class="legend-type-header" 
+          @click="$emit('toggle-type', 'targets')"
         >
-          <div class="legend-category-row">
-            <div 
-              class="legend-category-header"
-              @click="$emit('toggle-category', category.id)"
-            >
-              <span 
-                class="legend-indicator legend-indicator-small" 
-                :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ category.name }}</span>
+          <span 
+            class="legend-indicator" 
+            :style="{ backgroundColor: isTypeVisible('targets') ? getTypeColor('targets') : '#fff' }"
+          ></span>
+          <span class="legend-type-name">TARGETS</span>
+        </div>
+        
+        <div class="legend-categories-list">
+          <div 
+            class="legend-category-item" 
+            v-for="category in targetCategories" 
+            :key="category.id"
+          >
+            <div class="legend-category-row">
+              <div 
+                class="legend-category-header"
+                @click="$emit('toggle-category', category.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-small" 
+                  :style="{ backgroundColor: isCategoryVisible(category.id) ? category.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ category.name }}</span>
+              </div>
+              
+              <button 
+                v-if="category.children && category.children.length > 0"
+                class="legend-expand-btn"
+                @click.stop="$emit('toggle-category-expanded', category.id)"
+              >
+                <AppIcon 
+                  :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
+                  size="small" 
+                />
+              </button>
             </div>
             
-            <button 
-              v-if="category.children && category.children.length > 0"
-              class="legend-expand-btn"
-              @click.stop="$emit('toggle-category-expanded', category.id)"
-            >
-              <AppIcon 
-                :name="isCategoryExpanded(category.id) ? 'angle-down' : 'angle-right'" 
-                size="small" 
-              />
-            </button>
-          </div>
-          
-          <div 
-            v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
-            class="legend-subcategories-list"
-          >
             <div 
-              class="legend-subcat-item" 
-              v-for="subcat in category.children" 
-              :key="subcat.id"
-              @click="$emit('toggle-subcategory', subcat.id)"
+              v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
+              class="legend-subcategories-list"
             >
-              <span 
-                class="legend-indicator legend-indicator-tiny" 
-                :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
-              ></span>
-              <span class="legend-item-name">{{ subcat.name }}</span>
+              <div 
+                class="legend-subcat-item" 
+                v-for="subcat in category.children" 
+                :key="subcat.id"
+                @click="$emit('toggle-subcategory', subcat.id)"
+              >
+                <span 
+                  class="legend-indicator legend-indicator-tiny" 
+                  :style="{ backgroundColor: isSubcategoryVisible(subcat.id) ? subcat.color : '#fff' }"
+                ></span>
+                <span class="legend-item-name">{{ subcat.name }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
-
+    </template>
   </div>
 </template>
 
 <script>
+import { computed } from 'vue'
 import { useCategoryStore } from '@/stores/categories'
 import AppIcon from './AppIcon.vue'
 
@@ -306,6 +315,13 @@ export default {
   setup(props) {
     const categoryStore = useCategoryStore()
     
+    const hasCategories = computed(() => {
+      return props.expenseCategories.length > 0 || 
+             props.incomeCategories.length > 0 || 
+             props.transferCategories.length > 0 ||
+             props.targetCategories.length > 0
+    })
+    
     function getTypeColor(typeId) {
       const typeMap = {
         'income': '#00C9A0',
@@ -337,6 +353,7 @@ export default {
     }
     
     return {
+      hasCategories,
       getTypeColor,
       isTypeVisible,
       isCategoryVisible,
@@ -358,6 +375,29 @@ export default {
   display: flex;
   flex-direction: column;
   gap: var(--gap-standard);
+}
+
+.legend-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: var(--gap-xxl);
+  gap: var(--gap-small);
+  text-align: center;
+  min-height: 300px;
+}
+
+.empty-text {
+  margin: 0;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.empty-subtext {
+  margin: 0;
+  font-size: var(--text-small);
+  color: var(--color-text-muted);
 }
 
 .legend-section {
