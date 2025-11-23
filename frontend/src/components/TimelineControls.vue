@@ -2,32 +2,17 @@
   <div class="timeline-controls-wrapper">
     <!-- Main Controls Row -->
     <div class="controls-row">
-      <!-- Zoom Controls - Left Side -->
-      <div class="zoom-controls">
+      <!-- Zoom Level Toggle - Left Side -->
+      <div class="zoom-level-toggle">
         <button 
-          class="btn btn-icon"
-          :disabled="currentZoomLevel <= -1"
-          @click="$emit('zoom-out')"
-          title="Zoom Out"
+          v-for="level in zoomLevels" 
+          :key="level.value"
+          class="btn btn-zoom-level"
+          :class="{ active: currentZoomLevel === level.value }"
+          @click="$emit('set-zoom-level', level.value)"
+          :title="`View by ${level.label}`"
         >
-          <AppIcon name="zoom-out" size="small" />
-        </button>
-        
-        <button 
-          class="btn btn-icon"
-          :disabled="currentZoomLevel >= 1"
-          @click="$emit('zoom-in')"
-          title="Zoom In"
-        >
-          <AppIcon name="zoom-in" size="small" />
-        </button>
-        
-        <button 
-          class="btn btn-icon"
-          @click="$emit('reset-zoom')"
-          title="Reset Zoom"
-        >
-          <AppIcon name="refresh" size="small" />
+          {{ level.label }}
         </button>
       </div>
 
@@ -88,14 +73,21 @@ export default {
       required: true
     }
   },
-  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'set-mode', 'scroll-to'],
+  emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'set-mode', 'scroll-to', 'set-zoom-level'],
   setup(props, { emit }) {
+    const zoomLevels = [
+      { value: -1, label: 'Year' },
+      { value: 0, label: 'Quarter' },
+      { value: 1, label: 'Month' }
+    ]
+
     function toggleMode() {
       const newMode = props.currentMode === 'view' ? 'add' : 'view'
       emit('set-mode', newMode)
     }
 
     return {
+      zoomLevels,
       toggleMode
     }
   }
@@ -116,25 +108,43 @@ export default {
   gap: var(--gap-standard);
 }
 
-.zoom-controls {
+.zoom-level-toggle {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--gap-small);
-}
-
-.zoom-controls .btn-icon {
-  background: var(--color-background);
-  border: 1px solid var(--color-background-dark);
-  padding: 0;
-  margin: 0;
-  width: 2rem;
+  gap: var(--gap-standard);
+  background: var(--color-background-dark);
+  border-radius: var(--radius);
+  padding: 0.125rem;
   height: 2rem;
-  box-shadow: none;
-  transition: all 0.2s;
 }
 
-.zoom-controls .btn-icon:hover:not(:disabled) {
+.btn-zoom-level {
+  background: transparent;
+  border: none;
+  padding: 0 0.75rem;
+  height: 1.75rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--color-text-light);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  opacity: 0.8;
+  z-index: 1;
+  position: relative;
+}
+
+.btn-zoom-level:hover:not(.active) {
+  opacity: 1;
+}
+
+.btn-zoom-level.active {
   background: var(--color-background-light);
+
+  opacity: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .mode-toggle-switch {
@@ -195,7 +205,7 @@ export default {
 
 .toggle-option.active {
   background: var(--color-background-light);
-  color: white;
+
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 </style>

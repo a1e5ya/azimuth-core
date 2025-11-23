@@ -39,9 +39,7 @@
           :full-range-end="fullRangeEnd"
           :visible-range-start="visibleRangeStart"
           :visible-range-end="visibleRangeEnd"
-          @zoom-in="zoomIn"
-          @zoom-out="zoomOut"
-          @reset-zoom="handleResetZoom"
+          @set-zoom-level="handleSetZoomLevel"
           @set-mode="setMode"
         />
         
@@ -245,6 +243,13 @@ export default {
       customVisibleRange.value = null
     }
     
+    function handleSetZoomLevel(level) {
+      currentZoomLevel.value = level
+      unpinHoverData()
+      customVisibleRange.value = null
+      console.log('📊 Zoom level set to:', level)
+    }
+    
     watch(
       [visibleTypes, visibleCategories, visibleSubcategories, expandedCategories],
       () => {
@@ -303,9 +308,7 @@ export default {
       toggleCategory,
       toggleSubcategory,
       toggleCategoryExpanded,
-      zoomIn,
-      zoomOut,
-      handleResetZoom,
+      handleSetZoomLevel,
       unpinHoverData,
       setMode,
       handleScrollTo,

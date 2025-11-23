@@ -16,14 +16,14 @@
           :class="{ active: breakdownMode === 'owner' }"
           @click="$emit('update:breakdownMode', 'owner')"
         >
-          By Owner
+          Owner
         </button>
         <button
           class="toggle-option"
           :class="{ active: breakdownMode === 'account' }"
           @click="$emit('update:breakdownMode', 'account')"
         >
-          By Account
+          Account
         </button>
       </div>
     </div>
@@ -158,6 +158,7 @@ export default {
   background: var(--color-background);
   border-radius: var(--radius);
   margin-bottom: var(--gap-standard);
+  align-items: flex-start;
 }
 
 .filter-section {
@@ -174,34 +175,40 @@ export default {
 }
 
 .breakdown-toggle {
+  position: relative;
   display: flex;
-  gap: 0.25rem;
-  background: var(--color-background-light);
+
+  background: var(--color-background-dark);
   border-radius: var(--radius);
-  padding: 0.25rem;
+  gap: var(--gap-standard);
 }
 
 .toggle-option {
-  padding: 0.5rem 1rem;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 4rem;
+  height: 1.75rem;
   background: transparent;
   border: none;
-  border-radius: calc(var(--radius) - 0.125rem);
-  cursor: pointer;
-  font-size: var(--text-small);
+  padding: 1.125rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
   color: var(--color-text-light);
-  transition: all 0.2s;
-}
-
-.toggle-option:hover {
-  background: var(--color-background-dark);
-  color: var(--color-text);
+  box-shadow: var(--shadow);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s;
+  white-space: nowrap;
+  opacity: 0.8;
+  z-index: 1;
 }
 
 .toggle-option.active {
-  background: var(--color-background);
-  color: var(--color-text);
-  font-weight: 600;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+background-color: var(--color-background-light);
+  opacity: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
 .multiselect-group {

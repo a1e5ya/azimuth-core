@@ -20,7 +20,7 @@ from ..auth.local_auth import get_current_user
 DEFAULT_CATEGORIES = {
     'income': {
         'id': 'income',
-        'name': 'INCOME',
+        'name': 'Income',
         'icon': 'apps-add',
         'color': '#00C9A0',
         'categories': [
@@ -70,7 +70,7 @@ DEFAULT_CATEGORIES = {
     },
     'expenses': {
         'id': 'expenses',
-        'name': 'EXPENSES',
+        'name': 'Expenses',
         'icon': 'apps-delete',
         'color': '#9B7EDE',
         'categories': [
@@ -206,7 +206,7 @@ DEFAULT_CATEGORIES = {
     },
     'transfers': {
         'id': 'transfers',
-        'name': 'TRANSFERS',
+        'name': 'Transfers',
         'icon': 'apps-sort',
         'color': "#BD8317",
         'categories': [
@@ -237,7 +237,7 @@ DEFAULT_CATEGORIES = {
     },
     'targets': {
         'id': 'targets',
-        'name': 'TARGETS',
+        'name': 'Targets',
         'icon': 'target',
         'color': '#b54a4a',
         'categories': [
@@ -566,10 +566,45 @@ class CategoryService:
                 if not target_category:
                     raise HTTPException(status_code=404, detail="Target category not found")
             
+            # Get parent hierarchy for string columns
+            target_parent = None
+            target_grandparent = None
+            
+            if target_category.parent_id:
+                target_parent = await self.get_category_by_id(target_category.parent_id)
+                if target_parent and target_parent.parent_id:
+                    target_grandparent = await self.get_category_by_id(target_parent.parent_id)
+            
+            # Determine string values based on hierarchy
+            main_cat_str = None
+            cat_str = None
+            subcat_str = None
+            
+            if target_grandparent and not target_grandparent.parent_id:
+                # Target is level 3 (subcategory)
+                main_cat_str = target_grandparent.name
+                cat_str = target_parent.name
+                subcat_str = target_category.name
+            elif target_parent and not target_parent.parent_id:
+                # Target is level 2 (category)
+                main_cat_str = target_parent.name
+                cat_str = target_category.name
+                subcat_str = None
+            elif not target_category.parent_id:
+                # Target is level 1 (type)
+                main_cat_str = target_category.name
+                cat_str = None
+                subcat_str = None
+            
             from sqlalchemy import update
             update_query = update(Transaction).where(
                 Transaction.category_id == category_id
-            ).values(category_id=target_category.id)
+            ).values(
+                category_id=target_category.id,
+                main_category=main_cat_str,
+                category=cat_str,
+                subcategory=subcat_str
+            )
             await self.db.execute(update_query)
             transactions_moved = usage_check["transaction_count"]
             moved_to = target_category.id
@@ -654,15 +689,17 @@ class CategoryService:
             if type_data:
                 color = type_data.get('color', '#94a3b8')
                 icon = type_data.get('icon', 'apps-sort')
+                name = type_data.get('name', category_type.upper())
             else:
                 color = '#94a3b8'
                 icon = 'apps-sort'
+                name = category_type.upper()
             
             type_category = Category(
                 id=str(uuid.uuid4()),
                 user_id=self.user.id,
                 parent_id=None,
-                name=main_category.upper(),
+                name=name,
                 code=category_type,
                 icon=icon,
                 color=color,
