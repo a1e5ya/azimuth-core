@@ -134,6 +134,7 @@ export function useTimelineChart(
   
   /**
    * Build categories WITH BREAKDOWN - separate by owner/account
+   * FIX: Only filter by owner/account when NOT in 'all' mode
    */
   function buildAllCategoriesSinglePass() {
     const currentVisibilityHash = getVisibilityHash()
@@ -143,18 +144,22 @@ export function useTimelineChart(
     }
 
     if (!categoryStore.categories || categoryStore.categories.length === 0) {
-    console.warn('⚠️ Categories not loaded yet')
-    return { 
-      expensesByBreakdown: {}, 
-      incomeByBreakdown: {}, 
-      transfersByBreakdown: {} 
+      console.warn('⚠️ Categories not loaded yet')
+      return { 
+        expensesByBreakdown: {}, 
+        incomeByBreakdown: {}, 
+        transfersNegativeByBreakdown: {},
+        transfersPositiveByBreakdown: {}
+      }
     }
-  }
+    
+    console.log('🔄 Building categories - Mode:', breakdownMode.value, 'Keys:', breakdownKeys.value)
     
     // Structure: { breakdownKey: { categoryName: Map<date, amount> } }
     const expensesByBreakdown = {}
     const incomeByBreakdown = {}
-    const transfersByBreakdown = {}
+    const transfersNegativeByBreakdown = {}
+    const transfersPositiveByBreakdown = {}
     
     const currentGroupingValue = currentGrouping.value
     const allCategories = [
@@ -168,21 +173,34 @@ export function useTimelineChart(
     breakdownKeys.value.forEach(key => {
       expensesByBreakdown[key] = {}
       incomeByBreakdown[key] = {}
-      transfersByBreakdown[key] = {}
+      transfersNegativeByBreakdown[key] = {}
+      transfersPositiveByBreakdown[key] = {}
     })
+    
+    let processedCount = 0
+    let skippedByMode = 0
+    let skippedByVisibility = 0
     
     transactions.value.forEach(t => {
       // Determine breakdown key for this transaction
       let breakdownKey = 'all'
+      
       if (breakdownMode.value === 'owner') {
-        if (!t.owner) return // Skip if no owner
+        if (!t.owner) return
         breakdownKey = t.owner
-        if (!selectedOwners.value.includes(breakdownKey)) return
+        if (!selectedOwners.value.includes(breakdownKey)) {
+          skippedByMode++
+          return
+        }
       } else if (breakdownMode.value === 'account') {
-        if (!t.owner || !t.bank_account_type) return // Skip if missing owner or account type
+        if (!t.owner || !t.bank_account_type) return
         breakdownKey = `${t.owner}_${t.bank_account_type}`
-        if (!selectedAccounts.value.includes(breakdownKey)) return
+        if (!selectedAccounts.value.includes(breakdownKey)) {
+          skippedByMode++
+          return
+        }
       }
+      // For 'all' mode: breakdownKey='all' and we process ALL transactions
       
       const mainCat = (t.main_category || '').toUpperCase()
       const subcategoryName = t.subcategory
@@ -190,40 +208,86 @@ export function useTimelineChart(
       const amount = Math.abs(parseFloat(t.amount))
       const rawAmount = parseFloat(t.amount)
       
+      // Debug: log Savings Transfer transactions
+      if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
+        console.log('🔍 Processing Savings Transfer transaction:', {
+          category: categoryName,
+          subcategory: subcategoryName,
+          amount: rawAmount
+        })
+      }
+      
       const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
       let displayName = categoryName
       let shouldInclude = true
       
-      if (parentCategory) {
+      // Check category visibility
+      // First check if the TYPE is visible
+      if (mainCat === 'INCOME' && !isTypeVisible('income')) {
+        shouldInclude = false
+      } else if (mainCat === 'EXPENSES' && !isTypeVisible('expenses')) {
+        shouldInclude = false
+      } else if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) {
+        shouldInclude = false
+      } else if (parentCategory) {
+        // Has a parent category
         if (!isCategoryVisible(parentCategory.id)) {
           shouldInclude = false
-        } else {
-          if (isCategoryExpanded(parentCategory.id)) {
-            if (subcategoryName) {
-              const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
-              if (subcategoryId && isSubcategoryVisible(subcategoryId)) {
-                displayName = subcategoryName
-              } else {
-                shouldInclude = false
-              }
+        } else if (isCategoryExpanded(parentCategory.id)) {
+          // Parent is expanded - show subcategory if visible
+          if (subcategoryName) {
+            const subcategoryId = findCategoryId(categoryStore.categories, subcategoryName)
+            if (subcategoryId && !isSubcategoryVisible(subcategoryId)) {
+              shouldInclude = false
             } else {
-              displayName = categoryName
+              displayName = subcategoryName
             }
           } else {
-            displayName = parentCategory.name
+            displayName = categoryName
           }
+        } else {
+          // Parent not expanded - group under parent
+          displayName = parentCategory.name
         }
       } else {
+        // No parent category - check if category itself is visible
         const categoryId = findCategoryId(categoryStore.categories, categoryName)
-        if (categoryId && isCategoryVisible(categoryId)) {
-          displayName = categoryName
-        } else {
+        if (categoryId && !isCategoryVisible(categoryId)) {
           shouldInclude = false
+        } else {
+          displayName = subcategoryName || categoryName
         }
       }
       
-      if (!shouldInclude) return
+      if (!shouldInclude) {
+        if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
+          console.log('❌ HIDING Savings Transfer:', {
+            subcategoryName,
+            categoryName,
+            displayName,
+            parentCategory: parentCategory?.name,
+            parentId: parentCategory?.id,
+            parentVisible: parentCategory ? isCategoryVisible(parentCategory.id) : 'no parent',
+            parentExpanded: parentCategory ? isCategoryExpanded(parentCategory.id) : 'no parent'
+          })
+        }
+        skippedByVisibility++
+        return
+      }
       
+      if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
+        console.log('✅ SHOWING Savings Transfer:', {
+          subcategoryName,
+          categoryName,
+          displayName,
+          parentCategory: parentCategory?.name,
+          parentExpanded: parentCategory ? isCategoryExpanded(parentCategory.id) : 'no parent'
+        })
+      }
+      
+      processedCount++
+      
+      // Calculate period key
       const date = new Date(t.posted_at)
       let key
       
@@ -241,6 +305,7 @@ export function useTimelineChart(
         key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
       }
       
+      // Add to appropriate breakdown bucket
       if (mainCat === 'EXPENSES') {
         if (!expensesByBreakdown[breakdownKey][displayName]) {
           expensesByBreakdown[breakdownKey][displayName] = new Map()
@@ -258,17 +323,30 @@ export function useTimelineChart(
           (incomeByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
         )
       } else if (mainCat === 'TRANSFERS') {
-        if (!transfersByBreakdown[breakdownKey][displayName]) {
-          transfersByBreakdown[breakdownKey][displayName] = new Map()
+        // Track positive and negative transfers separately 
+        if (rawAmount < 0) {
+          if (!transfersNegativeByBreakdown[breakdownKey][displayName]) {
+            transfersNegativeByBreakdown[breakdownKey][displayName] = new Map()
+          }
+          transfersNegativeByBreakdown[breakdownKey][displayName].set(
+            key,
+            (transfersNegativeByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
+          )
+        } else if (rawAmount > 0) {
+          if (!transfersPositiveByBreakdown[breakdownKey][displayName]) {
+            transfersPositiveByBreakdown[breakdownKey][displayName] = new Map()
+          }
+          transfersPositiveByBreakdown[breakdownKey][displayName].set(
+            key,
+            (transfersPositiveByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
+          )
         }
-        transfersByBreakdown[breakdownKey][displayName].set(
-          key,
-          (transfersByBreakdown[breakdownKey][displayName].get(key) || 0) + rawAmount
-        )
       }
     })
     
-    const result = { expensesByBreakdown, incomeByBreakdown, transfersByBreakdown }
+    console.log('📊 Processed:', processedCount, '| Skipped by mode:', skippedByMode, '| Skipped by visibility:', skippedByVisibility)
+    
+    const result = { expensesByBreakdown, incomeByBreakdown, transfersNegativeByBreakdown, transfersPositiveByBreakdown }
     memoizedCategoryData.value = result
     lastVisibilityHash.value = currentVisibilityHash
     
@@ -281,7 +359,7 @@ export function useTimelineChart(
   const chartSeries = computed(() => {
     if (!timelineData.value.length) return []
     
-    const { expensesByBreakdown, incomeByBreakdown, transfersByBreakdown } = buildAllCategoriesSinglePass()
+    const { expensesByBreakdown, incomeByBreakdown, transfersNegativeByBreakdown, transfersPositiveByBreakdown } = buildAllCategoriesSinglePass()
     const series = []
     
     // For each breakdown key, create separate series with ONE stack group per breakdown
@@ -311,16 +389,18 @@ export function useTimelineChart(
       }
       
       // NEGATIVE TRANSFERS - same stack group
-      if (isTypeVisible('transfers') && transfersByBreakdown[breakdownKey]) {
-        Object.entries(transfersByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+      if (isTypeVisible('transfers') && transfersNegativeByBreakdown[breakdownKey]) {
+        Object.entries(transfersNegativeByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
           
-          const negativeData = timelineData.value.map(d => {
-            const value = dateMap.get(d.date) || 0
-            return { x: d.date, y: value < 0 ? value : 0 }
-          })
+          const negativeData = timelineData.value.map(d => ({
+            x: d.date,
+            y: -(dateMap.get(d.date) || 0)
+          }))
           
-          if (negativeData.some(p => p.y < 0)) {
+          const hasNegative = negativeData.some(p => p.y < 0)
+          
+          if (hasNegative) {
             series.push({
               name: `${categoryName} (Out)${suffix}`,
               type: 'bar',
@@ -355,16 +435,18 @@ export function useTimelineChart(
       }
       
       // POSITIVE TRANSFERS - same stack group
-      if (isTypeVisible('transfers') && transfersByBreakdown[breakdownKey]) {
-        Object.entries(transfersByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
+      if (isTypeVisible('transfers') && transfersPositiveByBreakdown[breakdownKey]) {
+        Object.entries(transfersPositiveByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
           
-          const positiveData = timelineData.value.map(d => {
-            const value = dateMap.get(d.date) || 0
-            return { x: d.date, y: value > 0 ? value : 0 }
-          })
+          const positiveData = timelineData.value.map(d => ({
+            x: d.date,
+            y: dateMap.get(d.date) || 0
+          }))
           
-          if (positiveData.some(p => p.y > 0)) {
+          const hasPositive = positiveData.some(p => p.y > 0)
+          
+          if (hasPositive) {
             series.push({
               name: `${categoryName} (In)${suffix}`,
               type: 'bar',
@@ -377,6 +459,8 @@ export function useTimelineChart(
         })
       }
     })
+    
+    console.log('📊 Final series count:', series.length)
     
     return series
   })
@@ -447,28 +531,89 @@ export function useTimelineChart(
     }
   }
   
+  /**
+   * Handle chart hover - track transfer directions separately (In/Out)
+   */
   function handleChartHover(config) {
     if (!config || config.dataPointIndex === -1) return
     
     const dataPoint = timelineData.value[config.dataPointIndex]
     if (!dataPoint) return
     
-    // Build breakdown data
     const breakdownData = {}
     
     if (breakdownMode.value === 'all') {
-      // For 'all' mode, use simple structure compatible with old hover info
+      const incomeByCategory = {}
+      const expensesByCategory = {}
+      const transfersOutByCategory = {}
+      const transfersInByCategory = {}
+      
+      const grouping = currentGrouping.value
+      const periodTransactions = transactions.value.filter(t => {
+        const tDate = new Date(t.posted_at)
+        let periodMatches = false
+        
+        if (grouping === 'year') {
+          periodMatches = tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+        } else if (grouping === 'quarter') {
+          const tQuarter = Math.floor(tDate.getMonth() / 3)
+          const pQuarter = Math.floor(new Date(dataPoint.date).getMonth() / 3)
+          periodMatches = tQuarter === pQuarter && tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+        } else {
+          periodMatches = tDate.getMonth() === new Date(dataPoint.date).getMonth() && tDate.getFullYear() === new Date(dataPoint.date).getFullYear()
+        }
+        
+        return periodMatches
+      })
+      
+      let income = 0
+      let expenses = 0
+      let transfersOut = 0
+      let transfersIn = 0
+      
+      periodTransactions.forEach(t => {
+        const amount = Math.abs(parseFloat(t.amount))
+        const rawAmount = parseFloat(t.amount)
+        const subcategoryName = t.subcategory
+        const categoryName = t.category || 'Uncategorized'
+        const mainCat = (t.main_category || '').toUpperCase()
+        
+        if (mainCat === 'INCOME' && !isTypeVisible('income')) return
+        if (mainCat === 'EXPENSES' && !isTypeVisible('expenses')) return
+        if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) return
+        
+        // Use subcategory if available, otherwise use category
+        const displayName = subcategoryName || categoryName
+        
+        if (mainCat === 'INCOME') {
+          income += amount
+          incomeByCategory[displayName] = (incomeByCategory[displayName] || 0) + amount
+        } else if (mainCat === 'EXPENSES') {
+          expenses += amount
+          expensesByCategory[displayName] = (expensesByCategory[displayName] || 0) + amount
+        } else if (mainCat === 'TRANSFERS') {
+          if (rawAmount < 0) {
+            transfersOut += amount
+            transfersOutByCategory[displayName] = (transfersOutByCategory[displayName] || 0) + amount
+          } else if (rawAmount > 0) {
+            transfersIn += amount
+            transfersInByCategory[displayName] = (transfersInByCategory[displayName] || 0) + amount
+          }
+        }
+      })
+      
       breakdownData.all = {
-        income: dataPoint.income || 0,
-        expenses: dataPoint.expenses || 0,
-        transfers: dataPoint.transfers || 0,
-        balance: (dataPoint.income || 0) - (dataPoint.expenses || 0),
-        incomeByCategory: dataPoint.incomeByCategory || {},
-        expensesByCategory: dataPoint.expensesByCategory || {},
-        transfersByCategory: dataPoint.transfersByCategory || {}
+        income,
+        expenses,
+        transfersOut,
+        transfersIn,
+        balance: income - expenses,
+        incomeByCategory,
+        expensesByCategory,
+        transfersOutByCategory,
+        transfersInByCategory
       }
     } else {
-      // Calculate per breakdown key
       breakdownKeys.value.forEach(key => {
         const keyTransactions = transactions.value.filter(t => {
           const tDate = new Date(t.posted_at)
@@ -476,7 +621,6 @@ export function useTimelineChart(
             ? t.owner 
             : `${t.owner}_${t.bank_account_type}`
           
-          // Check if transaction matches date period
           const grouping = currentGrouping.value
           let periodMatches = false
           
@@ -495,36 +639,54 @@ export function useTimelineChart(
         
         let income = 0
         let expenses = 0
-        let transfers = 0
+        let transfersOut = 0
+        let transfersIn = 0
         const incomeByCategory = {}
         const expensesByCategory = {}
-        const transfersByCategory = {}
+        const transfersOutByCategory = {}
+        const transfersInByCategory = {}
         
         keyTransactions.forEach(t => {
           const amount = Math.abs(parseFloat(t.amount))
-          const category = t.subcategory || t.category || 'Uncategorized'
+          const rawAmount = parseFloat(t.amount)
+          const subcategoryName = t.subcategory
+          const categoryName = t.category || 'Uncategorized'
           const mainCat = (t.main_category || '').toUpperCase()
+          
+          if (mainCat === 'INCOME' && !isTypeVisible('income')) return
+          if (mainCat === 'EXPENSES' && !isTypeVisible('expenses')) return
+          if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) return
+          
+          // Use subcategory if available, otherwise use category
+          const displayName = subcategoryName || categoryName
           
           if (mainCat === 'INCOME') {
             income += amount
-            incomeByCategory[category] = (incomeByCategory[category] || 0) + amount
+            incomeByCategory[displayName] = (incomeByCategory[displayName] || 0) + amount
           } else if (mainCat === 'EXPENSES') {
             expenses += amount
-            expensesByCategory[category] = (expensesByCategory[category] || 0) + amount
+            expensesByCategory[displayName] = (expensesByCategory[displayName] || 0) + amount
           } else if (mainCat === 'TRANSFERS') {
-            transfers += amount
-            transfersByCategory[category] = (transfersByCategory[category] || 0) + amount
+            if (rawAmount < 0) {
+              transfersOut += amount
+              transfersOutByCategory[displayName] = (transfersOutByCategory[displayName] || 0) + amount
+            } else if (rawAmount > 0) {
+              transfersIn += amount
+              transfersInByCategory[displayName] = (transfersInByCategory[displayName] || 0) + amount
+            }
           }
         })
         
         breakdownData[key] = {
           income,
           expenses,
-          transfers,
+          transfersOut,
+          transfersIn,
           balance: income - expenses,
           incomeByCategory,
           expensesByCategory,
-          transfersByCategory
+          transfersOutByCategory,
+          transfersInByCategory
         }
       })
     }
@@ -591,15 +753,23 @@ export function useTimelineChart(
     breakdownMode,
     selectedOwners,
     selectedAccounts
-  ], () => {
+  ], async () => {
     if (visibilityDebounceTimer) {
       clearTimeout(visibilityDebounceTimer)
     }
-    visibilityDebounceTimer = setTimeout(() => {
-      memoizedCategoryData.value = null
-      yAxisValues.value = calculateYAxisMax()
-      console.log('📏 Y-axis recalculated after visibility/breakdown change')
-    }, 50)
+    
+    // Clear memoized data immediately
+    memoizedCategoryData.value = null
+    
+    // Wait for DOM updates before recalculating Y-axis
+    visibilityDebounceTimer = setTimeout(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const chart = chartRef?.value?.chart
+      if (chart) {
+        yAxisValues.value = calculateYAxisMax()
+        console.log('📏 Y-axis recalculated after visibility/breakdown change')
+      }
+    }, 100)
   }, { deep: true })
   
   watch(currentZoomLevel, () => {
@@ -657,9 +827,6 @@ export function useTimelineChart(
       yMax = 1000
     }
     
-    // Adjust column width based on breakdown count
-    const numBreakdowns = breakdownKeys.value.length
-    // All mode: 98%, multiple breakdowns: 60% each for better visibility
     const columnWidth = breakdownMode.value === 'all' ? '90%' : '90%'
     
     return {

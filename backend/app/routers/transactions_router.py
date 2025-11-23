@@ -1,11 +1,11 @@
 """
-Main transactions router with CRUD operations - FIXED
+Main transactions router with CRUD operations 
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, distinct
-from typing import List, Optional
+from typing import List, Optional, Union
 from datetime import date, datetime
 from pydantic import BaseModel
 import uuid
@@ -26,6 +26,14 @@ from .transaction_models import (
 from ..auth.local_auth import get_current_user
 
 router = APIRouter()
+
+def ensure_list(param: Optional[Union[str, List[str]]]) -> Optional[List[str]]:
+    """Convert string params to single-item lists for FastAPI Query compatibility"""
+    if param is None:
+        return None
+    if isinstance(param, str):
+        return [param]
+    return param
 
 class TransactionUpdateRequest(BaseModel):
     merchant: Optional[str] = None
@@ -145,6 +153,13 @@ async def get_filtered_summary(
 ):
     """Get summary stats for filtered transactions (all pages)"""
     
+    # Convert single string params to lists (axios with paramsSerializer sends single values as strings)
+    main_categories = ensure_list(main_categories)
+    categories = ensure_list(categories)
+    subcategories = ensure_list(subcategories)
+    owners = ensure_list(owners)
+    account_types = ensure_list(account_types)
+    
     conditions = [Transaction.user_id == current_user.id]
     
     if start_date:
@@ -168,11 +183,14 @@ async def get_filtered_summary(
     if account_types and len(account_types) > 0:
         conditions.append(Transaction.bank_account_type.in_(account_types))
     if main_categories and len(main_categories) > 0:
-        conditions.append(Transaction.main_category.in_(main_categories))
+        # Case-insensitive comparison
+        conditions.append(func.upper(Transaction.main_category).in_([m.upper() for m in main_categories]))
     if categories and len(categories) > 0:
-        conditions.append(Transaction.category.in_(categories))
+        # Case-insensitive comparison
+        conditions.append(func.upper(Transaction.category).in_([c.upper() for c in categories]))
     if subcategories and len(subcategories) > 0:
-        conditions.append(Transaction.subcategory.in_(subcategories))
+        # Case-insensitive comparison
+        conditions.append(func.upper(Transaction.subcategory).in_([s.upper() for s in subcategories]))
     
     base_condition = and_(*conditions)
     
@@ -365,9 +383,9 @@ async def get_filter_metadata(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get unique values for filter dropdowns - FROM CATEGORY TREE"""
+    """Get unique values for filter dropdowns - FROM ACTUAL TRANSACTION DATA"""
     
-    # Get unique owners and account types (still from transactions)
+    # Get unique owners and account types
     owner_account_query = select(
         Transaction.owner,
         Transaction.bank_account_type
@@ -391,50 +409,55 @@ async def get_filter_metadata(
     for owner in owner_account_map:
         owner_account_map[owner].sort()
     
-    # Get categories from Category table, not transactions!
-    from sqlalchemy.orm import selectinload
-    
-    categories_query = select(Category).options(
-        selectinload(Category.children).selectinload(Category.children)
+    # Get categories from ACTUAL TRANSACTION DATA
+    categories_query = select(
+        Transaction.main_category,
+        Transaction.category,
+        Transaction.subcategory
     ).where(
         and_(
-            Category.user_id == current_user.id,
-            Category.active == True,
-            Category.parent_id.is_(None)  # Get root categories only
+            Transaction.user_id == current_user.id,
+            Transaction.main_category.isnot(None)
         )
-    )
+    ).distinct()
     
     categories_result = await db.execute(categories_query)
-    root_categories = categories_result.scalars().all()
     
-    main_categories = []
+    main_categories_set = set()
     category_map = {}
     subcategory_map = {}
     
-    for root_cat in root_categories:
-        main_categories.append(root_cat.name)
-        category_map[root_cat.name] = []
-        
-        for mid_cat in root_cat.children:
-            category_map[root_cat.name].append(mid_cat.name)
+    for main_cat, cat, subcat in categories_result:
+        if main_cat:
+            main_categories_set.add(main_cat)
             
-            key = f"{root_cat.name}|{mid_cat.name}"
-            subcategory_map[key] = []
-            
-            for sub_cat in mid_cat.children:
-                subcategory_map[key].append(sub_cat.name)
-            
-            subcategory_map[key].sort()
-        
-        category_map[root_cat.name].sort()
+            if cat:
+                if main_cat not in category_map:
+                    category_map[main_cat] = set()
+                category_map[main_cat].add(cat)
+                
+                if subcat:
+                    key = f"{main_cat}|{cat}"
+                    if key not in subcategory_map:
+                        subcategory_map[key] = set()
+                    subcategory_map[key].add(subcat)
     
-    main_categories.sort()
+    # Convert sets to sorted lists
+    main_categories = sorted(list(main_categories_set))
+    
+    category_map_final = {}
+    for main_cat in category_map:
+        category_map_final[main_cat] = sorted(list(category_map[main_cat]))
+    
+    subcategory_map_final = {}
+    for key in subcategory_map:
+        subcategory_map_final[key] = sorted(list(subcategory_map[key]))
     
     return {
         "ownerAccountMap": owner_account_map,
         "mainCategories": main_categories,
-        "categoryMap": category_map,
-        "subcategoryMap": subcategory_map
+        "categoryMap": category_map_final,
+        "subcategoryMap": subcategory_map_final
     }
 
 @router.get("/debug/main-categories")
@@ -468,6 +491,72 @@ async def debug_main_categories(
         "total_transactions": sum(cat.count for cat in categories)
     }
 
-
-
-
+@router.post("/sync-category-strings")
+async def sync_category_strings(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Sync transaction category strings with Category table - fixes reassigned transactions"""
+    
+    # Get all transactions with category_id
+    transactions_query = select(Transaction).where(
+        and_(
+            Transaction.user_id == current_user.id,
+            Transaction.category_id.isnot(None)
+        )
+    )
+    
+    transactions_result = await db.execute(transactions_query)
+    transactions = transactions_result.scalars().all()
+    
+    updated_count = 0
+    
+    for transaction in transactions:
+        # Get the assigned category
+        category_query = select(Category).where(Category.id == transaction.category_id)
+        category_result = await db.execute(category_query)
+        category = category_result.scalar()
+        
+        if not category:
+            continue
+        
+        # Get parent and grandparent
+        parent = None
+        grandparent = None
+        
+        if category.parent_id:
+            parent_query = select(Category).where(Category.id == category.parent_id)
+            parent_result = await db.execute(parent_query)
+            parent = parent_result.scalar()
+            
+            if parent and parent.parent_id:
+                grandparent_query = select(Category).where(Category.id == parent.parent_id)
+                grandparent_result = await db.execute(grandparent_query)
+                grandparent = grandparent_result.scalar()
+        
+        # Update transaction strings based on category hierarchy
+        if grandparent and parent:
+            # 3-level: grandparent = main, parent = category, self = subcategory
+            transaction.main_category = grandparent.name
+            transaction.category = parent.name
+            transaction.subcategory = category.name
+        elif parent:
+            # 2-level: parent = main, self = category
+            transaction.main_category = parent.name
+            transaction.category = category.name
+            transaction.subcategory = None
+        else:
+            # 1-level: self = main
+            transaction.main_category = category.name
+            transaction.category = None
+            transaction.subcategory = None
+        
+        updated_count += 1
+    
+    await db.commit()
+    
+    return {
+        "success": True,
+        "updated_count": updated_count,
+        "message": f"Synced {updated_count} transactions with current category names"
+    }

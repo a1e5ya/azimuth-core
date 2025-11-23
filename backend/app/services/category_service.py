@@ -533,9 +533,9 @@ class CategoryService:
         if not category:
             raise HTTPException(status_code=404, detail="Category not found")
         
-        if name:
+        if name is not None:
             category.name = name
-        if icon:
+        if icon is not None:
             category.icon = icon
         if color is not None:
             category.color = color

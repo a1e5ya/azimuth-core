@@ -67,23 +67,48 @@
                 </div>
               </div>
 
-              <!-- TRANSFERS -->
-              <div v-if="data.transfers > 0" class="hover-info-type-section">
+              <!-- TRANSFERS OUT -->
+              <div v-if="data.transfersOut > 0" class="hover-info-type-section">
                 <div class="hover-type-header">
                   <AppIcon name="apps-sort" size="small" />
-                  <span class="hover-type-label">TRANSFERS</span>
-                  <span class="hover-type-total neutral">{{ formatCurrency(data.transfers) }}</span>
+                  <span class="hover-type-label">TRANSFERS OUT</span>
+                  <span class="hover-type-total neutral">{{ formatCurrency(data.transfersOut) }}</span>
                 </div>
                 
-                <div class="hover-info-tree" v-if="data.transfersByCategory">
-                  <template v-for="item in buildCategoryTree(data.transfersByCategory, 'transfers')" :key="item.id">
+                <div class="hover-info-tree" v-if="data.transfersOutByCategory">
+                  <template v-for="item in buildCategoryTree(data.transfersOutByCategory, 'transfers')" :key="item.id + '-out'">
                     <div class="hover-tree-main">
                       <AppIcon :name="item.icon" size="small" />
                       <span class="hover-tree-name">{{ item.name }}</span>
                       <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
                     </div>
                     
-                    <div v-for="subcat in item.subcategories" :key="subcat.id" class="hover-tree-sub">
+                    <div v-for="subcat in item.subcategories" :key="subcat.id + '-out'" class="hover-tree-sub">
+                      <AppIcon :name="subcat.icon" size="small" />
+                      <span class="hover-tree-name">{{ subcat.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
+                    </div>
+                  </template>
+                </div>
+              </div>
+              
+              <!-- TRANSFERS IN -->
+              <div v-if="data.transfersIn > 0" class="hover-info-type-section">
+                <div class="hover-type-header">
+                  <AppIcon name="apps-sort" size="small" />
+                  <span class="hover-type-label">TRANSFERS IN</span>
+                  <span class="hover-type-total neutral">{{ formatCurrency(data.transfersIn) }}</span>
+                </div>
+                
+                <div class="hover-info-tree" v-if="data.transfersInByCategory">
+                  <template v-for="item in buildCategoryTree(data.transfersInByCategory, 'transfers')" :key="item.id + '-in'">
+                    <div class="hover-tree-main">
+                      <AppIcon :name="item.icon" size="small" />
+                      <span class="hover-tree-name">{{ item.name }}</span>
+                      <span class="hover-tree-amount">{{ formatCurrency(item.total) }}</span>
+                    </div>
+                    
+                    <div v-for="subcat in item.subcategories" :key="subcat.id + '-in'" class="hover-tree-sub">
                       <AppIcon :name="subcat.icon" size="small" />
                       <span class="hover-tree-name">{{ subcat.name }}</span>
                       <span class="hover-tree-amount">{{ formatCurrency(subcat.amount) }}</span>
@@ -196,7 +221,23 @@ export default {
         if (amount <= 0) return
         
         const catInfo = findCategory(catName, typeCode)
-        if (!catInfo) return
+        
+        if (!catInfo) {
+          // Category not found in tree - show it anyway with default icon
+          const fallbackId = `fallback-${catName}`
+          if (!mainCategories[fallbackId]) {
+            mainCategories[fallbackId] = {
+              id: fallbackId,
+              name: catName,
+              icon: 'circle',
+              total: amount,
+              subcategories: []
+            }
+          } else {
+            mainCategories[fallbackId].total += amount
+          }
+          return
+        }
         
         if (catInfo.parent_id) {
           const type = categoryStore.categories?.find(t => t.code === typeCode)

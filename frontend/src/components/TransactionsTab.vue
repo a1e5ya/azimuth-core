@@ -230,6 +230,8 @@ export default {
         if (params[key] === undefined) delete params[key]
       })
       
+      console.log('📤 Sending to filtered-summary API:', JSON.stringify(params, null, 2))
+      
       const response = await axios.get(`${API_BASE}/transactions/filtered-summary`, {
         params,
         headers: { Authorization: `Bearer ${authStore.token}` },
@@ -238,6 +240,9 @@ export default {
         }
       })
       
+      console.log('📊 Request URL:', response.request.responseURL || response.config.url)
+      console.log('📊 Request params:', response.config.params)
+      console.log('📊 Filtered stats response:', response.data)
       filteredStats.value = response.data
     } catch (error) {
       console.error('Failed to load filtered stats:', error)
@@ -557,12 +562,23 @@ const loadFilterOptions = async () => {
     })
     
     console.log('🔍 Loading with filters:', params)
+    console.log('📊 Category filter details:', {
+      types: filters.value.types,
+      typesRaw: JSON.stringify(filters.value.types),
+      categories: filters.value.categories,
+      categoriesRaw: JSON.stringify(filters.value.categories),
+      subcategories: filters.value.subcategories,
+      subcategoriesRaw: JSON.stringify(filters.value.subcategories),
+      mainCategoriesParam: params.main_categories,
+      categoriesParam: params.categories,
+      subcategoriesParam: params.subcategories
+    })
     
     const response = await axios.get(`${API_BASE}/transactions/list`, {
       params,
       headers: { 
         Authorization: `Bearer ${authStore.token}`,
-        'Cache-Control': 'no-cache'  // Prevent caching
+        'Cache-Control': 'no-cache'
       },
       paramsSerializer: {
         indexes: null 
@@ -681,6 +697,7 @@ const handleBulkCategorize = async (data) => {
     watch(filters, () => {
       currentPage.value = 1
       loadTransactions()
+      loadFilteredStats()
     }, { deep: true })
     
     watch(() => [currentPage.value, pageSize.value, sortBy.value, sortOrder.value], () => {
