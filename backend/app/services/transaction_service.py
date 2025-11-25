@@ -292,7 +292,15 @@ class TransactionImportService:
         if not account:
             raise Exception(f"Account {account_id} not found")
         
-        print(f"✅ Importing to account: {account.name}")
+        # ✅ GET OWNER
+        owner_query = select(Owner).where(Owner.id == account.owner_id)
+        owner_result = await self.db.execute(owner_query)
+        owner = owner_result.scalar_one_or_none()
+        
+        if not owner:
+            raise Exception(f"Owner not found for account {account_id}")
+        
+        print(f"✅ Importing to account: {owner.name} - {account.name}")
         
         # Insert transactions
         update_job(job_id, {
@@ -319,9 +327,9 @@ class TransactionImportService:
                 main_category=None,
                 category=None,
                 subcategory=None,
-                bank_account=None,
-                owner=None,
-                bank_account_type=None,
+                bank_account=f"{owner.name}_{account.name}",  # ✅ FIXED
+                owner=owner.name,                              # ✅ FIXED
+                bank_account_type=account.account_type,        # ✅ FIXED
                 is_expense=trans_data['amount'] < 0,
                 is_income=trans_data['amount'] > 0,
                 year=trans_data.get('year'),
@@ -335,7 +343,6 @@ class TransactionImportService:
             
             self.db.add(transaction)
             
-            # Progress update every 100 transactions
             if idx % 100 == 0:
                 update_job(job_id, {
                     "progress": idx,
@@ -344,17 +351,7 @@ class TransactionImportService:
         
         await self.db.commit()
         
-        # Transfer detection
-        update_job(job_id, {
-            "current_step": "transfers",
-            "message": "Detecting transfer pairs..."
-        })
-        
-        from .transfer_detector import TransferDetector
-        detector = TransferDetector(self.db, self.user)
-        pairs_found = await detector.detect_pairs()
-        
-        # LLM categorization
+        # ✅ LLM CATEGORIZATION (skip training)
         update_job(job_id, {
             "current_step": "llm_categorizing",
             "progress": 0,
@@ -391,9 +388,14 @@ class TransactionImportService:
                 transaction.source_category = result['method']
                 transaction.confidence_score = result['confidence']
                 transaction.review_needed = result['confidence'] < 0.7
+                
+                # ✅ UPDATE CSV FIELDS
+                transaction.main_category = result.get('main_category')
+                transaction.category = result.get('category')
+                transaction.subcategory = result.get('subcategory')
+                
                 categorized_by_llm += 1
             
-            # Progress update every 10 transactions
             if idx % 10 == 0:
                 update_job(job_id, {
                     "progress": idx,
@@ -403,42 +405,25 @@ class TransactionImportService:
         
         await self.db.commit()
         
-        # Train categories
+        # Transfer detection
         update_job(job_id, {
-            "current_step": "training",
-            "progress": 0,
-            "total": 0,
-            "message": "Training categories..."
+            "current_step": "transfers",
+            "message": "Detecting transfer pairs..."
         })
         
-        from .category_training import CategoryTrainingService
-        trainer = CategoryTrainingService(self.db, self.user)
-        
-        training_log = []
-        
-        async def progress_callback(current, total, category_name):
-            msg = f"Training {category_name}"
-            training_log.append(msg)
-            
-            update_job(job_id, {
-                "progress": current,
-                "total": total,
-                "message": msg
-            })
-        
-        trained_count = await trainer.train_all_categories(progress_callback)
+        from .transfer_detector import TransferDetector
+        detector = TransferDetector(self.db, self.user)
+        pairs_found = await detector.detect_pairs()
         
         return {
             "stats": {
                 "uncategorized": len(transactions_data),
-                "transfer_pairs_found": pairs_found,
                 "llm_categorized": categorized_by_llm,
-                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm,
-                "categories_trained": trained_count,
-                "training_log": training_log
+                "transfer_pairs_found": pairs_found,
+                "needs_review": len(transactions_data) - pairs_found - categorized_by_llm
             }
         }
-
+    
     async def _import_training_data(
         self, transactions_data: List[Dict], import_batch: ImportBatch,
         auto_categorize: bool
