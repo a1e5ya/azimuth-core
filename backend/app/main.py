@@ -18,10 +18,11 @@ print(f"   ALLOWED_ORIGINS: {settings.ALLOWED_ORIGINS}")
 
 # Import routers - UPDATED for merged files
 from app.routers import auth, chat, categories_router
-from app.routers import transactions_router  # Merged router
+from app.routers import transactions_router, backup_router
 from app.routers import owners_router, accounts_router
 from app.routers import dangerous_router, system_router, auth_profile_router
 from app.models.database import init_database
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -102,6 +103,7 @@ app.include_router(accounts_router.router, prefix="/accounts", tags=["accounts"]
 app.include_router(dangerous_router.router)
 app.include_router(system_router.router)
 app.include_router(auth_profile_router.router)
+app.include_router(backup_router.router)
 
 @app.get("/health")
 async def health_check():

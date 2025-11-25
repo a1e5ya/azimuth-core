@@ -11,33 +11,7 @@
       <!-- Data & Privacy -->
       <SettingsData @data-imported="handleDataImported" />
       
-      <!-- Security & Sessions -->
-      <SettingsSecurity />
-      
-      <!-- System Status -->
-      <div class="card settings-card">
-        <div class="stats-grid">
-          <div class="stat-box">
-            <div :class="['stat-value', systemStatus.database ? 'status-ok' : 'status-error']">
-              {{ systemStatus.database ? 'OK' : 'ERR' }}
-            </div>
-            <div class="stat-label">Database</div>
-          </div>
-          <div class="stat-box">
-            <div :class="['stat-value', systemStatus.api ? 'status-ok' : 'status-error']">
-              {{ systemStatus.api ? 'OK' : 'ERR' }}
-            </div>
-            <div class="stat-label">API</div>
-          </div>
-          <div class="stat-box">
-            <div :class="['stat-value', systemStatus.ollama ? 'status-ok' : 'status-error']">
-              {{ systemStatus.ollama ? 'OK' : 'ERR' }}
-            </div>
-            <div class="stat-label">Ollama</div>
-          </div>
-        </div>
-      </div>
-      
+    
       <!-- Danger Zone -->
       <SettingsDanger 
         @transaction-deleted="handleTransactionDeleted" 
@@ -54,7 +28,6 @@ import { ref, onMounted } from 'vue'
 import SettingsAccount from './SettingsAccount.vue'
 import SettingsAI from './SettingsAI.vue'
 import SettingsData from './SettingsData.vue'
-import SettingsSecurity from './SettingsSecurity.vue'
 import SettingsDanger from './SettingsDanger.vue'
 
 export default {
@@ -63,7 +36,6 @@ export default {
     SettingsAccount,
     SettingsAI,
     SettingsData,
-    SettingsSecurity,
     SettingsDanger
   },
   emits: ['chat-cleared'],
@@ -160,7 +132,7 @@ export default {
 }
 
 .settings-masonry {
-  column-count: 4;
+  column-count: 3;
   column-gap: var(--gap-standard);
   padding: var(--gap-standard);
 }

@@ -7,7 +7,6 @@
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Current Session</div>
-        <div class="setting-desc">Started {{ sessionStartTime }}</div>
       </div>
       <button @click="logout" class="btn btn-danger">Logout</button>
     </div>
@@ -15,7 +14,6 @@
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Clear All Chat History</div>
-        <div class="setting-desc">Delete all AI chat messages</div>
       </div>
       <button @click="confirmAction('clear-chat')" class="btn btn-danger">Clear Chat</button>
     </div>
@@ -23,7 +21,6 @@
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Delete All Transactions</div>
-        <div class="setting-desc">Permanently delete all transaction data</div>
       </div>
       <button @click="confirmAction('delete-transactions')" class="btn btn-danger">Delete Transactions</button>
     </div>
@@ -31,7 +28,6 @@
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Delete Account</div>
-        <div class="setting-desc">Permanently delete account and all data</div>
       </div>
       <button @click="confirmAction('delete-account')" class="btn btn-danger">Delete Account</button>
     </div>
@@ -62,7 +58,7 @@
 </template>
 
 <script>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import axios from 'axios'
 
@@ -79,9 +75,35 @@ export default {
     const confirmationPassword = ref('')
     const pendingAction = ref(null)
     const executing = ref(false)
-    const sessionStartTime = computed(() => {
-      return new Date().toLocaleString()
-    })
+    const sessionStartTime = ref('Unknown')
+
+    const loadSessionTime = async () => {
+      try {
+        const token = localStorage.getItem('token')
+        if (!token) {
+          sessionStartTime.value = 'Unknown'
+          return
+        }
+        
+        const response = await fetch('http://localhost:8001/system/activity-log', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+        
+        if (response.ok) {
+          const logs = await response.json()
+          const lastLogin = logs.find(log => log.entity === 'auth' && log.action === 'login')
+          
+          if (lastLogin && lastLogin.created_at) {
+            // Backend returns: "2025-11-25 12:58:59"
+            sessionStartTime.value = lastLogin.created_at
+            return
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load session time:', error)
+      }
+      sessionStartTime.value = 'Unknown'
+    }
 
     const requiresPasswordConfirmation = computed(() => {
       return ['delete-transactions', 'delete-account'].includes(pendingAction.value)
@@ -183,6 +205,10 @@ export default {
       emit('account-deleted')
       window.location.href = '/'
     }
+
+    onMounted(() => {
+      loadSessionTime()
+    })
 
     return {
       sessionStartTime,

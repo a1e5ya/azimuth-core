@@ -1,219 +1,265 @@
 <template>
   <div class="card settings-card">
     
-    <div class="setting-row">
-      <div class="setting-info">
-        <div class="setting-label">Auto Backup</div>
-      </div>
-      <label class="switch">
-        <input type="checkbox" v-model="autoBackup" @change="toggleAutoBackup">
-        <span class="slider round"></span>
-      </label>
-
-    </div>
-    
     <div class="btn-row">
       <button @click="backupData" class="btn btn-primary" :disabled="backingUp">
-        {{ backingUp ? 'Backing up...' : 'Backup Now' }}
+        {{ backingUp ? 'Backing up...' : 'Backup Database' }}
       </button>
-      <button @click="restoreData" class="btn btn-primary">Restore</button>
-    </div>
-        <div class="btn-row">
-      <button @click="exportData" class="btn btn-primary" :disabled="exporting">
-        {{ exporting ? 'Exporting...' : 'Export All' }}
+      <button @click="restoreData" class="btn btn-primary">
+        Restore Database
       </button>
     </div>
     
+    <input 
+      ref="restoreFileInput" 
+      type="file" 
+      accept=".db" 
+      style="display: none" 
+      @change="handleRestoreFile"
+    />
 
+    <!-- Confirmation Modal -->
+    <div v-if="showModal" class="modal-overlay" @click="showModal = false">
+      <div class="modal-content" @click.stop>
+        <div class="modal-header">
+          <h3>{{ modalTitle }}</h3>
+          <button class="close-btn" @click="showModal = false">×</button>
+        </div>
+        <div class="modal-body">
+          <p>{{ modalMessage }}</p>
+        </div>
+        <div class="modal-actions">
+          <button @click="cancelModal" class="btn btn-secondary">{{ modalCancelText }}</button>
+          <button v-if="modalConfirmAction" @click="modalConfirmAction" class="btn btn-primary">
+            {{ modalConfirmText }}
+          </button>
+        </div>
+      </div>
+    </div>
     
   </div>
 </template>
 
 <script>
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 
 export default {
   name: 'SettingsData',
   emits: ['data-imported'],
-  setup(props, { emit }) {
-    const autoBackup = ref(false)
-    const databasePath = ref('/data/finance.db')
+  setup() {
     const backingUp = ref(false)
-    const exporting = ref(false)
     const restoreFileInput = ref(null)
-    const importFileInput = ref(null)
-    const dataStats = ref({ totalTransactions: 0, databaseSize: '0 MB', lastBackup: 'Never' })
+    const showModal = ref(false)
+    const modalTitle = ref('')
+    const modalMessage = ref('')
+    const modalConfirmText = ref('OK')
+    const modalCancelText = ref('Cancel')
+    const modalConfirmAction = ref(null)
 
-    const formatNumber = (num) => num.toLocaleString()
+    const showNotification = (title, message, confirmText = 'OK') => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalConfirmText.value = confirmText
+      modalCancelText.value = 'Close'
+      modalConfirmAction.value = null
+      showModal.value = true
+    }
 
-    const loadDataStats = async () => {
-      try {
-        const token = localStorage.getItem('token')
-        if (!token) return
-        const response = await fetch('http://localhost:8001/transactions/stats', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (response.ok) {
-          const data = await response.json()
-          dataStats.value.totalTransactions = data.total_count || 0
-        }
-        const statsResponse = await fetch('http://localhost:8001/system/database-stats', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (statsResponse.ok) {
-          const stats = await statsResponse.json()
-          dataStats.value.databaseSize = stats.size || '0 MB'
-          dataStats.value.lastBackup = stats.last_backup || 'Never'
-        }
-      } catch (error) {
-        console.error('Failed to load data stats:', error)
+    const showConfirmation = (title, message, onConfirm) => {
+      modalTitle.value = title
+      modalMessage.value = message
+      modalConfirmText.value = 'Continue'
+      modalCancelText.value = 'Cancel'
+      modalConfirmAction.value = () => {
+        showModal.value = false
+        onConfirm()
       }
+      showModal.value = true
     }
 
-    const toggleAutoBackup = () => {
-      autoBackup.value = !autoBackup.value
-      alert(`Auto-backup ${autoBackup.value ? 'enabled' : 'disabled'}`)
+    const cancelModal = () => {
+      showModal.value = false
+      modalConfirmAction.value = null
     }
-
-    const openDatabaseFolder = () => alert('Database location: ' + databasePath.value)
 
     const backupData = async () => {
       try {
         backingUp.value = true
-        const token = localStorage.getItem('token')
-        if (!token) return
-        const response = await fetch('http://localhost:8001/system/backup', {
-          method: 'POST',
+        const token = localStorage.getItem('azimuth_token')
+        if (!token) {
+          showNotification('Not Authenticated', 'Please login to backup your database.')
+          return
+        }
+        
+        const response = await fetch('http://localhost:8001/backup/export', {
           headers: { 'Authorization': `Bearer ${token}` }
         })
+        
         if (response.ok) {
           const blob = await response.blob()
           const url = window.URL.createObjectURL(blob)
           const a = document.createElement('a')
           a.href = url
-          a.download = `finance-backup-${new Date().toISOString().split('T')[0]}.db`
-          document.body.appendChild(a)
+          a.download = `azimuth_backup_${new Date().toISOString().split('T')[0]}.db`
           a.click()
           window.URL.revokeObjectURL(url)
-          document.body.removeChild(a)
-          alert('✅ Backup created successfully!')
-          await loadDataStats()
+          showNotification('Success', 'Backup downloaded successfully!')
         } else {
           const data = await response.json()
-          alert('❌ ' + (data.detail || 'Backup failed'))
+          showNotification('Backup Failed', data.detail || 'Failed to create backup.')
         }
       } catch (error) {
         console.error('Backup failed:', error)
-        alert('❌ Backup failed')
+        showNotification('Error', 'Backup failed: ' + error.message)
       } finally {
         backingUp.value = false
       }
     }
 
     const restoreData = () => {
-      if (confirm('⚠️ Restoring a backup will replace ALL current data. Continue?')) {
-        restoreFileInput.value?.click()
-      }
+      showConfirmation(
+        'Restore Database?',
+        'This will replace ALL current data with the backup. This cannot be undone!',
+        () => {
+          restoreFileInput.value?.click()
+        }
+      )
     }
 
     const handleRestoreFile = async (event) => {
       const file = event.target.files?.[0]
       if (!file) return
+      
       try {
-        const token = localStorage.getItem('token')
-        if (!token) return
+        const token = localStorage.getItem('azimuth_token')
+        if (!token) {
+          showNotification('Not Authenticated', 'Please login to restore your database.')
+          return
+        }
+        
         const formData = new FormData()
         formData.append('file', file)
-        const response = await fetch('http://localhost:8001/system/restore', {
+        
+        const response = await fetch('http://localhost:8001/backup/import', {
           method: 'POST',
           headers: { 'Authorization': `Bearer ${token}` },
           body: formData
         })
+        
+        const data = await response.json()
+        
         if (response.ok) {
-          alert('✅ Database restored successfully! Reloading...')
-          window.location.reload()
+          showNotification('Success', 'Database restored! Page will reload in 2 seconds.')
+          setTimeout(() => window.location.reload(), 2000)
         } else {
-          const data = await response.json()
-          alert('❌ ' + (data.detail || 'Restore failed'))
+          showNotification('Restore Failed', data.detail || 'Failed to restore backup.')
         }
       } catch (error) {
         console.error('Restore failed:', error)
-        alert('❌ Restore failed')
-      }
-      event.target.value = ''
-    }
-
-    const triggerImport = () => importFileInput.value?.click()
-
-    const handleImportFile = async (event) => {
-      const file = event.target.files?.[0]
-      if (!file) return
-      try {
-        const token = localStorage.getItem('token')
-        if (!token) return
-        const formData = new FormData()
-        formData.append('file', file)
-        const response = await fetch('http://localhost:8001/transactions/import', {
-          method: 'POST',
-          headers: { 'Authorization': `Bearer ${token}` },
-          body: formData
-        })
-        if (response.ok) {
-          const result = await response.json()
-          alert(`✅ Import completed!\nImported: ${result.rows_imported}\nDuplicates: ${result.rows_duplicated}\nErrors: ${result.rows_errors}`)
-          emit('data-imported')
-          await loadDataStats()
-        } else {
-          const data = await response.json()
-          alert('❌ ' + (data.detail || 'Import failed'))
-        }
-      } catch (error) {
-        console.error('Import failed:', error)
-        alert('❌ Import failed')
-      }
-      event.target.value = ''
-    }
-
-    const exportData = async () => {
-      try {
-        exporting.value = true
-        const token = localStorage.getItem('token')
-        if (!token) return
-        const response = await fetch('http://localhost:8001/transactions/export', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (response.ok) {
-          const blob = await response.blob()
-          const url = window.URL.createObjectURL(blob)
-          const a = document.createElement('a')
-          a.href = url
-          a.download = `finance-export-${new Date().toISOString().split('T')[0]}.csv`
-          document.body.appendChild(a)
-          a.click()
-          window.URL.revokeObjectURL(url)
-          document.body.removeChild(a)
-          alert('✅ Data exported successfully!')
-        } else {
-          const data = await response.json()
-          alert('❌ ' + (data.detail || 'Export failed'))
-        }
-      } catch (error) {
-        console.error('Export failed:', error)
-        alert('❌ Export failed')
+        showNotification('Error', 'Restore failed: ' + error.message)
       } finally {
-        exporting.value = false
+        event.target.value = ''
       }
     }
-
-    const viewHistory = () => alert('Import history view coming soon!')
-
-    onMounted(() => loadDataStats())
 
     return {
-      autoBackup, databasePath, dataStats, backingUp, exporting, restoreFileInput, importFileInput,
-      formatNumber, toggleAutoBackup, openDatabaseFolder, backupData, restoreData, handleRestoreFile,
-      triggerImport, handleImportFile, exportData, viewHistory
+      backingUp,
+      restoreFileInput,
+      showModal,
+      modalTitle,
+      modalMessage,
+      modalConfirmText,
+      modalCancelText,
+      modalConfirmAction,
+      backupData,
+      restoreData,
+      handleRestoreFile,
+      cancelModal
     }
   }
 }
 </script>
+
+<style scoped>
+
+.btn-row {
+  display: flex;
+  gap: var(--gap-large);
+}
+
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.modal-content {
+  background: #dddddd;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  padding: var(--gap-large);
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  position: relative;
+  z-index: 10000;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--gap-large);
+  padding-bottom: var(--gap-large);
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  font-size: var(--text-large);
+  font-weight: 600;
+  color: #111827;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 2rem;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0;
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+
+.close-btn:hover {
+  color: #111827;
+}
+
+.modal-body {
+  margin-bottom: var(--gap-large);
+  line-height: 1.6;
+}
+
+.modal-body p {
+  margin: 0;
+  color: #374151;
+}
+
+.modal-actions {
+  display: flex;
+  gap: var(--gap-large);
+  justify-content: flex-end;
+}
+</style>

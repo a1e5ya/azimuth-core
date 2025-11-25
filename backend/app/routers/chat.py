@@ -538,6 +538,19 @@ Answer:"""
     
     return chat_response
 
+@router.get("/ollama-status")
+async def get_ollama_status():
+    """Get Ollama connection status"""
+    status = await llm_client.check_model_availability()
+    
+    return {
+        "ollama_running": status.get("ollama_running", False),
+        "model_available": status.get("model_available", False),
+        "current_model": status.get("configured_model", "llama3.2:3b"),
+        "available_models": status.get("available_models", []),
+        "message": "Ready" if (status.get("ollama_running") and status.get("model_available")) else "Not available"
+    }
+
 @router.get("/history")
 async def get_chat_history(
     current_user: User = Depends(get_current_user),
@@ -572,3 +585,4 @@ async def get_chat_history(
         "count": len(history),
         "user_id": str(current_user.id)
     }
+

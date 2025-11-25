@@ -14,9 +14,6 @@
 
 
     <div class="btn-row">
-      <button @click="testConnection" class="btn btn-primary" :disabled="testing">
-        {{ testing ? 'Testing...' : 'Test Connection' }}
-      </button>
       <button @click="refreshStatus" class="btn btn-primary" :disabled="refreshing">
         {{ refreshing ? 'Refreshing...' : 'Refresh Status' }}
       </button>
