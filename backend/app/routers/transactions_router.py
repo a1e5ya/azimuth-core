@@ -5,6 +5,7 @@ Main transactions router with CRUD operations
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, distinct
+from sqlalchemy.orm import selectinload
 from typing import List, Optional, Union
 from datetime import date, datetime
 from pydantic import BaseModel
@@ -40,6 +41,19 @@ class TransactionUpdateRequest(BaseModel):
     amount: Optional[float] = None
     memo: Optional[str] = None
     category_id: Optional[str] = None
+
+class BulkDeleteRequest(BaseModel):
+    transaction_ids: List[str]
+
+class TransactionCreateRequest(BaseModel):
+    posted_at: str  # ISO date string
+    amount: float
+    merchant: Optional[str] = None
+    memo: Optional[str] = None
+    owner: Optional[str] = None
+    bank_account_type: Optional[str] = None
+    category_id: Optional[str] = None
+
 
 
 @router.get("/list", response_model=List[TransactionResponse])
@@ -307,58 +321,147 @@ async def categorize_transaction(
 @router.delete("/{transaction_id}", response_model=DeleteResponse)
 async def delete_transaction(
     transaction_id: str,
-    service: TransactionService = Depends(get_transaction_service)
-):
-    """Delete a single transaction"""
-    result = await service.delete_transaction(transaction_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=404, detail=result["message"])
-    
-    return DeleteResponse(**result)
-
-@router.post("/reset")
-async def reset_all_transactions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Reset all transaction data for the current user"""
-    from sqlalchemy import delete
-    from ..models.database import Transaction, ImportBatch
+    """Delete a single transaction"""
+    from sqlalchemy import delete as sql_delete
     
-    count_query = select(func.count(Transaction.id)).where(Transaction.user_id == current_user.id)
-    count_result = await db.execute(count_query)
-    transaction_count = count_result.scalar()
-    
-    await db.execute(delete(Transaction).where(Transaction.user_id == current_user.id))
-    await db.execute(delete(ImportBatch).where(ImportBatch.user_id == current_user.id))
-    await db.commit()
-    
-    return {
-        "success": True,
-        "message": f"Successfully deleted {transaction_count} transactions",
-        "deleted_count": transaction_count
-    }
+    try:
+        # Convert to UUID
+        trans_uuid = str(uuid.UUID(transaction_id))
+        
+        print(f"🗑️ Deleting transaction: {trans_uuid}")
+        
+        # DELETE with explicit query
+        delete_query = sql_delete(Transaction).where(
+            and_(
+                Transaction.id == trans_uuid,
+                Transaction.user_id == str(current_user.id)
+            )
+        )
+        
+        result = await db.execute(delete_query)
+        deleted_count = result.rowcount
+        
+        print(f"✅ Rows affected: {deleted_count}")
+        
+        await db.commit()
+        
+        if deleted_count == 0:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        return DeleteResponse(
+            success=True,
+            message="Transaction deleted",
+            deleted_count=deleted_count
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Delete failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.put("/{transaction_id}")
 async def update_transaction(
     transaction_id: str,
-    update_data: TransactionUpdateRequest,
-    service: TransactionService = Depends(get_transaction_service)
+    data: TransactionCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
     """Update transaction details"""
-    result = await service.update_transaction(
-        transaction_id=transaction_id,
-        merchant=update_data.merchant,
-        amount=update_data.amount,
-        memo=update_data.memo,
-        category_id=update_data.category_id
-    )
+    from datetime import datetime
     
-    if not result["success"]:
-        raise HTTPException(status_code=404, detail=result["message"])
-    
-    return result
+    try:
+        trans_uuid = str(uuid.UUID(transaction_id))
+        
+        transaction_query = select(Transaction).where(
+            and_(
+                Transaction.id == trans_uuid,
+                Transaction.user_id == str(current_user.id)
+            )
+        )
+        result = await db.execute(transaction_query)
+        transaction = result.scalar_one_or_none()
+        
+        if not transaction:
+            raise HTTPException(status_code=404, detail="Transaction not found")
+        
+        # Update date if provided
+        if data.posted_at:
+            posted_at = datetime.fromisoformat(data.posted_at.replace('Z', '+00:00'))
+            transaction.posted_at = posted_at
+            transaction.year = posted_at.year
+            transaction.month = posted_at.month
+            transaction.year_month = posted_at.strftime('%Y-%m')
+            transaction.weekday = posted_at.strftime('%A')
+        
+        # Update amount
+        if data.amount is not None:
+            transaction.amount = data.amount
+            transaction.is_income = data.amount > 0
+            transaction.is_expense = data.amount < 0
+        
+        # Update other fields
+        if data.merchant is not None:
+            transaction.merchant = data.merchant
+        if data.memo is not None:
+            transaction.memo = data.memo
+        if data.owner is not None:
+            transaction.owner = data.owner
+        if data.bank_account_type is not None:
+            transaction.bank_account_type = data.bank_account_type
+        
+        # Update category AND derive main_category, category, subcategory
+        if data.category_id:
+            transaction.category_id = data.category_id
+            transaction.source_category = "user"
+            transaction.review_needed = False
+            
+            # ✅ GET CATEGORY HIERARCHY
+            cat_query = select(Category).options(
+                selectinload(Category.parent).selectinload(Category.parent)
+            ).where(Category.id == data.category_id)
+            cat_result = await db.execute(cat_query)
+            cat = cat_result.scalar_one_or_none()
+            
+            if cat:
+                if cat.parent:
+                    if cat.parent.parent:
+                        # 3-level
+                        transaction.main_category = cat.parent.parent.name
+                        transaction.category = cat.parent.name
+                        transaction.subcategory = cat.name
+                    else:
+                        # 2-level
+                        transaction.main_category = cat.parent.name
+                        transaction.category = cat.name
+                        transaction.subcategory = None
+                else:
+                    # 1-level
+                    transaction.main_category = cat.name
+                    transaction.category = None
+                    transaction.subcategory = None
+        
+        transaction.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        
+        print(f"✅ Updated transaction {transaction_id}")
+        
+        return {
+            "success": True,
+            "message": "Transaction updated successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Update failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/bulk-categorize", response_model=BulkOperationResponse)
@@ -560,3 +663,137 @@ async def sync_category_strings(
         "updated_count": updated_count,
         "message": f"Synced {updated_count} transactions with current category names"
     }
+
+
+@router.post("/create")
+async def create_transaction(
+    data: TransactionCreateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Create new transaction"""
+    from datetime import datetime
+    
+    try:
+        # Parse date
+        posted_at = datetime.fromisoformat(data.posted_at.replace('Z', '+00:00'))
+        
+        # Determine is_income/is_expense
+        is_income = data.amount > 0
+        is_expense = data.amount < 0
+        
+        # Extract date components
+        year = posted_at.year
+        month = posted_at.month
+        year_month = posted_at.strftime('%Y-%m')
+        weekday = posted_at.strftime('%A')
+        
+        # ✅ GET CATEGORY HIERARCHY for main_category, category, subcategory
+        main_category = None
+        category = None
+        subcategory = None
+        
+        if data.category_id:
+            cat_query = select(Category).options(
+                selectinload(Category.parent).selectinload(Category.parent)
+            ).where(Category.id == data.category_id)
+            cat_result = await db.execute(cat_query)
+            cat = cat_result.scalar_one_or_none()
+            
+            if cat:
+                # Determine hierarchy level
+                if cat.parent:
+                    if cat.parent.parent:
+                        # 3-level: grandparent = main, parent = category, self = subcategory
+                        main_category = cat.parent.parent.name
+                        category = cat.parent.name
+                        subcategory = cat.name
+                    else:
+                        # 2-level: parent = main, self = category
+                        main_category = cat.parent.name
+                        category = cat.name
+                        subcategory = None
+                else:
+                    # 1-level: self = main
+                    main_category = cat.name
+                    category = None
+                    subcategory = None
+        
+        # Create transaction
+        transaction = Transaction(
+            id=str(uuid.uuid4()),
+            user_id=str(current_user.id),
+            account_id=None,
+            posted_at=posted_at,
+            amount=data.amount,
+            currency='EUR',
+            merchant=data.merchant,
+            memo=data.memo,
+            owner=data.owner,
+            bank_account_type=data.bank_account_type,
+            main_category=main_category,  # ✅ SET FROM CATEGORY
+            category=category,            # ✅ SET FROM CATEGORY
+            subcategory=subcategory,      # ✅ SET FROM CATEGORY
+            category_id=data.category_id,
+            is_income=is_income,
+            is_expense=is_expense,
+            year=year,
+            month=month,
+            year_month=year_month,
+            weekday=weekday,
+            source_category='user',
+            review_needed=not data.category_id
+        )
+        
+        db.add(transaction)
+        await db.commit()
+        await db.refresh(transaction)
+        
+        return {
+            "success": True,
+            "message": "Transaction created successfully",
+            "transaction_id": str(transaction.id)
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Create failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_transactions(
+    request: BulkDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Delete multiple transactions"""
+    from sqlalchemy import delete as sql_delete
+    
+    try:
+        # Convert to UUIDs
+        trans_ids = [str(uuid.UUID(tid)) for tid in request.transaction_ids]
+        
+        # Delete
+        delete_query = sql_delete(Transaction).where(
+            and_(
+                Transaction.id.in_(trans_ids),
+                Transaction.user_id == str(current_user.id)
+            )
+        )
+        
+        result = await db.execute(delete_query)
+        await db.commit()
+        
+        print(f"✅ Deleted {result.rowcount} transactions")
+        
+        return {
+            "success": True,
+            "message": f"Deleted {result.rowcount} transactions",
+            "deleted_count": result.rowcount
+        }
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Bulk delete failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

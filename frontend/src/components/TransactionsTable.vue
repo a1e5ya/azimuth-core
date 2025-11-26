@@ -4,7 +4,6 @@
     <div class="bulk-actions" v-if="selectedIds.length > 0">
       <span class="bulk-selection">{{ selectedIds.length }} selected</span>
       
-      <!-- NEW: Styled dropdown like delete modal -->
       <div class="bulk-category-dropdown">
         <select v-model="bulkCategoryId" class="form-input">
           <option value="">Select subcategory...</option>
@@ -25,12 +24,14 @@
       <button class="btn btn-small" @click="handleBulkCategorize" :disabled="!bulkCategoryId">
         Apply Category
       </button>
+      <button class="btn btn-link btn-danger" @click="handleBulkDelete">
+        Delete Selected
+      </button>
       <button class="btn btn-link" @click="clearSelection">
-        Clear Selection
+        Clear
       </button>
     </div>
 
-    <!-- Rest of template unchanged... -->
     <!-- Loading State -->
     <div v-if="loading" class="loading-state">
       <div class="loading-spinner">⟳</div>
@@ -207,7 +208,7 @@ export default {
       default: () => []
     }
   },
-  emits: ['edit', 'delete', 'sort', 'bulk-categorize'],
+  emits: ['edit', 'delete', 'sort', 'bulk-categorize', 'bulk-delete', 'category-updated'],
   setup(props, { emit }) {
     const selectedIds = ref([])
     const bulkCategoryId = ref('')
@@ -250,6 +251,12 @@ export default {
       clearSelection()
     }
 
+    const handleBulkDelete = () => {
+      if (selectedIds.value.length === 0) return
+      
+      emit('bulk-delete', selectedIds.value)
+    }
+
     const findCategoryById = (categoryId) => {
       const searchInTree = (categories) => {
         for (const cat of categories) {
@@ -278,15 +285,12 @@ export default {
       
       const amount = parseFloat(transaction.amount)
       
-      // Income - up arrow
       if (amount > 0) {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858 1000" fill="${color}"><path d="M0,995.3C142.08,666.06,284.15,336.82,429.5,0c144.66,336.09,286.58,665.83,428.5,995.57-.95,1.48-1.9,2.95-2.85,4.43-136.09-78.77-269.66-161.99-404.48-243.08-15.79-9.62-28.28-9.41-44.01.15-134.05,80.88-267.52,162.59-402.48,241.8-1.4-1.19-2.79-2.38-4.19-3.57Z"/></svg>`
       }
-      // Expense - down arrow  
       else if (amount < 0) {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858.01 1000" fill="${color}"><path d="M858,4.7c-142.08,329.24-284.15,658.48-429.5,995.3C283.84,663.91,141.92,334.17,0,4.43.95,2.95,1.9,1.48,2.85,0c136.09,78.77,269.66,161.99,404.48,243.08,15.79,9.62,28.28,9.41,44.01-.15C585.39,162.05,718.86,80.34,853.82,1.13c1.4,1.19,2.79,2.38,4.19,3.57h-.01Z"/></svg>`
       }
-      // Transfer - right arrow
       else {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 858.01" fill="${color}"><path d="M4.7.01c329.24,142.08,658.48,284.15,995.3,429.5C663.91,574.17,334.17,716.09,4.43,858.01c-1.48-.95-2.95-1.9-4.43-2.85,78.77-136.09,161.99-269.66,243.08-404.48,9.62-15.79,9.41-28.28-.15-44.01C162.05,272.62,80.34,139.15,1.13,4.19,2.32,2.79,3.51,1.4,4.7,0h0Z"/></svg>`
       }
@@ -330,13 +334,6 @@ export default {
       return text.substring(0, maxLength) + '...'
     }
 
-    const getAccountInfo = (transaction) => {
-      if (transaction.bank_account && transaction.bank_account_type) {
-        return `${transaction.bank_account} (${transaction.bank_account_type})`
-      }
-      return transaction.bank_account || transaction.bank_account_type || '-'
-    }
-
     return {
       selectedIds,
       bulkCategoryId,
@@ -345,13 +342,13 @@ export default {
       toggleAll,
       clearSelection,
       handleBulkCategorize,
+      handleBulkDelete,
       getCategoryColor,
       getTypeShape,
       formatDate,
       formatAmount,
       getAmountClass,
-      truncateText,
-      getAccountInfo
+      truncateText
     }
   }
 }
@@ -389,6 +386,7 @@ export default {
   overflow-x: auto;
   border-radius: var(--radius);
   box-shadow: var(--shadow);
+  position: relative;
 }
 
 .transactions-table {
@@ -431,6 +429,7 @@ export default {
 
 .transaction-row {
   transition: background-color 0.2s ease;
+  position: relative;
 }
 
 .transaction-row:hover {
@@ -471,6 +470,7 @@ export default {
 .col-type {
   width: 6rem;
 }
+
 .col-indicator {
   width: 2rem;
   text-align: center;
@@ -479,6 +479,16 @@ export default {
 .col-actions {
   width: 2rem;
   text-align: center;
+  position: relative;
+}
+
+.actions-cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  position: relative;
+  z-index: 1;
 }
 
 .date-primary {
@@ -546,13 +556,6 @@ export default {
 .text-muted {
   color: var(--color-text-muted);
   font-style: italic;
-}
-
-.actions-cell {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 0.25rem;
 }
 
 .type-indicator {

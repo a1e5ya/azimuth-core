@@ -1,17 +1,24 @@
 <template>
   <div class="tab-content">
     <div class="container">
-      <!-- Transactions Header with Actions and Pagination -->
+      <!-- Transactions Header -->
       <div class="transactions-header">
-        <!-- Transactions Info Component -->
         <TransactionsInfo
           :summary="summary"
           :filtered-stats="filteredStats"
           :uploads="localUploads"
         />
 
-        <!-- left: Action Buttons -->
+        <!-- Action Buttons -->
         <div class="action-buttons-compact">
+          <button 
+            class="btn btn-icon" 
+            @click="handleAdd"
+            title="Add Transaction"
+          >
+            <AppIcon name="plus" size="medium" />
+          </button>
+          
           <button 
             class="btn btn-icon" 
             @click="showImportModal = true"
@@ -39,7 +46,7 @@
           </button>
         </div>
         
-        <!-- right: Pagination -->
+        <!-- Pagination controls unchanged... -->
         <div class="pagination-controls">
           <select v-model.number="pageSize" @change="changePageSize" class="page-size-select">
             <option :value="25">25</option>
@@ -70,32 +77,31 @@
         </div>
       </div>
       
-      <!-- Filters Component -->
       <TransactionsFilters
-      v-model:show="showFilters"
-      v-model="filters"
-      :filter-options="filterOptions"
-      @apply="loadTransactions"
-    />
+        v-model:show="showFilters"
+        v-model="filters"
+        :filter-options="filterOptions"
+        @apply="loadTransactions"
+      />
 
-<!-- Transactions Table Component -->
-<TransactionsTable
-  :transactions="transactions"
-  :loading="loading"
-  :has-active-filters="hasActiveFilters"
-  :sort-by="sortBy"
-  :sort-order="sortOrder"
-  :grouped-categories="groupedCategories"
-  :category-tree="categoryTree"
-  @edit="handleEdit"
-  @delete="handleDelete"
-  @sort="toggleSort"
-  @bulk-categorize="handleBulkCategorize"
-  @category-updated="handleCategoryUpdated"
-/>
+      <TransactionsTable
+        :transactions="transactions"
+        :loading="loading"
+        :has-active-filters="hasActiveFilters"
+        :sort-by="sortBy"
+        :sort-order="sortOrder"
+        :grouped-categories="groupedCategories"
+        :category-tree="categoryTree"
+        @edit="handleEdit"
+        @delete="handleDelete"
+        @sort="toggleSort"
+        @bulk-categorize="handleBulkCategorize"
+        @bulk-delete="handleBulkDelete"
+        @category-updated="handleCategoryUpdated"
+      />
     </div>
 
-    <!-- CRUD Modals Component -->
+    <!-- CRUD Modals -->
     <TransactionsCRUD
       ref="crudComponent"
       @transaction-updated="handleTransactionUpdated"
@@ -164,6 +170,14 @@ export default {
     
     const handleImportStarted = () => {
       addChatMessage({ response: 'Starting import...' })
+    }
+
+    const handleAdd = () => {
+      crudComponent.value.addTransaction()
+    }
+
+    const handleBulkDelete = (transactionIds) => {
+      crudComponent.value.bulkDelete(transactionIds)
     }
 
     const handleImportComplete = async (result) => {
@@ -416,7 +430,6 @@ const loadFilterOptions = async () => {
     
     filterOptions.value = response.data
     
-    console.log('✅ Filter options RAW:', JSON.stringify(response.data, null, 2))
     
     console.log('✅ Filter options loaded:', {
       owners: filterOptions.value.owners?.length || 0,
@@ -637,10 +650,20 @@ const handleTransactionUpdated = async () => {
 
 const handleTransactionDeleted = async () => {
   console.log('🔄 Refreshing after delete...')
+  
+  // Clear transactions array to force re-render
+  transactions.value = []
+  
+  // Wait a moment for backend to commit
+  await new Promise(resolve => setTimeout(resolve, 100))
+  
+  // Reload everything with cache-busting
   await loadFilterOptions()
   await loadTransactions()
   await loadSummary()
   await loadFilteredStats()
+  
+  console.log('✅ Refresh complete, transaction count:', transactions.value.length)
 }
 
 const handleCategoryUpdated = async () => {
@@ -750,7 +773,9 @@ const handleBulkCategorize = async (data) => {
       handleCategoryUpdated,
       showImportModal,
       handleImportStarted,
-      handleImportComplete
+      handleImportComplete,
+      handleAdd,
+      handleBulkDelete
     }
   }
 }
