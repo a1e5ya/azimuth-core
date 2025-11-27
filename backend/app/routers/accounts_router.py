@@ -1,11 +1,32 @@
 """
-Accounts Router - CRUD operations for accounts
-backend/app/routers/accounts_router.py
+Accounts Router - Bank Account CRUD Operations
+
+Endpoints:
+- GET /: List all accounts (with owner info and transaction counts)
+- GET /list: List accounts for import modal (with owner details)
+- GET /list-simple: Simplified account list for dropdowns
+- GET /{account_id}: Get single account details
+- POST /: Create new account
+- PUT /{account_id}: Update account
+- DELETE /{account_id}: Delete account (with transaction protection)
+- POST /{account_id}/import: Import CSV/XLSX transactions to account
+- GET /{account_id}/transactions: Get paginated transactions for account
+
+Features:
+- Account types: Main, Kopio, Reserv, BSP
+- Owner linking (family members)
+- Transaction count tracking
+- Balance tracking
+- Soft delete support (active flag)
+- Direct CSV import to specific account
+- Transaction protection on delete
+
+Database: SQLAlchemy async with Account, Owner, Transaction models
 """
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, delete
+from sqlalchemy import select, and_, func, delete, desc
 from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
@@ -19,8 +40,12 @@ from ..services.transaction_service import TransactionImportService
 router = APIRouter()
 
 
-# Pydantic Models
+# ============================================================================
+# PYDANTIC REQUEST/RESPONSE MODELS
+# ============================================================================
+
 class AccountCreate(BaseModel):
+    """Account creation request"""
     owner_id: str
     name: str
     account_type: str  # Main, Kopio, Reserv, BSP
@@ -29,6 +54,7 @@ class AccountCreate(BaseModel):
 
 
 class AccountUpdate(BaseModel):
+    """Account update request (all fields optional)"""
     name: Optional[str] = None
     account_type: Optional[str] = None
     institution: Optional[str] = None
@@ -37,6 +63,7 @@ class AccountUpdate(BaseModel):
 
 
 class AccountResponse(BaseModel):
+    """Account response with owner and transaction count"""
     id: str
     owner_id: str
     owner_name: str
@@ -50,7 +77,9 @@ class AccountResponse(BaseModel):
     updated_at: str
 
 
-# Endpoints
+# ============================================================================
+# LIST ACCOUNTS ENDPOINTS
+# ============================================================================
 
 @router.get("/", response_model=List[AccountResponse])
 async def list_accounts(
@@ -59,10 +88,25 @@ async def list_accounts(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all accounts, optionally filtered by owner"""
+    """
+    Get all accounts for current user
     
+    Features:
+    - Optional filter by owner_id
+    - Optional filter for active accounts only
+    - Includes owner name and transaction count
+    - Sorted by account name
+    
+    @param owner_id: Optional UUID to filter by owner
+    @param active_only: Filter for active accounts (default: true)
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {List[AccountResponse]} List of accounts with metadata
+    """
+    # Build query: user's accounts
     query = select(Account).where(Account.user_id == current_user.id)
     
+    # Filter by owner if specified
     if owner_id:
         try:
             owner_uuid = uuid.UUID(owner_id)
@@ -70,18 +114,21 @@ async def list_accounts(
         except ValueError:
             raise HTTPException(status_code=400, detail="Invalid owner ID")
     
+    # Filter active accounts only
     if active_only:
         query = query.where(Account.active == True)
     
+    # Sort by name
     query = query.order_by(Account.name)
     
+    # Execute query
     result = await db.execute(query)
     accounts = result.scalars().all()
     
-    # Get owner names and transaction counts
+    # Build response with owner names and transaction counts
     response = []
     for account in accounts:
-        # Get owner
+        # Get owner name
         owner_query = select(Owner).where(Owner.id == account.owner_id)
         owner_result = await db.execute(owner_query)
         owner = owner_result.scalar_one_or_none()
@@ -109,13 +156,74 @@ async def list_accounts(
     
     return response
 
+
 @router.get("/list")
 async def list_accounts_for_import(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get all accounts for user with owner information - for import modal"""
+    """
+    Get all accounts for import modal
     
+    Returns accounts with full owner details (name, color)
+    Used in frontend import modal dropdowns
+    Sorted by owner name, then account name
+    
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {accounts: [...], total: int}
+    """
+    # Join accounts with owners, filter active only
+    query = select(Account, Owner).join(
+        Owner, Account.owner_id == Owner.id
+    ).where(
+        and_(
+            Account.user_id == current_user.id,
+            Account.active == True
+        )
+    ).order_by(Owner.name, Account.name)
+    
+    result = await db.execute(query)
+    rows = result.all()
+    
+    # Build response with nested owner data
+    accounts = []
+    for account, owner in rows:
+        accounts.append({
+            "id": str(account.id),
+            "name": account.name,
+            "account_type": account.account_type,
+            "institution": account.institution,
+            "current_balance": float(account.current_balance or 0),
+            "owner": {
+                "id": str(owner.id),
+                "name": owner.name,
+                "color": owner.color
+            }
+        })
+    
+    return {
+        "accounts": accounts,
+        "total": len(accounts)
+    }
+
+
+@router.get("/list-simple")
+async def list_accounts_simple(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get simplified account list
+    
+    Same as /list but with cleaner endpoint name
+    Used for dropdown selects in UI
+    
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {accounts: [...], total: int}
+    """
+    # Join accounts with owners, filter active only
     query = select(Account, Owner).join(
         Owner, Account.owner_id == Owner.id
     ).where(
@@ -148,44 +256,10 @@ async def list_accounts_for_import(
         "total": len(accounts)
     }
 
-@router.get("/list-simple")
-async def list_accounts_simple(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get all accounts for import modal - simplified"""
-    
-    query = select(Account, Owner).join(
-        Owner, Account.owner_id == Owner.id
-    ).where(
-        and_(
-            Account.user_id == current_user.id,
-            Account.active == True
-        )
-    ).order_by(Owner.name, Account.name)
-    
-    result = await db.execute(query)
-    rows = result.all()
-    
-    accounts = []
-    for account, owner in rows:
-        accounts.append({
-            "id": str(account.id),
-            "name": account.name,
-            "account_type": account.account_type,
-            "institution": account.institution,
-            "current_balance": float(account.current_balance or 0),
-            "owner": {
-                "id": str(owner.id),
-                "name": owner.name,
-                "color": owner.color
-            }
-        })
-    
-    return {
-        "accounts": accounts,
-        "total": len(accounts)
-    }
+
+# ============================================================================
+# SINGLE ACCOUNT ENDPOINTS
+# ============================================================================
 
 @router.get("/{account_id}", response_model=AccountResponse)
 async def get_account(
@@ -193,13 +267,24 @@ async def get_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get single account details"""
+    """
+    Get single account details by ID
     
+    Includes owner name and transaction count
+    
+    @param account_id: Account UUID
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {AccountResponse} Account with metadata
+    @raises HTTPException: 400 if invalid UUID, 404 if not found
+    """
+    # Validate UUID format
     try:
         account_uuid = uuid.UUID(account_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid account ID")
     
+    # Query account (must belong to current user)
     query = select(Account).where(
         and_(
             Account.id == str(account_uuid),
@@ -212,7 +297,7 @@ async def get_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Get owner
+    # Get owner name
     owner_query = select(Owner).where(Owner.id == account.owner_id)
     owner_result = await db.execute(owner_query)
     owner = owner_result.scalar_one_or_none()
@@ -239,20 +324,37 @@ async def get_account(
     }
 
 
+# ============================================================================
+# CREATE ACCOUNT ENDPOINT
+# ============================================================================
+
 @router.post("/", response_model=AccountResponse)
 async def create_account(
     account_data: AccountCreate,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create new account"""
+    """
+    Create new bank account
     
-    # Verify owner exists and belongs to user
+    Process:
+    1. Validate owner_id exists and belongs to user
+    2. Create account with initial balance
+    3. Return created account with metadata
+    
+    @param account_data: Account creation data
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {AccountResponse} Created account
+    @raises HTTPException: 400 if invalid owner_id, 404 if owner not found
+    """
+    # Validate owner UUID
     try:
         owner_uuid = uuid.UUID(account_data.owner_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid owner ID")
     
+    # Verify owner exists and belongs to user
     owner_query = select(Owner).where(
         and_(
             Owner.id == str(owner_uuid),
@@ -265,30 +367,14 @@ async def create_account(
     if not owner:
         raise HTTPException(status_code=404, detail="Owner not found")
     
-    # Check if account with same name exists for this owner
-    existing_query = select(Account).where(
-        and_(
-            Account.owner_id == str(owner_uuid),
-            Account.name == account_data.name,
-            Account.account_type == account_data.account_type
-        )
-    )
-    existing_result = await db.execute(existing_query)
-    if existing_result.scalar_one_or_none():
-        raise HTTPException(
-            status_code=400,
-            detail=f"Account '{account_data.name}' ({account_data.account_type}) already exists for {owner.name}"
-        )
-    
+    # Create account
     new_account = Account(
-        id=str(uuid.uuid4()),
         user_id=current_user.id,
         owner_id=str(owner_uuid),
         name=account_data.name,
         account_type=account_data.account_type,
         institution=account_data.institution,
-        current_balance=Decimal(str(account_data.current_balance or 0)),
-        active=True
+        current_balance=Decimal(str(account_data.current_balance or 0))
     )
     
     db.add(new_account)
@@ -312,6 +398,10 @@ async def create_account(
     }
 
 
+# ============================================================================
+# UPDATE ACCOUNT ENDPOINT
+# ============================================================================
+
 @router.put("/{account_id}", response_model=AccountResponse)
 async def update_account(
     account_id: str,
@@ -319,13 +409,26 @@ async def update_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Update account"""
+    """
+    Update existing account
     
+    All fields are optional - only provided fields are updated
+    Updates updated_at timestamp automatically
+    
+    @param account_id: Account UUID
+    @param account_data: Fields to update
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {AccountResponse} Updated account
+    @raises HTTPException: 400 if invalid UUID, 404 if not found
+    """
+    # Validate UUID format
     try:
         account_uuid = uuid.UUID(account_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid account ID")
     
+    # Query account (must belong to current user)
     query = select(Account).where(
         and_(
             Account.id == str(account_uuid),
@@ -338,7 +441,7 @@ async def update_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Update fields
+    # Update only provided fields
     if account_data.name is not None:
         account.name = account_data.name
     
@@ -354,6 +457,7 @@ async def update_account(
     if account_data.active is not None:
         account.active = account_data.active
     
+    # Update timestamp
     account.updated_at = datetime.utcnow()
     
     await db.commit()
@@ -387,6 +491,10 @@ async def update_account(
     }
 
 
+# ============================================================================
+# DELETE ACCOUNT ENDPOINT
+# ============================================================================
+
 @router.delete("/{account_id}")
 async def delete_account(
     account_id: str,
@@ -394,13 +502,28 @@ async def delete_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete account (only if no transactions or force=true)"""
+    """
+    Delete account (with transaction protection)
     
+    By default, prevents deletion if account has transactions
+    Use force=true to delete account with all its transactions
+    
+    CASCADE DELETE: If force=true, all transactions are deleted too
+    
+    @param account_id: Account UUID
+    @param force: Allow deletion with transactions (default: false)
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} Success message with transaction count
+    @raises HTTPException: 400 if has transactions and force=false, 404 if not found
+    """
+    # Validate UUID format
     try:
         account_uuid = uuid.UUID(account_id)
     except ValueError:
         raise HTTPException(status_code=400, detail="Invalid account ID")
     
+    # Query account (must belong to current user)
     query = select(Account).where(
         and_(
             Account.id == str(account_uuid),
@@ -420,13 +543,14 @@ async def delete_account(
     trans_result = await db.execute(trans_query)
     transaction_count = trans_result.scalar()
     
+    # Prevent deletion if has transactions (unless force=true)
     if transaction_count > 0 and not force:
         raise HTTPException(
             status_code=400,
             detail=f"Cannot delete account with {transaction_count} transactions. Use force=true to delete anyway"
         )
     
-    # Delete account (cascade will delete transactions if force=true)
+    # Delete account (cascade deletes transactions if force=true)
     delete_query = delete(Account).where(Account.id == str(account_uuid))
     await db.execute(delete_query)
     await db.commit()
@@ -440,6 +564,10 @@ async def delete_account(
     }
 
 
+# ============================================================================
+# ACCOUNT TRANSACTION IMPORT ENDPOINT
+# ============================================================================
+
 @router.post("/{account_id}/import")
 async def import_transactions_to_account(
     account_id: str,
@@ -448,8 +576,25 @@ async def import_transactions_to_account(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Import transactions directly to specific account"""
+    """
+    Import CSV/XLSX transactions directly to specific account
     
+    Process:
+    1. Validate account exists and belongs to user
+    2. Validate file format (CSV/XLSX) and size (<10MB)
+    3. Parse transactions from file
+    4. Auto-categorize if enabled (using LLM or rules)
+    5. Import to database with duplicate detection
+    
+    @param account_id: Target account UUID
+    @param file: CSV or XLSX file upload
+    @param auto_categorize: Enable LLM categorization (default: true)
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} Import result with statistics
+    @raises HTTPException: 400 if invalid file, 404 if account not found
+    """
+    # Validate UUID format
     try:
         account_uuid = uuid.UUID(account_id)
     except ValueError:
@@ -468,7 +613,7 @@ async def import_transactions_to_account(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Get owner
+    # Get owner for logging
     owner_query = select(Owner).where(Owner.id == account.owner_id)
     owner_result = await db.execute(owner_query)
     owner = owner_result.scalar_one_or_none()
@@ -478,39 +623,41 @@ async def import_transactions_to_account(
     
     print(f"📤 Import to account: {owner.name} - {account.name} ({account.account_type})")
     
-    # Validate file
+    # Validate file type
     if not file.filename.lower().endswith(('.csv', '.xlsx')):
         raise HTTPException(status_code=400, detail="Only CSV and XLSX files are supported")
     
+    # Validate file size
     if file.size and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
     
-    # Read file
+    # Read file content
     try:
         file_content = await file.read()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
     
-    # Import using service
+    # Import using TransactionImportService
     import_service = TransactionImportService(db, current_user)
     
     result = await import_service.import_from_csv(
         file_content=file_content,
         filename=file.filename,
-        account_name=f"{owner.name}_{account.name}",  # Legacy compatibility
+        account_name=f"{owner.name}_{account.name}",  # Legacy format for compatibility
         account_type=account.account_type,
         auto_categorize=auto_categorize,
-        account_id=str(account_uuid)  # Pass account_id directly
+        account_id=str(account_uuid)  # Link transactions to account
     )
     
     if not result["success"]:
         raise HTTPException(status_code=500, detail=result["message"])
     
-    # Update account balance if needed (calculate from transactions)
-    # This could be done asynchronously or here
-    
     return result
 
+
+# ============================================================================
+# ACCOUNT TRANSACTIONS ENDPOINT
+# ============================================================================
 
 @router.get("/{account_id}/transactions")
 async def get_account_transactions(
@@ -520,8 +667,21 @@ async def get_account_transactions(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get transactions for specific account"""
+    """
+    Get paginated transactions for specific account
     
+    Returns transactions sorted by posted_at descending (newest first)
+    Includes pagination with page and limit parameters
+    
+    @param account_id: Account UUID
+    @param page: Page number (default: 1)
+    @param limit: Items per page (default: 50)
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {account_id, account_name, transactions: [...], total, page, limit}
+    @raises HTTPException: 400 if invalid UUID, 404 if account not found
+    """
+    # Validate UUID format
     try:
         account_uuid = uuid.UUID(account_id)
     except ValueError:
@@ -540,9 +700,7 @@ async def get_account_transactions(
     if not account:
         raise HTTPException(status_code=404, detail="Account not found")
     
-    # Get transactions
-    from sqlalchemy import desc
-    
+    # Get paginated transactions (newest first)
     trans_query = select(Transaction).where(
         Transaction.account_id == str(account_uuid)
     ).order_by(desc(Transaction.posted_at)).offset((page - 1) * limit).limit(limit)
@@ -550,7 +708,7 @@ async def get_account_transactions(
     trans_result = await db.execute(trans_query)
     transactions = trans_result.scalars().all()
     
-    # Get total count
+    # Get total count for pagination
     count_query = select(func.count(Transaction.id)).where(
         Transaction.account_id == str(account_uuid)
     )

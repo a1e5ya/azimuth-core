@@ -1,5 +1,33 @@
 """
-Main transactions router with CRUD operations 
+Transactions Router - Main Transaction CRUD Operations
+
+This is the primary router for all transaction-related endpoints.
+
+Endpoints:
+- GET /list: List transactions with advanced filtering and pagination
+- GET /summary: Get transaction summary statistics
+- GET /filtered-summary: Get summary for filtered subset
+- GET /{transaction_id}: Get single transaction details
+- POST /: Create single transaction manually
+- PUT /{transaction_id}: Update transaction
+- DELETE /{transaction_id}: Delete single transaction
+- POST /bulk-delete: Delete multiple transactions
+- POST /bulk-categorize: Assign category to multiple transactions
+- POST /import: Import CSV/XLSX file
+- POST /sync-categories: Sync transaction category strings with Category table
+
+Features:
+- Advanced filtering (date, amount, merchant, category, account, owner)
+- Pagination and sorting
+- Category assignment (manual and automatic)
+- Bulk operations (categorize, delete)
+- CSV/XLSX import with auto-categorization
+- Transfer pair linking
+- Confidence scoring
+- Review flagging
+
+Database: SQLAlchemy async with Transaction, Category, Account models
+Services: TransactionService, TransactionQueries, TransactionImportService
 """
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, Form
@@ -28,24 +56,48 @@ from ..auth.local_auth import get_current_user
 
 router = APIRouter()
 
+
+# ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
 def ensure_list(param: Optional[Union[str, List[str]]]) -> Optional[List[str]]:
-    """Convert string params to single-item lists for FastAPI Query compatibility"""
+    """
+    Convert string params to single-item lists
+    
+    FastAPI Query params can be sent as either string or list
+    Axios with paramsSerializer may send single values as strings
+    This normalizes them to always be lists
+    
+    @param param: String or list of strings (or None)
+    @returns {List[str]|None} List of strings or None
+    """
     if param is None:
         return None
     if isinstance(param, str):
         return [param]
     return param
 
+
+# ============================================================================
+# REQUEST MODELS
+# ============================================================================
+
 class TransactionUpdateRequest(BaseModel):
+    """Transaction update request (all fields optional)"""
     merchant: Optional[str] = None
     amount: Optional[float] = None
     memo: Optional[str] = None
     category_id: Optional[str] = None
 
+
 class BulkDeleteRequest(BaseModel):
+    """Bulk delete request"""
     transaction_ids: List[str]
 
+
 class TransactionCreateRequest(BaseModel):
+    """Manual transaction creation request"""
     posted_at: str  # ISO date string
     amount: float
     merchant: Optional[str] = None
@@ -55,6 +107,9 @@ class TransactionCreateRequest(BaseModel):
     category_id: Optional[str] = None
 
 
+# ============================================================================
+# LIST TRANSACTIONS ENDPOINT
+# ============================================================================
 
 @router.get("/list", response_model=List[TransactionResponse])
 async def list_transactions(
@@ -72,29 +127,75 @@ async def list_transactions(
     owners: Optional[List[str]] = Query(None),
     account_types: Optional[List[str]] = Query(None),
     main_categories: Optional[List[str]] = Query(None),
-    categories: Optional[List[str]] = Query(None),  
-    subcategories: Optional[List[str]] = Query(None),  
+    categories: Optional[List[str]] = Query(None),  # CSV category filter
+    subcategories: Optional[List[str]] = Query(None),  # CSV subcategory filter
     sort_by: str = Query("posted_at", regex="^(posted_at|amount|merchant|created_at)$"),
     sort_order: str = Query("desc", regex="^(asc|desc)$"),
     current_user: User = Depends(get_current_user),
     queries: TransactionQueries = Depends(get_transaction_queries)
 ):
-    """Get paginated list of transactions with enhanced filters"""
+    """
+    Get paginated list of transactions with advanced filtering
     
+    Supports filtering by:
+    - Date range (start_date, end_date)
+    - Amount range (min_amount, max_amount)
+    - Merchant (partial match, case-insensitive)
+    - Category (linked category_id)
+    - Account (account_id)
+    - Main category (INCOME, EXPENSES, TRANSFERS)
+    - Review status (review_needed boolean)
+    - Owners (list of owner names: Egor, Alex, Lila)
+    - Account types (list: Main, Kopio, Reserv, BSP)
+    - CSV categories (list of category strings from CSV)
+    - CSV subcategories (list of subcategory strings from CSV)
+    
+    Supports sorting by: posted_at, amount, merchant, created_at
+    Supports pagination with page and limit
+    
+    Returns transactions with full category details (name, icon, parent)
+    
+    @param page: Page number (starts at 1)
+    @param limit: Items per page (1-1000)
+    @param start_date: Filter from date (inclusive)
+    @param end_date: Filter to date (inclusive)
+    @param min_amount: Minimum amount (inclusive)
+    @param max_amount: Maximum amount (inclusive)
+    @param merchant: Merchant name (partial match)
+    @param category_id: Linked category UUID
+    @param account_id: Account UUID
+    @param main_category: Main category (INCOME, EXPENSES, TRANSFERS)
+    @param review_needed: Filter by review flag
+    @param owners: List of owner names
+    @param account_types: List of account types
+    @param main_categories: List of main categories
+    @param categories: List of CSV category strings
+    @param subcategories: List of CSV subcategory strings
+    @param sort_by: Sort field
+    @param sort_order: Sort direction (asc|desc)
+    @param current_user: Injected from JWT token
+    @param queries: Injected TransactionQueries service
+    @returns {List[TransactionResponse]} List of transactions
+    """
+    # Build filters dict for service
     filters = {
         'page': page, 'limit': limit, 'start_date': start_date, 'end_date': end_date,
         'min_amount': min_amount, 'max_amount': max_amount, 'merchant': merchant,
         'category_id': category_id, 'account_id': account_id, 'main_category': main_category,
         'review_needed': review_needed, 'owners': owners or [], 'account_types': account_types or [],
         'main_categories': main_categories or [], 
-        'categories': categories or [],  
-        'subcategories': subcategories or [],  
+        'categories': categories or [],  # CSV category strings
+        'subcategories': subcategories or [],  # CSV subcategory strings
         'sort_by': sort_by, 'sort_order': sort_order
     }
     
-    transactions, total_count = await queries.get_transactions_with_filters(filters)    
+    # Get filtered transactions from service
+    transactions, total_count = await queries.get_transactions_with_filters(filters)
+    
+    # Build response with full category details
     response_data = []
     for transaction in transactions:
+        # Get parent category name if exists
         parent_category_name = None
         if transaction.assigned_category:
             if transaction.assigned_category.parent:
@@ -136,15 +237,40 @@ async def list_transactions(
     
     return response_data
 
+
+# ============================================================================
+# TRANSACTION SUMMARY ENDPOINTS
+# ============================================================================
+
 @router.get("/summary", response_model=TransactionSummary)
 async def get_transaction_summary(
     start_date: Optional[date] = Query(None),
     end_date: Optional[date] = Query(None),
     queries: TransactionQueries = Depends(get_transaction_queries)
 ):
-    """Get comprehensive transaction summary with analytics"""
+    """
+    Get comprehensive transaction summary with analytics
+    
+    Aggregates:
+    - Total transaction count
+    - Total amounts by type (income, expense, transfer)
+    - Categorization rate (percentage)
+    - Date range
+    - Monthly breakdown
+    - Recent imports
+    - Top merchants
+    - Top categories
+    
+    Optional date range filtering
+    
+    @param start_date: Filter from date (optional)
+    @param end_date: Filter to date (optional)
+    @param queries: Injected TransactionQueries service
+    @returns {TransactionSummary} Summary statistics
+    """
     summary_data = await queries.get_transaction_summary(start_date, end_date)
     return TransactionSummary(**summary_data)
+
 
 @router.get("/filtered-summary")
 async def get_filtered_summary(
@@ -165,15 +291,34 @@ async def get_filtered_summary(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get summary stats for filtered transactions (all pages)"""
+    """
+    Get summary statistics for filtered subset of transactions
     
-    # Convert single string params to lists (axios with paramsSerializer sends single values as strings)
+    Calculates totals for currently filtered transactions (all pages)
+    Used to show "Filtered X transactions totaling €Y" in UI
+    
+    Applies same filters as /list endpoint but returns aggregates instead of records
+    
+    Returns:
+    - Total count
+    - Total amount (sum of absolute values)
+    - Income total
+    - Expense total
+    - Transfer total
+    
+    @param start_date through subcategories: Same filters as /list endpoint
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {total_count, total_amount, income, expense, transfer}
+    """
+    # Normalize params (handle single strings from axios)
     main_categories = ensure_list(main_categories)
     categories = ensure_list(categories)
     subcategories = ensure_list(subcategories)
     owners = ensure_list(owners)
     account_types = ensure_list(account_types)
     
+    # Build query conditions
     conditions = [Transaction.user_id == current_user.id]
     
     if start_date:
@@ -200,62 +345,409 @@ async def get_filtered_summary(
         # Case-insensitive comparison
         conditions.append(func.upper(Transaction.main_category).in_([m.upper() for m in main_categories]))
     if categories and len(categories) > 0:
-        # Case-insensitive comparison
         conditions.append(func.upper(Transaction.category).in_([c.upper() for c in categories]))
     if subcategories and len(subcategories) > 0:
-        # Case-insensitive comparison
         conditions.append(func.upper(Transaction.subcategory).in_([s.upper() for s in subcategories]))
     
-    base_condition = and_(*conditions)
+    # Get total count
+    count_query = select(func.count(Transaction.id)).where(and_(*conditions))
+    count_result = await db.execute(count_query)
+    total_count = count_result.scalar()
     
-    # Total count and categorized
-    stats_query = select(
-        func.count(Transaction.id).label('total'),
-        func.count(Transaction.category_id).label('categorized'),
-        func.coalesce(func.sum(func.abs(Transaction.amount)), 0).label('total_amount')
-    ).where(base_condition)
-    
-    stats_result = await db.execute(stats_query)
-    stats = stats_result.first()
-    
-    # Count transactions with category = "-" (uncategorized in CSV)
-    uncategorized_query = select(func.count(Transaction.id)).where(
-        and_(base_condition, Transaction.category == "Uncategorized")
+    # Get sum totals by type
+    income_query = select(func.sum(Transaction.amount)).where(
+        and_(*conditions, Transaction.is_income == True)
     )
-    uncategorized_result = await db.execute(uncategorized_query)
-    uncategorized_count = uncategorized_result.scalar() or 0
+    income_result = await db.execute(income_query)
+    income_total = float(income_result.scalar() or 0)
+    
+    expense_query = select(func.sum(func.abs(Transaction.amount))).where(
+        and_(*conditions, Transaction.is_expense == True)
+    )
+    expense_result = await db.execute(expense_query)
+    expense_total = float(expense_result.scalar() or 0)
+    
+    transfer_query = select(func.sum(func.abs(Transaction.amount))).where(
+        and_(*conditions, Transaction.main_category == 'TRANSFERS')
+    )
+    transfer_result = await db.execute(transfer_query)
+    transfer_total = float(transfer_result.scalar() or 0)
+    
+    # Total amount (sum of absolute values)
+    total_query = select(func.sum(func.abs(Transaction.amount))).where(and_(*conditions))
+    total_result = await db.execute(total_query)
+    total_amount = float(total_result.scalar() or 0)
     
     return {
-        "filtered_count": stats.total or 0,
-        "categorized_count": stats.categorized or 0,
-        "uncategorized_count": uncategorized_count,
-        "total_amount": float(stats.total_amount or 0)
+        "total_count": total_count,
+        "total_amount": total_amount,
+        "income": income_total,
+        "expense": expense_total,
+        "transfer": transfer_total
     }
 
-@router.get("/import/status/{job_id}")
-async def get_import_status(
-    job_id: str,
-    current_user: User = Depends(get_current_user)
+
+# ============================================================================
+# SINGLE TRANSACTION ENDPOINTS
+# ============================================================================
+
+@router.get("/{transaction_id}", response_model=TransactionResponse)
+async def get_transaction(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
 ):
-    """Get import job status for polling"""
-    from ..services.import_jobs import get_job
+    """
+    Get single transaction by ID
     
-    job = get_job(job_id)
+    Includes full category details (name, icon, parent)
     
-    if not job:
-        raise HTTPException(404, "Job not found")
+    @param transaction_id: Transaction UUID
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {TransactionResponse} Transaction details
+    @raises HTTPException: 400 if invalid UUID, 404 if not found
+    """
+    try:
+        trans_uuid = uuid.UUID(transaction_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transaction ID")
     
-    # Verify job belongs to user
-    if job["user_id"] != str(current_user.id):
-        raise HTTPException(403, "Access denied")
+    # Query transaction with category relationship
+    query = select(Transaction).options(
+        selectinload(Transaction.assigned_category).selectinload(Category.parent)
+    ).where(
+        and_(
+            Transaction.id == str(trans_uuid),
+            Transaction.user_id == current_user.id
+        )
+    )
     
-    return job
+    result = await db.execute(query)
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Get parent category name
+    parent_category_name = None
+    if transaction.assigned_category and transaction.assigned_category.parent:
+        parent_category_name = transaction.assigned_category.parent.name
+    
+    return TransactionResponse(
+        id=str(transaction.id),
+        account_id=str(transaction.account_id) if transaction.account_id else None,
+        posted_at=transaction.posted_at.isoformat(),
+        amount=str(transaction.amount),
+        currency=transaction.currency,
+        merchant=transaction.merchant,
+        memo=transaction.memo,
+        category_id=str(transaction.category_id) if transaction.category_id else None,
+        category_name=transaction.assigned_category.name if transaction.assigned_category else None,
+        category_icon=transaction.assigned_category.icon if transaction.assigned_category else None,
+        parent_category_name=parent_category_name,
+        source_category=transaction.source_category,
+        import_batch_id=str(transaction.import_batch_id) if transaction.import_batch_id else None,
+        main_category=transaction.main_category,
+        category=transaction.category,
+        subcategory=transaction.subcategory,
+        owner=transaction.owner,
+        is_expense=transaction.is_expense,
+        is_income=transaction.is_income,
+        year=transaction.year,
+        month=transaction.month,
+        year_month=transaction.year_month,
+        weekday=transaction.weekday,
+        transfer_pair_id=transaction.transfer_pair_id,
+        confidence_score=float(transaction.confidence_score) if transaction.confidence_score else None,
+        review_needed=transaction.review_needed,
+        tags=transaction.tags if transaction.tags else [],
+        notes=transaction.notes,
+        created_at=transaction.created_at.isoformat(),
+        bank_account=transaction.bank_account,
+        bank_account_type=transaction.bank_account_type,
+    )
+
+
+# File continues in next message due to length...
+
+
+@router.put("/{transaction_id}", response_model=TransactionResponse)
+async def update_transaction(
+    transaction_id: str,
+    data: TransactionUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Update transaction fields
+    
+    All fields optional - only provided fields are updated
+    If category_id is updated, automatically syncs category strings
+    
+    @param transaction_id: Transaction UUID
+    @param data: Fields to update
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {TransactionResponse} Updated transaction
+    @raises HTTPException: 400 if invalid UUID, 404 if not found
+    """
+    try:
+        trans_uuid = uuid.UUID(transaction_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transaction ID")
+    
+    # Query transaction
+    query = select(Transaction).where(
+        and_(
+            Transaction.id == str(trans_uuid),
+            Transaction.user_id == current_user.id
+        )
+    )
+    result = await db.execute(query)
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Update provided fields
+    if data.merchant is not None:
+        transaction.merchant = data.merchant
+    if data.amount is not None:
+        transaction.amount = data.amount
+        transaction.is_income = data.amount > 0
+        transaction.is_expense = data.amount < 0
+    if data.memo is not None:
+        transaction.memo = data.memo
+    
+    # Update category if provided (sync category strings)
+    if data.category_id is not None:
+        transaction.category_id = data.category_id
+        
+        # Get category hierarchy
+        if data.category_id:
+            cat_query = select(Category).options(
+                selectinload(Category.parent).selectinload(Category.parent)
+            ).where(Category.id == data.category_id)
+            cat_result = await db.execute(cat_query)
+            cat = cat_result.scalar_one_or_none()
+            
+            if cat:
+                # Sync category strings based on hierarchy
+                if cat.parent:
+                    if cat.parent.parent:
+                        # 3-level: grandparent = main, parent = category, self = subcategory
+                        transaction.main_category = cat.parent.parent.name
+                        transaction.category = cat.parent.name
+                        transaction.subcategory = cat.name
+                    else:
+                        # 2-level: parent = main, self = category
+                        transaction.main_category = cat.parent.name
+                        transaction.category = cat.name
+                        transaction.subcategory = None
+                else:
+                    # 1-level: self = main
+                    transaction.main_category = cat.name
+                    transaction.category = None
+                    transaction.subcategory = None
+    
+    await db.commit()
+    await db.refresh(transaction)
+    
+    print(f"✅ Updated transaction: {transaction.id}")
+    
+    # Return full transaction response (re-query with relationships)
+    return await get_transaction(transaction_id, current_user, db)
+
+
+@router.delete("/{transaction_id}", response_model=DeleteResponse)
+async def delete_transaction(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete single transaction
+    
+    @param transaction_id: Transaction UUID
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {DeleteResponse} {success, message, deleted_count}
+    @raises HTTPException: 400 if invalid UUID, 404 if not found
+    """
+    try:
+        trans_uuid = uuid.UUID(transaction_id)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid transaction ID")
+    
+    # Query transaction
+    query = select(Transaction).where(
+        and_(
+            Transaction.id == str(trans_uuid),
+            Transaction.user_id == current_user.id
+        )
+    )
+    result = await db.execute(query)
+    transaction = result.scalar_one_or_none()
+    
+    if not transaction:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    # Delete transaction
+    await db.delete(transaction)
+    await db.commit()
+    
+    print(f"✅ Deleted transaction: {transaction_id}")
+    
+    return DeleteResponse(
+        success=True,
+        message="Transaction deleted successfully",
+        deleted_count=1
+    )
+
+
+# ============================================================================
+# BULK OPERATIONS ENDPOINTS
+# ============================================================================
+
+@router.post("/bulk-categorize", response_model=BulkOperationResponse)
+async def bulk_categorize_transactions(
+    request: BulkCategorizeRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Assign category to multiple transactions
+    
+    Updates category_id and syncs category strings for all transactions
+    Sets source_category to 'user' and confidence to provided value
+    
+    @param request: {transaction_ids: [UUIDs], category_id: UUID, confidence: float}
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {BulkOperationResponse} {success, message, updated_count}
+    """
+    try:
+        # Convert to UUIDs
+        trans_ids = [str(uuid.UUID(tid)) for tid in request.transaction_ids]
+        
+        # Get category hierarchy for syncing strings
+        cat_query = select(Category).options(
+            selectinload(Category.parent).selectinload(Category.parent)
+        ).where(Category.id == request.category_id)
+        cat_result = await db.execute(cat_query)
+        cat = cat_result.scalar_one_or_none()
+        
+        if not cat:
+            raise HTTPException(status_code=404, detail="Category not found")
+        
+        # Determine category strings
+        main_category = None
+        category = None
+        subcategory = None
+        
+        if cat.parent:
+            if cat.parent.parent:
+                # 3-level
+                main_category = cat.parent.parent.name
+                category = cat.parent.name
+                subcategory = cat.name
+            else:
+                # 2-level
+                main_category = cat.parent.name
+                category = cat.name
+        else:
+            # 1-level
+            main_category = cat.name
+        
+        # Update all transactions
+        query = select(Transaction).where(
+            and_(
+                Transaction.id.in_(trans_ids),
+                Transaction.user_id == current_user.id
+            )
+        )
+        result = await db.execute(query)
+        transactions = result.scalars().all()
+        
+        updated_count = 0
+        for trans in transactions:
+            trans.category_id = request.category_id
+            trans.main_category = main_category
+            trans.category = category
+            trans.subcategory = subcategory
+            trans.source_category = 'user'
+            trans.confidence_score = request.confidence
+            trans.review_needed = False
+            updated_count += 1
+        
+        await db.commit()
+        
+        print(f"✅ Bulk categorized {updated_count} transactions")
+        
+        return BulkOperationResponse(
+            success=True,
+            message=f"Categorized {updated_count} transactions",
+            updated_count=updated_count
+        )
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Bulk categorize failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/bulk-delete")
+async def bulk_delete_transactions(
+    request: BulkDeleteRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Delete multiple transactions
+    
+    @param request: {transaction_ids: [UUIDs]}
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {success, message, deleted_count}
+    """
+    from sqlalchemy import delete as sql_delete
+    
+    try:
+        # Convert to UUIDs
+        trans_ids = [str(uuid.UUID(tid)) for tid in request.transaction_ids]
+        
+        # Delete all transactions
+        delete_query = sql_delete(Transaction).where(
+            and_(
+                Transaction.id.in_(trans_ids),
+                Transaction.user_id == str(current_user.id)
+            )
+        )
+        
+        result = await db.execute(delete_query)
+        await db.commit()
+        
+        print(f"✅ Deleted {result.rowcount} transactions")
+        
+        return {
+            "success": True,
+            "message": f"Deleted {result.rowcount} transactions",
+            "deleted_count": result.rowcount
+        }
+    except Exception as e:
+        await db.rollback()
+        print(f"❌ Bulk delete failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ============================================================================
+# CSV/XLSX IMPORT ENDPOINT
+# ============================================================================
 
 @router.post("/import")
 async def import_transactions(
     file: UploadFile = File(...),
-    import_mode: str = Form("training"),
-    account_id: Optional[str] = Form(None),
+    account_id: str = Form(...),
     auto_categorize: bool = Form(True),
     current_user: User = Depends(get_current_user),
     import_service: TransactionImportService = Depends(get_import_service)
@@ -263,25 +755,34 @@ async def import_transactions(
     """
     Import transactions from CSV/XLSX file
     
-    Modes:
-    - training: Pre-categorized data with auto-category creation
-    - account: Uncategorized bank data to specific account
-    """
+    Process:
+    1. Validate file format and size
+    2. Parse CSV/XLSX
+    3. Detect duplicates (hash_dedupe)
+    4. Extract transaction data
+    5. Auto-categorize if enabled (LLM/rules)
+    6. Import to database
+    7. Return import summary
     
+    Supported formats:
+    - Finnish bank CSV (OP, Nordea, etc.)
+    - Standard CSV with columns: Date, Amount, Merchant, Memo
+    - XLSX with same columns
+    
+    @param file: Uploaded CSV/XLSX file
+    @param account_id: Target account UUID
+    @param auto_categorize: Enable AI categorization (default: true)
+    @param current_user: Injected from JWT token
+    @param import_service: Injected TransactionImportService
+    @returns {dict} Import result with statistics
+    @raises HTTPException: 400 if invalid file, 500 on import failure
+    """
     # Validate file
     if not file.filename.lower().endswith(('.csv', '.xlsx')):
-        raise HTTPException(status_code=400, detail="Only CSV and XLSX files supported")
+        raise HTTPException(status_code=400, detail="Only CSV and XLSX files are supported")
     
     if file.size and file.size > 10 * 1024 * 1024:
         raise HTTPException(status_code=400, detail="File too large (max 10MB)")
-    
-    # Validate mode
-    if import_mode not in ['training', 'account']:
-        raise HTTPException(status_code=400, detail="Invalid import_mode. Use 'training' or 'account'")
-    
-    # For account mode, account_id is required
-    if import_mode == 'account' and not account_id:
-        raise HTTPException(status_code=400, detail="account_id required for account mode")
     
     # Read file
     try:
@@ -289,11 +790,10 @@ async def import_transactions(
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {str(e)}")
     
-    # Import
+    # Import using service
     result = await import_service.import_from_csv(
         file_content=file_content,
         filename=file.filename,
-        import_mode=import_mode,
         account_id=account_id,
         auto_categorize=auto_categorize
     )
@@ -303,304 +803,31 @@ async def import_transactions(
     
     return result
 
-@router.post("/categorize/{transaction_id}")
-async def categorize_transaction(
-    transaction_id: str,
-    category_id: str = Query(...),
-    service: TransactionService = Depends(get_transaction_service)
-):
-    """Manually categorize a transaction"""
-    result = await service.categorize_transaction(transaction_id, category_id)
-    
-    if not result["success"]:
-        raise HTTPException(status_code=404, detail=result["message"])
-    
-    return result
 
+# ============================================================================
+# CATEGORY SYNC ENDPOINT
+# ============================================================================
 
-@router.delete("/{transaction_id}", response_model=DeleteResponse)
-async def delete_transaction(
-    transaction_id: str,
+@router.post("/sync-categories")
+async def sync_transaction_categories(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Delete a single transaction"""
-    from sqlalchemy import delete as sql_delete
+    """
+    Sync transaction category strings with Category table
     
-    try:
-        # Convert to UUID
-        trans_uuid = str(uuid.UUID(transaction_id))
-        
-        print(f"🗑️ Deleting transaction: {trans_uuid}")
-        
-        # DELETE with explicit query
-        delete_query = sql_delete(Transaction).where(
-            and_(
-                Transaction.id == trans_uuid,
-                Transaction.user_id == str(current_user.id)
-            )
-        )
-        
-        result = await db.execute(delete_query)
-        deleted_count = result.rowcount
-        
-        print(f"✅ Rows affected: {deleted_count}")
-        
-        await db.commit()
-        
-        if deleted_count == 0:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        
-        return DeleteResponse(
-            success=True,
-            message="Transaction deleted",
-            deleted_count=deleted_count
-        )
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        print(f"❌ Delete failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.put("/{transaction_id}")
-async def update_transaction(
-    transaction_id: str,
-    data: TransactionCreateRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Update transaction details"""
-    from datetime import datetime
+    Fixes transactions where category was reassigned but strings not updated
+    Useful after bulk category changes or category renames
     
-    try:
-        trans_uuid = str(uuid.UUID(transaction_id))
-        
-        transaction_query = select(Transaction).where(
-            and_(
-                Transaction.id == trans_uuid,
-                Transaction.user_id == str(current_user.id)
-            )
-        )
-        result = await db.execute(transaction_query)
-        transaction = result.scalar_one_or_none()
-        
-        if not transaction:
-            raise HTTPException(status_code=404, detail="Transaction not found")
-        
-        # Update date if provided
-        if data.posted_at:
-            posted_at = datetime.fromisoformat(data.posted_at.replace('Z', '+00:00'))
-            transaction.posted_at = posted_at
-            transaction.year = posted_at.year
-            transaction.month = posted_at.month
-            transaction.year_month = posted_at.strftime('%Y-%m')
-            transaction.weekday = posted_at.strftime('%A')
-        
-        # Update amount
-        if data.amount is not None:
-            transaction.amount = data.amount
-            transaction.is_income = data.amount > 0
-            transaction.is_expense = data.amount < 0
-        
-        # Update other fields
-        if data.merchant is not None:
-            transaction.merchant = data.merchant
-        if data.memo is not None:
-            transaction.memo = data.memo
-        if data.owner is not None:
-            transaction.owner = data.owner
-        if data.bank_account_type is not None:
-            transaction.bank_account_type = data.bank_account_type
-        
-        # Update category AND derive main_category, category, subcategory
-        if data.category_id:
-            transaction.category_id = data.category_id
-            transaction.source_category = "user"
-            transaction.review_needed = False
-            
-            # ✅ GET CATEGORY HIERARCHY
-            cat_query = select(Category).options(
-                selectinload(Category.parent).selectinload(Category.parent)
-            ).where(Category.id == data.category_id)
-            cat_result = await db.execute(cat_query)
-            cat = cat_result.scalar_one_or_none()
-            
-            if cat:
-                if cat.parent:
-                    if cat.parent.parent:
-                        # 3-level
-                        transaction.main_category = cat.parent.parent.name
-                        transaction.category = cat.parent.name
-                        transaction.subcategory = cat.name
-                    else:
-                        # 2-level
-                        transaction.main_category = cat.parent.name
-                        transaction.category = cat.name
-                        transaction.subcategory = None
-                else:
-                    # 1-level
-                    transaction.main_category = cat.name
-                    transaction.category = None
-                    transaction.subcategory = None
-        
-        transaction.updated_at = datetime.utcnow()
-        
-        await db.commit()
-        
-        print(f"✅ Updated transaction {transaction_id}")
-        
-        return {
-            "success": True,
-            "message": "Transaction updated successfully"
-        }
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        await db.rollback()
-        print(f"❌ Update failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/bulk-categorize", response_model=BulkOperationResponse)
-async def bulk_categorize_transactions(
-    request: BulkCategorizeRequest,
-    service: TransactionService = Depends(get_transaction_service)
-):
-    """Bulk categorize multiple transactions"""
-    result = await service.bulk_categorize(
-        transaction_ids=request.transaction_ids,
-        category_id=request.category_id,
-        confidence=request.confidence
-    )
+    Process:
+    1. Find all transactions with category_id
+    2. Get category hierarchy (category → parent → grandparent)
+    3. Update main_category, category, subcategory strings
     
-    return BulkOperationResponse(**result)
-
-
-
-
-@router.get("/filter-metadata")
-async def get_filter_metadata(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Get unique values for filter dropdowns - FROM ACTUAL TRANSACTION DATA"""
-    
-    # Get unique owners and account types
-    owner_account_query = select(
-        Transaction.owner,
-        Transaction.bank_account_type
-    ).where(
-        and_(
-            Transaction.user_id == current_user.id,
-            Transaction.owner.isnot(None),
-            Transaction.bank_account_type.isnot(None)
-        )
-    ).distinct()
-    
-    owner_account_result = await db.execute(owner_account_query)
-    
-    owner_account_map = {}
-    for owner, account_type in owner_account_result:
-        if owner not in owner_account_map:
-            owner_account_map[owner] = []
-        if account_type not in owner_account_map[owner]:
-            owner_account_map[owner].append(account_type)
-    
-    for owner in owner_account_map:
-        owner_account_map[owner].sort()
-    
-    # Get categories from ACTUAL TRANSACTION DATA
-    categories_query = select(
-        Transaction.main_category,
-        Transaction.category,
-        Transaction.subcategory
-    ).where(
-        and_(
-            Transaction.user_id == current_user.id,
-            Transaction.main_category.isnot(None)
-        )
-    ).distinct()
-    
-    categories_result = await db.execute(categories_query)
-    
-    main_categories_set = set()
-    category_map = {}
-    subcategory_map = {}
-    
-    for main_cat, cat, subcat in categories_result:
-        if main_cat:
-            main_categories_set.add(main_cat)
-            
-            if cat:
-                if main_cat not in category_map:
-                    category_map[main_cat] = set()
-                category_map[main_cat].add(cat)
-                
-                if subcat:
-                    key = f"{main_cat}|{cat}"
-                    if key not in subcategory_map:
-                        subcategory_map[key] = set()
-                    subcategory_map[key].add(subcat)
-    
-    # Convert sets to sorted lists
-    main_categories = sorted(list(main_categories_set))
-    
-    category_map_final = {}
-    for main_cat in category_map:
-        category_map_final[main_cat] = sorted(list(category_map[main_cat]))
-    
-    subcategory_map_final = {}
-    for key in subcategory_map:
-        subcategory_map_final[key] = sorted(list(subcategory_map[key]))
-    
-    return {
-        "ownerAccountMap": owner_account_map,
-        "mainCategories": main_categories,
-        "categoryMap": category_map_final,
-        "subcategoryMap": subcategory_map_final
-    }
-
-@router.get("/debug/main-categories")
-async def debug_main_categories(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Debug: Check actual main_category values in database"""
-    from sqlalchemy import func, distinct
-    
-    # Get all unique main_category values
-    query = select(
-        Transaction.main_category,
-        func.count(Transaction.id).label('count')
-    ).where(
-        Transaction.user_id == current_user.id
-    ).group_by(
-        Transaction.main_category
-    ).order_by(
-        desc(func.count(Transaction.id))
-    )
-    
-    result = await db.execute(query)
-    categories = result.all()
-    
-    return {
-        "main_categories": [
-            {"value": cat.main_category, "count": cat.count}
-            for cat in categories
-        ],
-        "total_transactions": sum(cat.count for cat in categories)
-    }
-
-@router.post("/sync-category-strings")
-async def sync_category_strings(
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Sync transaction category strings with Category table - fixes reassigned transactions"""
-    
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {success, updated_count, message}
+    """
     # Get all transactions with category_id
     transactions_query = select(Transaction).where(
         and_(
@@ -615,39 +842,28 @@ async def sync_category_strings(
     updated_count = 0
     
     for transaction in transactions:
-        # Get the assigned category
-        category_query = select(Category).where(Category.id == transaction.category_id)
+        # Get the assigned category with parents
+        category_query = select(Category).options(
+            selectinload(Category.parent).selectinload(Category.parent)
+        ).where(Category.id == transaction.category_id)
         category_result = await db.execute(category_query)
         category = category_result.scalar()
         
         if not category:
             continue
         
-        # Get parent and grandparent
-        parent = None
-        grandparent = None
-        
-        if category.parent_id:
-            parent_query = select(Category).where(Category.id == category.parent_id)
-            parent_result = await db.execute(parent_query)
-            parent = parent_result.scalar()
-            
-            if parent and parent.parent_id:
-                grandparent_query = select(Category).where(Category.id == parent.parent_id)
-                grandparent_result = await db.execute(grandparent_query)
-                grandparent = grandparent_result.scalar()
-        
-        # Update transaction strings based on category hierarchy
-        if grandparent and parent:
-            # 3-level: grandparent = main, parent = category, self = subcategory
-            transaction.main_category = grandparent.name
-            transaction.category = parent.name
-            transaction.subcategory = category.name
-        elif parent:
-            # 2-level: parent = main, self = category
-            transaction.main_category = parent.name
-            transaction.category = category.name
-            transaction.subcategory = None
+        # Update category strings based on hierarchy
+        if category.parent:
+            if category.parent.parent:
+                # 3-level: grandparent = main, parent = category, self = subcategory
+                transaction.main_category = category.parent.parent.name
+                transaction.category = category.parent.name
+                transaction.subcategory = category.name
+            else:
+                # 2-level: parent = main, self = category
+                transaction.main_category = category.parent.name
+                transaction.category = category.name
+                transaction.subcategory = None
         else:
             # 1-level: self = main
             transaction.main_category = category.name
@@ -658,6 +874,8 @@ async def sync_category_strings(
     
     await db.commit()
     
+    print(f"✅ Synced {updated_count} transaction categories")
+    
     return {
         "success": True,
         "updated_count": updated_count,
@@ -665,30 +883,47 @@ async def sync_category_strings(
     }
 
 
+# ============================================================================
+# CREATE TRANSACTION ENDPOINT
+# ============================================================================
+
 @router.post("/create")
 async def create_transaction(
     data: TransactionCreateRequest,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Create new transaction"""
-    from datetime import datetime
+    """
+    Create new transaction manually
     
+    Process:
+    1. Parse date from ISO string
+    2. Determine is_income/is_expense from amount sign
+    3. Extract date components (year, month, weekday)
+    4. Get category hierarchy if category_id provided
+    5. Create transaction with synced category strings
+    
+    @param data: Transaction creation data
+    @param current_user: Injected from JWT token
+    @param db: Database session
+    @returns {dict} {success, message, transaction_id}
+    @raises HTTPException: 500 on creation failure
+    """
     try:
         # Parse date
         posted_at = datetime.fromisoformat(data.posted_at.replace('Z', '+00:00'))
         
-        # Determine is_income/is_expense
+        # Determine transaction type from amount sign
         is_income = data.amount > 0
         is_expense = data.amount < 0
         
-        # Extract date components
+        # Extract date components for filtering
         year = posted_at.year
         month = posted_at.month
         year_month = posted_at.strftime('%Y-%m')
         weekday = posted_at.strftime('%A')
         
-        # ✅ GET CATEGORY HIERARCHY for main_category, category, subcategory
+        # Get category hierarchy for syncing strings
         main_category = None
         category = None
         subcategory = None
@@ -731,9 +966,9 @@ async def create_transaction(
             memo=data.memo,
             owner=data.owner,
             bank_account_type=data.bank_account_type,
-            main_category=main_category,  # ✅ SET FROM CATEGORY
-            category=category,            # ✅ SET FROM CATEGORY
-            subcategory=subcategory,      # ✅ SET FROM CATEGORY
+            main_category=main_category,
+            category=category,
+            subcategory=subcategory,
             category_id=data.category_id,
             is_income=is_income,
             is_expense=is_expense,
@@ -742,12 +977,14 @@ async def create_transaction(
             year_month=year_month,
             weekday=weekday,
             source_category='user',
-            review_needed=not data.category_id
+            review_needed=not data.category_id  # Flag for review if uncategorized
         )
         
         db.add(transaction)
         await db.commit()
         await db.refresh(transaction)
+        
+        print(f"✅ Created transaction: {transaction.id}")
         
         return {
             "success": True,
@@ -758,42 +995,4 @@ async def create_transaction(
     except Exception as e:
         await db.rollback()
         print(f"❌ Create failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-
-@router.post("/bulk-delete")
-async def bulk_delete_transactions(
-    request: BulkDeleteRequest,
-    current_user: User = Depends(get_current_user),
-    db: AsyncSession = Depends(get_db)
-):
-    """Delete multiple transactions"""
-    from sqlalchemy import delete as sql_delete
-    
-    try:
-        # Convert to UUIDs
-        trans_ids = [str(uuid.UUID(tid)) for tid in request.transaction_ids]
-        
-        # Delete
-        delete_query = sql_delete(Transaction).where(
-            and_(
-                Transaction.id.in_(trans_ids),
-                Transaction.user_id == str(current_user.id)
-            )
-        )
-        
-        result = await db.execute(delete_query)
-        await db.commit()
-        
-        print(f"✅ Deleted {result.rowcount} transactions")
-        
-        return {
-            "success": True,
-            "message": f"Deleted {result.rowcount} transactions",
-            "deleted_count": result.rowcount
-        }
-    except Exception as e:
-        await db.rollback()
-        print(f"❌ Bulk delete failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
