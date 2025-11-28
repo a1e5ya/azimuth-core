@@ -1,17 +1,70 @@
+/**
+ * Authentication Store - User Authentication State Management
+ * 
+ * Manages all authentication-related state and operations:
+ * - User session (token, user data)
+ * - Login/logout
+ * - Registration
+ * - Password reset flow
+ * - Token verification
+ * - LocalStorage persistence
+ * 
+ * Architecture:
+ * - Uses Pinia composition API
+ * - Persists auth state to localStorage
+ * - Sets axios default Authorization header
+ * - Automatic token verification on init
+ * 
+ * LocalStorage Keys:
+ * - azimuth_token: JWT access token
+ * - azimuth_user: User profile data (JSON)
+ * 
+ * API Integration:
+ * - Backend: FastAPI JWT authentication
+ * - Endpoints: /auth/register, /auth/login, /auth/verify, etc.
+ */
+
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import axios from 'axios'
 
 export const useAuthStore = defineStore('auth', () => {
+  // ========================================
+  // STATE
+  // ========================================
+  
+  /** @type {Ref<Object|null>} Current user profile data */
   const user = ref(null)
+  
+  /** @type {Ref<string|null>} JWT access token */
   const token = ref(null)
+  
+  /** @type {ComputedRef<boolean>} True if user is authenticated */
   const isAuthenticated = computed(() => !!user.value && !!token.value)
+  
+  /** @type {Ref<boolean>} Loading state for async operations */
   const loading = ref(false)
   
   // Get API base URL from environment or default to local
   const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
   
-  // Load authentication state from localStorage on store initialization
+  // ========================================
+  // INITIALIZATION
+  // ========================================
+  
+  /**
+   * Load authentication state from localStorage on store initialization
+   * 
+   * Process:
+   * 1. Check localStorage for saved token and user
+   * 2. Restore to reactive state
+   * 3. Set axios Authorization header
+   * 4. Verify token is still valid with backend
+   * 5. Clear state if verification fails
+   * 
+   * Called automatically when store is created.
+   * Enables persistent login across page refreshes.
+   */
   const initAuth = () => {
     try {
       const storedToken = localStorage.getItem('azimuth_token')
@@ -21,7 +74,7 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = storedToken
         user.value = JSON.parse(storedUser)
         
-        // Set axios default header
+        // Set axios default header for all future requests
         axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
         
         console.log('✅ Auth state restored from localStorage')
@@ -39,7 +92,21 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = false
   }
   
-  // Save authentication state to localStorage
+  // ========================================
+  // STATE MANAGEMENT UTILITIES
+  // ========================================
+  
+  /**
+   * Save authentication state to localStorage
+   * 
+   * Persists:
+   * - JWT token
+   * - User profile data
+   * - Sets axios Authorization header
+   * 
+   * @param {string} authToken - JWT access token from backend
+   * @param {Object} userData - User profile data
+   */
   const saveAuthState = (authToken, userData) => {
     try {
       localStorage.setItem('azimuth_token', authToken)
@@ -48,7 +115,7 @@ export const useAuthStore = defineStore('auth', () => {
       token.value = authToken
       user.value = userData
       
-      // Set axios default header
+      // Set axios default header for all future requests
       axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`
       
       console.log('✅ Auth state saved')
@@ -57,7 +124,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Clear authentication state
+  /**
+   * Clear authentication state
+   * 
+   * Removes:
+   * - localStorage items
+   * - Reactive state
+   * - axios Authorization header
+   * 
+   * Called on:
+   * - Logout
+   * - Token verification failure
+   * - 401 responses
+   */
   const clearAuthState = () => {
     try {
       localStorage.removeItem('azimuth_token')
@@ -75,7 +154,31 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Register new user
+  // ========================================
+  // AUTHENTICATION ACTIONS
+  // ========================================
+  
+  /**
+   * Register new user
+   * 
+   * Process:
+   * 1. Send registration data to backend
+   * 2. Receive JWT token and user data
+   * 3. Save auth state to localStorage
+   * 4. Set axios headers
+   * 5. Return success/error result
+   * 
+   * @param {string} email - User email address
+   * @param {string} password - User password
+   * @param {string|null} displayName - Optional display name
+   * @returns {Promise<{success: boolean, user?: Object, error?: string}>} Registration result
+   * 
+   * @example
+   * const result = await register('user@example.com', 'password123', 'John Doe')
+   * if (result.success) {
+   *   console.log('Registered:', result.user)
+   * }
+   */
   const register = async (email, password, displayName = null) => {
     loading.value = true
     
@@ -123,12 +226,30 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Login user
+  /**
+   * Login user
+   * 
+   * Process:
+   * 1. Send credentials to backend
+   * 2. Receive JWT token and user data
+   * 3. Save auth state
+   * 4. Return success/error result
+   * 
+   * @param {string} email - User email address
+   * @param {string} password - User password
+   * @returns {Promise<{success: boolean, user?: Object, error?: string}>} Login result
+   * 
+   * @example
+   * const result = await login('user@example.com', 'password123')
+   * if (result.success) {
+   *   router.push('/dashboard')
+   * }
+   */
   const login = async (email, password) => {
     loading.value = true
     
     try {
-      console.log('🔑 Attempting login for:', email)
+      console.log('🔐 Attempting login for:', email)
       
       const response = await axios.post(`${API_BASE}/auth/login`, {
         email,
@@ -170,7 +291,21 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Request password reset
+  /**
+   * Request password reset
+   * 
+   * Sends password reset email to user.
+   * Backend generates reset token and emails it.
+   * 
+   * @param {string} email - User email address
+   * @returns {Promise<{success: boolean, message?: string, error?: string}>} Request result
+   * 
+   * @example
+   * const result = await requestPasswordReset('user@example.com')
+   * if (result.success) {
+   *   console.log('Check your email for reset link')
+   * }
+   */
   const requestPasswordReset = async (email) => {
     loading.value = true
     
@@ -213,12 +348,27 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Reset password with token
+  /**
+   * Reset password with token
+   * 
+   * Uses reset token from email link to set new password.
+   * Token is validated by backend.
+   * 
+   * @param {string} resetToken - Password reset token from email
+   * @param {string} newPassword - New password to set
+   * @returns {Promise<{success: boolean, message?: string, error?: string}>} Reset result
+   * 
+   * @example
+   * const result = await resetPassword('reset-token-123', 'newPassword456')
+   * if (result.success) {
+   *   router.push('/login')
+   * }
+   */
   const resetPassword = async (resetToken, newPassword) => {
     loading.value = true
     
     try {
-      console.log('🔒 Resetting password with token')
+      console.log('🔑 Resetting password with token')
       
       const response = await axios.post(`${API_BASE}/auth/reset-password`, {
         token: resetToken,
@@ -257,7 +407,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Verify current token
+  /**
+   * Verify current token
+   * 
+   * Checks if stored JWT token is still valid with backend.
+   * Clears auth state if token is expired or invalid.
+   * Updates user data if backend provides fresh data.
+   * 
+   * Called automatically on:
+   * - Store initialization
+   * - 401 responses
+   * 
+   * @returns {Promise<{success: boolean, user?: Object, error?: string}>} Verification result
+   */
   const verifyToken = async () => {
     if (!token.value) {
       return { success: false, error: 'No token available' }
@@ -299,7 +461,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Get current user profile
+  /**
+   * Get current user profile
+   * 
+   * Fetches fresh user profile data from backend.
+   * Updates stored user data in state and localStorage.
+   * 
+   * @returns {Promise<{success: boolean, user?: Object, error?: string}>} Profile fetch result
+   */
   const getCurrentUser = async () => {
     if (!token.value) {
       return { success: false, error: 'Not authenticated' }
@@ -332,7 +501,19 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Logout user
+  /**
+   * Logout user
+   * 
+   * Process:
+   * 1. Call backend logout endpoint (for audit logging)
+   * 2. Clear local auth state (even if backend fails)
+   * 3. Remove token and user data
+   * 4. Clear axios headers
+   * 
+   * Always succeeds locally even if backend logout fails.
+   * 
+   * @returns {Promise<{success: boolean, message: string}>} Logout result
+   */
   const logout = async () => {
     try {
       console.log('🚪 Logging out...')
@@ -365,7 +546,22 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Change password
+  /**
+   * Change password
+   * 
+   * Updates password for authenticated user.
+   * Requires current password for verification.
+   * 
+   * @param {string} currentPassword - Current password for verification
+   * @param {string} newPassword - New password to set
+   * @returns {Promise<{success: boolean, message?: string, error?: string}>} Change result
+   * 
+   * @example
+   * const result = await changePassword('oldPass123', 'newPass456')
+   * if (result.success) {
+   *   console.log('Password updated')
+   * }
+   */
   const changePassword = async (currentPassword, newPassword) => {
     if (!token.value) {
       return { success: false, error: 'Not authenticated' }
@@ -407,7 +603,14 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Check authentication status
+  /**
+   * Check authentication status
+   * 
+   * Queries backend for current authentication status.
+   * Does not require token (checks if any valid session exists).
+   * 
+   * @returns {Promise<{authenticated: boolean, user: Object|null, message: string}>} Status result
+   */
   const checkAuthStatus = async () => {
     try {
       const response = await axios.get(`${API_BASE}/auth/status`, {
@@ -431,8 +634,16 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
   
-  // Initialize auth store
+  // ========================================
+  // STORE INITIALIZATION
+  // ========================================
+  
+  // Initialize auth store on creation
   initAuth()
+  
+  // ========================================
+  // EXPOSED API
+  // ========================================
   
   return {
     // State

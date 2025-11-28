@@ -497,7 +497,7 @@ button * {
 .chat-history-simple {
   flex: 1;
   overflow-y: auto;
-  max-height: 10rem;
+  max-height: 35rem;
 }
 
 .chat-messages-simple {
@@ -787,6 +787,10 @@ textarea.form-input {
 
 .empty-subtitle {
   color: var(--color-text-muted);
+}
+
+.account-preview {
+  display: none;
 }
 
 /* ==============================================

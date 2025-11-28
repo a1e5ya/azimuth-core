@@ -1,13 +1,60 @@
+<!--
+  CategoriesCRUD Component - Category Create/Update/Delete Modals
+  
+  Provides modal dialogs for category management operations:
+  - Create Type (top-level category like INCOME, EXPENSES)
+  - Create Category (mid-level like Food, Transport)
+  - Create Subcategory (bottom-level like Groceries, Fuel)
+  - Edit existing category
+  - Delete category with transaction relocation
+  
+  Features:
+  - Icon picker with search (300+ fi-rr icons)
+  - Color picker
+  - Type selector for new categories
+  - Delete safety checks (has children? has transactions?)
+  - Transaction relocation on delete
+  - Loading states
+  - Validation
+  - Chat notifications on success/error
+  
+  Events:
+  - @category-updated: Category created or edited
+  - @category-deleted: Category deleted
+  - @add-chat-message: Show message in chat component
+  
+  Usage:
+  <CategoriesCRUD 
+    ref="crud"
+    @category-updated="refreshCategories"
+    @add-chat-message="addMessage"
+  />
+  
+  // Call from parent:
+  crud.value.createCategory(parentCategory, isMainCategory)
+  crud.value.editCategory(category)
+  crud.value.deleteCategory(category)
+  
+  Category Hierarchy:
+  - Type (Level 1): INCOME, EXPENSES, TRANSFERS, TARGETS
+  - Category (Level 2): Food, Transport, etc.
+  - Subcategory (Level 3): Groceries, Fuel, etc.
+-->
+
 <template>
   <div>
-    <!-- Create/Edit Category Modal -->
+    <!-- ============================================================================
+         CREATE/EDIT CATEGORY MODAL
+         ============================================================================ -->
     <div v-if="editingCategory" class="modal-overlay" @click="closeEditModal">
       <div class="modal-content category-edit-modal" @click.stop>
+        <!-- Modal Header -->
         <div class="modal-header">
           <h3>{{ isEditing ? 'Edit Category' : (isCreatingType ? 'Add Type' : (isCreatingMainCategory ? 'Add Category' : 'Add Subcategory')) }}</h3>
           <button class="close-btn" @click="closeEditModal">×</button>
         </div>
         
+        <!-- Modal Body -->
         <div class="modal-body">
           <div class="edit-form">
             <!-- Type Selector (only when creating main category) -->
@@ -21,7 +68,9 @@
               </select>
             </div>
 
+            <!-- Name and Color Row -->
             <div class="form-group-row">
+                <!-- Name Input -->
                 <div class="form-group">
                 <label>Name *</label>
                 <input 
@@ -33,6 +82,7 @@
                 >
                 </div>
 
+                <!-- Color Picker -->
                 <div class="form-group">
                 <label>Color</label>
                 <input 
@@ -43,15 +93,19 @@
                 </div>
             </div>
             
+            <!-- Icon Selector -->
             <div class="form-group">
               <label>Icon</label>
               <div class="icon-selector">
+                <!-- Selected Icon Display -->
                 <div class="selected-icon">
                   <AppIcon :name="editForm.icon" size="medium" />
                   <span>{{ editForm.icon }}</span>
                 </div>
                 
+                <!-- Icon Picker -->
                 <div class="icon-picker">
+                  <!-- Search Input -->
                   <div class="icon-search">
                     <input 
                       v-model="iconSearch" 
@@ -60,7 +114,11 @@
                       class="form-input"
                     >
                   </div>
+                  
+                  <!-- Loading State -->
                   <div v-if="loadingIcons" class="icon-loading">Loading icons...</div>
+                  
+                  <!-- Icon Grid -->
                   <div v-else class="icon-grid">
                     <div 
                       v-for="icon in filteredIcons" 
@@ -76,11 +134,11 @@
                 </div>
               </div>
             </div>
-            
 
           </div>
         </div>
         
+        <!-- Modal Actions -->
         <div class="modal-actions">
           <button 
             class="btn" 
@@ -96,35 +154,45 @@
       </div>
     </div>
 
-    <!-- Delete Confirmation Modal -->
+    <!-- ============================================================================
+         DELETE CONFIRMATION MODAL
+         ============================================================================ -->
     <div v-if="deletingCategory" class="modal-overlay" @click="closeDeleteModal">
       <div class="modal-content delete-modal" @click.stop>
+        <!-- Modal Header -->
         <div class="modal-header">
           <h3>Delete Category</h3>
           <button class="close-btn" @click="closeDeleteModal">×</button>
         </div>
         
+        <!-- Modal Body -->
         <div class="modal-body">
           <div class="delete-warning">
             <div class="warning-icon">⚠️</div>
             <div class="warning-text">
               <p><strong>Are you sure you want to delete "{{ deletingCategory.name }}"?</strong></p>
               
+              <!-- Delete Safety Check Info -->
               <div v-if="deleteCheck" class="delete-info">
+                <!-- Has Children Error -->
                 <p v-if="deleteCheck.has_children" class="error-text">
                   ❌ This category has subcategories. Please delete subcategories first.
                 </p>
                 
+                <!-- Transaction Count & Move Selector -->
                 <div v-if="deleteCheck.transaction_count > 0">
                   <p class="warning-text">
                     {{ deleteCheck.transaction_count }} transactions will be moved
                   </p>
                   
+                  <!-- Move To Category Selector -->
                   <div class="form-group" style="margin-top: 1rem;">
                     <label>Move transactions to:</label>
                     <select v-model="moveToSubcategoryId" class="form-input" required>
                       <option value="">Select subcategory...</option>
                       <option value="uncategorized">Uncategorized</option>
+                      
+                      <!-- Nested Category Options -->
                       <template v-for="type in availableTypesForMove" :key="type.id">
                         <template v-for="cat in type.children" :key="cat.id">
                           <option 
@@ -141,16 +209,19 @@
                   </div>
                 </div>
                 
+                <!-- Empty Category Message -->
                 <p v-if="deleteCheck.can_delete && deleteCheck.transaction_count === 0">
                   This category is empty and can be safely deleted.
                 </p>
               </div>
               
+              <!-- Warning -->
               <p v-if="deleteCheck?.can_delete">This action cannot be undone.</p>
             </div>
           </div>
         </div>
         
+        <!-- Modal Actions -->
         <div class="modal-actions">
           <button 
             class="btn btn-danger" 
@@ -177,36 +248,111 @@ import AppIcon from './AppIcon.vue'
 export default {
   name: 'CategoriesCRUD',
   components: { AppIcon },
+  
   emits: ['category-updated', 'category-deleted', 'add-chat-message'],
+  
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
     
+    // ========================================
+    // STATE
+    // ========================================
+    
+    /** @type {Ref<Object|null>} Category being edited/created */
     const editingCategory = ref(null)
+    
+    /** @type {Ref<Object|null>} Category being deleted */
     const deletingCategory = ref(null)
+    
+    /** @type {Ref<Object|null>} Delete safety check results */
     const deleteCheck = ref(null)
+    
+    /** @type {Ref<string>} Target category ID for transaction relocation */
     const moveToSubcategoryId = ref('')
+    
+    /** @type {Ref<boolean>} Saving state */
     const saving = ref(false)
+    
+    /** @type {Ref<boolean>} Deleting state */
     const deleting = ref(false)
+    
+    /** @type {Ref<string>} Icon search query */
     const iconSearch = ref('')
+    
+    /** @type {Ref<Array<string>>} Available icon names */
     const availableIcons = ref([])
+    
+    /** @type {Ref<boolean>} Loading icons state */
     const loadingIcons = ref(false)
+    
+    /** @type {Ref<Array>} Available type categories (INCOME, EXPENSES, etc.) */
     const availableTypes = ref([])
+    
+    /** @type {Ref<string>} Selected type ID when creating main category */
     const selectedTypeId = ref('')
     
+    /** @type {Ref<Object>} Edit form data */
     const editForm = ref({
       name: '',
       icon: '',
       color: ''
     })
 
-    const isEditing = computed(() => editingCategory.value?.id !== undefined)
-    const isCreatingType = computed(() => !isEditing.value && editingCategory.value?.parent_id === null && !editingCategory.value?.isMainCategory)
-    const isCreatingMainCategory = computed(() => !isEditing.value && editingCategory.value?.isMainCategory === true)
-    const isCreatingSubcategory = computed(() => !isEditing.value && editingCategory.value?.parent_id !== null && !editingCategory.value?.isMainCategory)
+    // ========================================
+    // COMPUTED
+    // ========================================
     
+    /**
+     * Check if editing existing category (has ID)
+     * @type {ComputedRef<boolean>}
+     */
+    const isEditing = computed(() => editingCategory.value?.id !== undefined)
+    
+    /**
+     * Check if creating new type (top level, no parent, not flagged as main category)
+     * @type {ComputedRef<boolean>}
+     */
+    const isCreatingType = computed(() => 
+      !isEditing.value && 
+      editingCategory.value?.parent_id === null && 
+      !editingCategory.value?.isMainCategory
+    )
+    
+    /**
+     * Check if creating main category (mid level, needs type selection)
+     * @type {ComputedRef<boolean>}
+     */
+    const isCreatingMainCategory = computed(() => 
+      !isEditing.value && 
+      editingCategory.value?.isMainCategory === true
+    )
+    
+    /**
+     * Check if creating subcategory (bottom level, has parent)
+     * @type {ComputedRef<boolean>}
+     */
+    const isCreatingSubcategory = computed(() => 
+      !isEditing.value && 
+      editingCategory.value?.parent_id !== null && 
+      !editingCategory.value?.isMainCategory
+    )
+    
+    /**
+     * Available types for move-to selector
+     * @type {ComputedRef<Array>}
+     */
     const availableTypesForMove = computed(() => availableTypes.value)
 
+    // ========================================
+    // TYPE HANDLING
+    // ========================================
+    
+    /**
+     * Handle type selection change
+     * 
+     * When creating main category, sets parent_id and inherits type color.
+     */
     const onTypeChange = () => {
       const selectedType = availableTypes.value.find(t => t.id === selectedTypeId.value)
       if (selectedType) {
@@ -215,6 +361,11 @@ export default {
       }
     }
 
+    /**
+     * Load available types from backend
+     * 
+     * Fetches category tree and filters for top-level types.
+     */
     const loadTypes = async () => {
       try {
         const response = await axios.get(`${API_BASE}/categories/tree`, {
@@ -228,12 +379,26 @@ export default {
       }
     }
 
+    // ========================================
+    // ICON HANDLING
+    // ========================================
+    
+    /**
+     * Filter icons by search query
+     * @type {ComputedRef<Array<string>>}
+     */
     const filteredIcons = computed(() => {
       if (!iconSearch.value) return availableIcons.value
       const search = iconSearch.value.toLowerCase()
       return availableIcons.value.filter(icon => icon.toLowerCase().includes(search))
     })
 
+    /**
+     * Load available icons from assets
+     * 
+     * Uses Vite's import.meta.glob to discover all fi-rr-*.svg files.
+     * Extracts icon names (without fi-rr- prefix and .svg extension).
+     */
     const loadAvailableIcons = async () => {
       loadingIcons.value = true
       try {
@@ -251,6 +416,31 @@ export default {
       }
     }
 
+    /**
+     * Select an icon from picker
+     * 
+     * @param {string} icon - Icon name
+     */
+    const selectIcon = (icon) => {
+      editForm.value.icon = icon
+      iconSearch.value = ''
+    }
+
+    // ========================================
+    // MODAL CONTROLS
+    // ========================================
+    
+    /**
+     * Open create category modal
+     * 
+     * @param {Object|null} parent - Parent category (null for type creation)
+     * @param {boolean} isMainCategory - True if creating main category (needs type selection)
+     * 
+     * Default values:
+     * - Type: icon='apps-sort', color='#94a3b8'
+     * - Main category: icon='circle', inherits type color
+     * - Subcategory: icon='circle', inherits parent color
+     */
     const createCategory = (parent = null, isMainCategory = false) => {
       editingCategory.value = { 
         parent_id: parent?.id || null,
@@ -284,6 +474,11 @@ export default {
       iconSearch.value = ''
     }
 
+    /**
+     * Open edit category modal
+     * 
+     * @param {Object} category - Category to edit
+     */
     const editCategory = (category) => {
       editingCategory.value = { ...category }
       editForm.value = {
@@ -294,11 +489,9 @@ export default {
       iconSearch.value = ''
     }
 
-    const selectIcon = (icon) => {
-      editForm.value.icon = icon
-      iconSearch.value = ''
-    }
-
+    /**
+     * Close edit modal and reset form
+     */
     const closeEditModal = () => {
       editingCategory.value = null
       editForm.value = { name: '', icon: '', color: '' }
@@ -306,6 +499,24 @@ export default {
       selectedTypeId.value = ''
     }
 
+    // ========================================
+    // SAVE/UPDATE
+    // ========================================
+    
+    /**
+     * Save category (create or update)
+     * 
+     * Process:
+     * 1. Validate form data
+     * 2. Call POST (create) or PUT (update) endpoint
+     * 3. Emit success message
+     * 4. Emit category-updated event
+     * 5. Close modal
+     * 
+     * Validation:
+     * - Name is required
+     * - Type selection required when creating main category
+     */
     const saveEdit = async () => {
       if (!editForm.value.name || saving.value) return
       
@@ -363,6 +574,21 @@ export default {
       }
     }
 
+    // ========================================
+    // DELETE
+    // ========================================
+    
+    /**
+     * Open delete confirmation modal
+     * 
+     * Process:
+     * 1. Set category to delete
+     * 2. Check if category can be deleted (no children)
+     * 3. Check transaction count
+     * 4. Show modal with results
+     * 
+     * @param {Object} category - Category to delete
+     */
     const deleteCategory = async (category) => {
       deletingCategory.value = category
       deleteCheck.value = null
@@ -384,12 +610,29 @@ export default {
       }
     }
 
+    /**
+     * Close delete modal and reset state
+     */
     const closeDeleteModal = () => {
       deletingCategory.value = null
       deleteCheck.value = null
       moveToSubcategoryId.value = ''
     }
 
+    /**
+     * Confirm and execute category deletion
+     * 
+     * Process:
+     * 1. Validate move-to selection if needed
+     * 2. Call DELETE endpoint with move_to_category_id param
+     * 3. Emit success message
+     * 4. Emit category-deleted event
+     * 5. Close modal
+     * 
+     * Safety:
+     * - Cannot delete if has children
+     * - Must specify move-to category if has transactions
+     */
     const confirmDelete = async () => {
       if (!deletingCategory.value || deleting.value || !deleteCheck.value?.can_delete) return
       
@@ -404,7 +647,7 @@ export default {
       deleting.value = true
       
       try {
-        // Send move_to_category_id as query parameter instead of body
+        // Send move_to_category_id as query parameter
         const params = moveToSubcategoryId.value 
           ? `?move_to_category_id=${moveToSubcategoryId.value}` 
           : ''
@@ -434,12 +677,21 @@ export default {
       }
     }
 
+    // ========================================
+    // INITIALIZATION
+    // ========================================
+    
     onMounted(() => {
       loadAvailableIcons()
       loadTypes()
     })
 
+    // ========================================
+    // EXPOSED API
+    // ========================================
+    
     return {
+      // State
       editingCategory,
       deletingCategory,
       deleteCheck,
@@ -447,20 +699,28 @@ export default {
       saving,
       deleting,
       editForm,
+      
+      // Computed
       isEditing,
       isCreatingType,
       isCreatingMainCategory,
       isCreatingSubcategory,
+      
+      // Icon handling
       iconSearch,
       filteredIcons,
       loadingIcons,
+      selectIcon,
+      
+      // Type handling
       availableTypes,
       availableTypesForMove,
       selectedTypeId,
       onTypeChange,
+      
+      // Actions
       createCategory,
       editCategory,
-      selectIcon,
       closeEditModal,
       saveEdit,
       deleteCategory,
@@ -472,10 +732,22 @@ export default {
 </script>
 
 <style scoped>
+/* ============================================================================
+   MODAL SIZING
+   ============================================================================ */
+
 .category-edit-modal {
   max-width: 35rem;
   min-height: fit-content;
 }
+
+.delete-modal {
+  max-width: 30rem;
+}
+
+/* ============================================================================
+   EDIT FORM
+   ============================================================================ */
 
 .edit-form {
   display: flex;
@@ -489,6 +761,10 @@ export default {
   gap: var(--gap-large);
 }
 
+/* ============================================================================
+   COLOR PICKER
+   ============================================================================ */
+
 .color-input {
   width: 100%;
   cursor: pointer;
@@ -497,6 +773,10 @@ export default {
   border: none;
   margin: 0;
 }
+
+/* ============================================================================
+   ICON SELECTOR
+   ============================================================================ */
 
 .icon-selector {
   display: flex;
@@ -573,9 +853,9 @@ export default {
   line-height: 1.2;
 }
 
-.delete-modal {
-  max-width: 30rem;
-}
+/* ============================================================================
+   DELETE MODAL
+   ============================================================================ */
 
 .delete-info {
   padding: var(--gap-small);

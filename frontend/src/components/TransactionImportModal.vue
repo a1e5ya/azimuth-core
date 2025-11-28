@@ -267,6 +267,7 @@ export default {
         
       } catch (error) {
         console.error('Import failed:', error)
+        console.error('Import failed:', error.response?.data)
       } finally {
         importing.value = false
         selectedFiles.value = []
