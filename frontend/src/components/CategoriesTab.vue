@@ -1028,7 +1028,7 @@ export default {
 .vertical-tabs {
   position: fixed;
   left: 0;
-  top: 80px;
+  top: 45px;
   height: 100vh;
   width: 4rem;
   background: var(--color-background);

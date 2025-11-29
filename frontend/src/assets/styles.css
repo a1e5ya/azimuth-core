@@ -32,7 +32,7 @@
   --gap-large: 1.5rem;
   
   /* Layout Constants - REM based */
-  --topbar-height: 5rem;
+  --topbar-height: 3rem;
   
   /* Shadows */
   --shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.15);
@@ -161,10 +161,14 @@ button * {
   font-style: italic;
 }
 
+.museo-dashboard {
+  height: 2.5rem;
+}
+
 .museo-dashboard,
 .museo-dashboard * {
   font-family: "MuseoModerno", sans-serif !important;
-  font-size: var(--text-large) !important;
+  font-size: var(--text-standard) !important;
   font-weight: 600 !important;
   font-style: italic !important;
   display: flex !important;
@@ -1237,4 +1241,8 @@ textarea.form-input {
 .loading-text {
   padding: var(--gap-standard);
   text-align: center;
+}
+
+.none {
+  display: none;
 }

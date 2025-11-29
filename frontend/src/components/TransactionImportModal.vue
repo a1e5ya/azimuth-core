@@ -153,7 +153,7 @@
         </div>
 
         <!-- Auto-categorization Option (only for account mode) -->
-        <div v-if="importMode === 'account'" class="form-section">
+        <div v-if="importMode === 'account'" class="form-section none">
           <h4>Options</h4>
           <label class="checkbox-option">
             <input type="checkbox" v-model="autoCategorize">
