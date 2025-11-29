@@ -1,6 +1,40 @@
+<!--
+  App Component - Main Application Shell
+  
+  Root component managing authentication, navigation, and global state:
+  - User authentication and session management
+  - Tab navigation (Dashboard, Transactions, Categories, Timeline, Settings)
+  - Global chat interface with AI assistant
+  - Transaction data loading and filtering
+  - File upload coordination
+  - Backend health monitoring
+  
+  Features:
+  - Login/logout flow with JWT authentication
+  - Persistent chat history (last 20 messages)
+  - Tab-based navigation with state preservation
+  - Real-time backend status monitoring
+  - Chat-driven UI actions (filter transactions, navigate tabs)
+  - Welcome message for new users
+  - Collapsible chat panel
+  
+  Layout Structure:
+  - Login screen (unauthenticated users)
+  - Top navigation bar (authenticated users)
+  - Main content area (tab-based)
+  - Always-visible chat bar at bottom
+  
+  Tab Components:
+  - DashboardTab: Overview and statistics
+  - TransactionsTab: Transaction management
+  - CategoriesTab: Category hierarchy management
+  - TimelineTab: Time-based visualizations
+  - SettingsTab: User preferences and system info
+-->
+
 <template>
   <div id="app">
-    <!-- Show Login Screen for Unauthenticated Users -->
+    <!-- Login Screen (unauthenticated users only) -->
     <div v-if="!user" class="login-screen">
       <div class="login-container">
         <div class="logo-section">
@@ -12,10 +46,11 @@
       </div>
     </div>
 
-    <!-- Main App for Authenticated Users -->
+    <!-- Main Application (authenticated users only) -->
     <div v-else class="authenticated-app">
-      <!-- Top Bar -->
+      <!-- Top Navigation Bar -->
       <div class="top-bar">
+        <!-- Logo/Dashboard Button -->
         <button 
           class="btn btn-active museo-dashboard"
           @click="showTab('dashboard')"
@@ -23,6 +58,7 @@
           <span class="text-medium">azimuth</span> <img src="@/assets/logo.png" alt="Azimuth Logo" width="18" class="logo" />
         </button>
         
+        <!-- Main Navigation Tabs -->
         <div class="flex flex-gap-lg">
           <button 
             class="btn btn-link"
@@ -47,6 +83,7 @@
           </button>
         </div>
         
+        <!-- User Actions (Settings, Logout) -->
         <div class="flex flex-center flex-gap">
           <span class="text-medium user-info">
             {{ user.display_name || user.email.split('@')[0] }}
@@ -71,7 +108,7 @@
         </div>
       </div>
 
-      <!-- Main Content -->
+      <!-- Main Content Area (tab-based) -->
       <div class="main-content" :class="{ 'chat-open': showHistory && chatHistory.length > 0 }">
         
         <!-- Dashboard Tab -->
@@ -88,7 +125,6 @@
           :currentPage="currentPage"
           :pageSize="pageSize"
           :filters="filters"
-          :allCategories="allCategories"
           :showFilters="showFilters"
           @file-upload="handleFileUpload"
           @refresh-transactions="refreshTransactions"
@@ -100,6 +136,7 @@
           @add-chat-message="addChatMessage"
           @update:showFilters="showFilters = $event"
         />
+        
         <!-- Categories Tab -->
         <CategoriesTab 
           v-else-if="currentTab === 'categories'"
@@ -122,12 +159,14 @@
         />
       </div>
 
-      <!-- Always Visible Chat Bar -->
+      <!-- Always-Visible Chat Bar -->
       <div class="chat-bar-always">
+        <!-- Welcome Message (shown when no chat history) -->
         <div v-if="showWelcomeMessage && !chatHistory.length && showChat" class="welcome-message">
           {{ welcomeText }}
         </div>
         
+        <!-- Chat History -->
         <div v-if="chatHistory.length > 0 && showHistory && showChat" class="chat-history-simple">
           <div class="chat-messages-simple">
             <div v-for="(item, index) in chatHistory" :key="index" class="message-pair-simple">
@@ -141,13 +180,16 @@
           </div>
         </div>
 
+        <!-- Thinking Indicator -->
         <div v-if="currentThinking && showChat" class="current-thinking">
           <div class="message bot-message-simple">
             <div class="message-content-simple">{{ currentThinking }}</div>
           </div>
         </div>
 
+        <!-- Chat Input Row -->
         <div class="chat-input-row">
+          <!-- Toggle Chat Panel Button -->
           <button 
             class="history-toggle-btn btn-link"
             @click="toggleChatPanel"
@@ -155,6 +197,8 @@
           >
             <AppIcon :name="showChat ? 'angle-down' : 'angle-up'" size="medium" />
           </button>
+          
+          <!-- Chat Input Field -->
           <input 
             type="text" 
             class="chat-input-always" 
@@ -163,6 +207,8 @@
             @click="openChatPanel"
             :disabled="loading"
           >
+          
+          <!-- Send Message Button -->
           <button 
             class="btn btn-link" 
             @click="sendMessage()"
@@ -203,18 +249,22 @@ export default {
     SettingsTab
   },
   setup() {
-    // Auth store
+    // Auth store instance
     const authStore = useAuthStore()
     const showFilters = ref(false)
     
-    // Core app state
+    /**
+     * Core application state
+     */
     const currentTab = ref('dashboard')
     const user = ref(null)
     const backendStatus = ref('Checking...')
     const phase = ref('1 - Transaction Import')
     const loading = ref(false)
     
-    // Chat state
+    /**
+     * Chat state management
+     */
     const chatInput = ref('')
     const chatHistory = ref([])
     const currentThinking = ref('')
@@ -222,7 +272,9 @@ export default {
     const showHistory = ref(false)
     const showChat = ref(false)
     
-    // File upload and transactions state
+    /**
+     * Transaction and file upload state
+     */
     const transactionCount = ref(0)
     const recentUploads = ref([])
     const transactions = ref([])
@@ -237,13 +289,20 @@ export default {
       maxAmount: null
     })
     
-    // Categories state
+    /**
+     * Category selection state
+     */
     const selectedCategory = ref(null)
     
-    // Dynamic API base URL
+    /**
+     * API base URL from environment or default
+     */
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
 
-    // Computed properties
+    /**
+     * Computed welcome text with user's name
+     * @returns {string} Personalized welcome message
+     */
     const welcomeText = computed(() => {
       const userName = user.value ? 
         (user.value.display_name || user.value.email.split('@')[0]) : 
@@ -251,8 +310,11 @@ export default {
       return `Hello, ${userName}! I'm here to help you with your financial data. You can ask questions about budgeting, upload CSV files, or explore your transaction categories.`
     })
     
-
-    // Chat functions - DEFINED FIRST
+    /**
+     * Scrolls chat history to bottom
+     * @async
+     * @returns {Promise<void>}
+     */
     const scrollToBottom = async () => {
       await nextTick()
       setTimeout(() => {
@@ -280,6 +342,14 @@ export default {
       }, 100)
     }
 
+    /**
+     * Adds message to chat history
+     * Maintains maximum of 20 messages
+     * @param {Object} messageData - Message data object
+     * @param {string} messageData.message - User message (optional)
+     * @param {string} messageData.response - Bot response
+     * @returns {void}
+     */
     const addChatMessage = (messageData) => {
       chatHistory.value.push({
         message: messageData.message || '',
@@ -295,173 +365,188 @@ export default {
       }
     }
 
-const sendMessage = async (message = null) => {
-  const messageText = message || chatInput.value.trim()
-  if (!messageText || loading.value) return
+    /**
+     * Sends message to chat API and handles response
+     * Supports retry on authentication failure
+     * @async
+     * @param {string|null} message - Message to send (uses chatInput if null)
+     * @returns {Promise<void>}
+     */
+    const sendMessage = async (message = null) => {
+      const messageText = message || chatInput.value.trim()
+      if (!messageText || loading.value) return
 
-  const originalInput = chatInput.value
-  loading.value = true
-  chatInput.value = ''
-  currentThinking.value = 'Thinking...'
-  
-  showWelcomeMessage.value = false
-  showHistory.value = true
-
-  try {
-    const headers = {
-      Authorization: `Bearer ${authStore.token}`
-    }
-
-    console.log('💬 Chat:', messageText.substring(0, 50))
-    const response = await axios.post(`${API_BASE}/chat/command`, {
-      message: messageText
-    }, { headers, timeout: 15000 })
-    
-    console.log('✅ Response:', response.data)
-    const botResponse = response.data.response
-    
-    // Add to history
-    addChatMessage({
-      message: messageText,
-      response: botResponse
-    })
-    
-    // Handle actions with parameters
-    if (response.data.suggested_action) {
-      console.log('⚡ Action:', response.data.suggested_action, response.data.action_params)
+      const originalInput = chatInput.value
+      loading.value = true
+      chatInput.value = ''
+      currentThinking.value = 'Thinking...'
       
-      switch (response.data.suggested_action) {
-        case 'filter_transactions':
-          currentTab.value = 'transactions'
-          // Apply filters from action_params
-          if (response.data.action_params) {
-            const params = response.data.action_params
-            if (params.main_category) {
-              filters.value.mainCategory = params.main_category
-            }
-            if (params.category_filter) {
-              filters.value.categoryFilter = params.category_filter
-            }
-            if (params.merchant) {
-              filters.value.merchant = params.merchant
-            }
-            if (params.main_category) {
-              filters.value.transactionType = params.main_category
-            }
-            // Show filters panel
-            showFilters.value = true
-          }
-          break
-          
-        case 'show_transactions_tab':
-          currentTab.value = 'transactions'
-          break
-          
-        case 'show_categories_tab':
-          currentTab.value = 'categories'
-          break
-          
-        case 'show_timeline':
-          currentTab.value = 'timeline'
-          break
-          
-        case 'show_dashboard':
-          currentTab.value = 'dashboard'
-          break
-          
-        case 'show_settings':
-          currentTab.value = 'settings'
-          break
-      }
-    }
-    
-  } catch (error) {
-    console.error('❌ Chat error:', error)
-    
-    let errorMessage = 'Error. Please try again.'
-    
-    if (error.response?.status === 401) {
-      console.log('🔄 Token refresh...')
-      try {
-        const verifyResult = await authStore.verifyToken()
-        if (verifyResult.success) {
-          // Retry
-          const retryResponse = await axios.post(`${API_BASE}/chat/command`, {
-            message: messageText
-          }, { 
-            headers: { Authorization: `Bearer ${authStore.token}` }, 
-            timeout: 15000 
-          })
-          
-          addChatMessage({
-            message: messageText,
-            response: retryResponse.data.response
-          })
-          
-          // Handle actions on retry
-          if (retryResponse.data.suggested_action) {
-            switch (retryResponse.data.suggested_action) {
-              case 'filter_transactions':
-                currentTab.value = 'transactions'
-                if (retryResponse.data.action_params) {
-                  Object.assign(filters.value, retryResponse.data.action_params)
-                  showFilters.value = true
-                }
-                break
-              case 'show_transactions_tab':
-                currentTab.value = 'transactions'
-                break
-              case 'show_categories_tab':
-                currentTab.value = 'categories'
-                break
-              case 'show_timeline':
-                currentTab.value = 'timeline'
-                break
-            }
-          }
-          
-          loading.value = false
-          currentThinking.value = ''
-          return
-          
-        } else {
-          errorMessage = 'Auth expired. Sign in again.'
-        }
-      } catch (retryError) {
-        errorMessage = 'Auth expired. Sign in again.'
-      }
-    } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-      errorMessage = 'Server offline. Check backend.'
-    } else if (error.response?.status >= 500) {
-      errorMessage = 'Server error. Try again.'
-    }
-    
-    addChatMessage({
-      message: messageText,
-      response: errorMessage
-    })
-    
-    chatInput.value = originalInput
-  } finally {
-    loading.value = false
-    currentThinking.value = ''
-  }
-}
+      showWelcomeMessage.value = false
+      showHistory.value = true
 
+      try {
+        const headers = {
+          Authorization: `Bearer ${authStore.token}`
+        }
+
+        const response = await axios.post(`${API_BASE}/chat/command`, {
+          message: messageText
+        }, { headers, timeout: 15000 })
+        
+        const botResponse = response.data.response
+        
+        addChatMessage({
+          message: messageText,
+          response: botResponse
+        })
+        
+        // Handle suggested actions from chat
+        if (response.data.suggested_action) {
+          switch (response.data.suggested_action) {
+            case 'filter_transactions':
+              currentTab.value = 'transactions'
+              if (response.data.action_params) {
+                const params = response.data.action_params
+                if (params.main_category) {
+                  filters.value.mainCategory = params.main_category
+                }
+                if (params.category_filter) {
+                  filters.value.categoryFilter = params.category_filter
+                }
+                if (params.merchant) {
+                  filters.value.merchant = params.merchant
+                }
+                if (params.main_category) {
+                  filters.value.transactionType = params.main_category
+                }
+                showFilters.value = true
+              }
+              break
+              
+            case 'show_transactions_tab':
+              currentTab.value = 'transactions'
+              break
+              
+            case 'show_categories_tab':
+              currentTab.value = 'categories'
+              break
+              
+            case 'show_timeline':
+              currentTab.value = 'timeline'
+              break
+              
+            case 'show_dashboard':
+              currentTab.value = 'dashboard'
+              break
+              
+            case 'show_settings':
+              currentTab.value = 'settings'
+              break
+          }
+        }
+        
+      } catch (error) {
+        console.error('❌ Chat error:', error)
+        
+        let errorMessage = 'Error. Please try again.'
+        
+        if (error.response?.status === 401) {
+          try {
+            const verifyResult = await authStore.verifyToken()
+            if (verifyResult.success) {
+              // Retry the request after token refresh
+              const retryResponse = await axios.post(`${API_BASE}/chat/command`, {
+                message: messageText
+              }, { 
+                headers: { Authorization: `Bearer ${authStore.token}` }, 
+                timeout: 15000 
+              })
+              
+              addChatMessage({
+                message: messageText,
+                response: retryResponse.data.response
+              })
+              
+              // Handle actions on retry
+              if (retryResponse.data.suggested_action) {
+                switch (retryResponse.data.suggested_action) {
+                  case 'filter_transactions':
+                    currentTab.value = 'transactions'
+                    if (retryResponse.data.action_params) {
+                      Object.assign(filters.value, retryResponse.data.action_params)
+                      showFilters.value = true
+                    }
+                    break
+                  case 'show_transactions_tab':
+                    currentTab.value = 'transactions'
+                    break
+                  case 'show_categories_tab':
+                    currentTab.value = 'categories'
+                    break
+                  case 'show_timeline':
+                    currentTab.value = 'timeline'
+                    break
+                }
+              }
+              
+              loading.value = false
+              currentThinking.value = ''
+              return
+              
+            } else {
+              errorMessage = 'Auth expired. Sign in again.'
+            }
+          } catch {
+            errorMessage = 'Auth expired. Sign in again.'
+          }
+        } else if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
+          errorMessage = 'Server offline. Check backend.'
+        } else if (error.response?.status >= 500) {
+          errorMessage = 'Server error. Try again.'
+        }
+        
+        addChatMessage({
+          message: messageText,
+          response: errorMessage
+        })
+        
+        chatInput.value = originalInput
+      } finally {
+        loading.value = false
+        currentThinking.value = ''
+      }
+    }
+
+    /**
+     * Toggles chat history visibility
+     * @returns {void}
+     */
     const toggleHistory = () => {
       showHistory.value = !showHistory.value
     }
 
+    /**
+     * Opens chat panel and shows history
+     * @returns {void}
+     */
     const openChatPanel = () => {
       showChat.value = true
       showHistory.value = true
     }
 
+    /**
+     * Closes chat panel and hides history
+     * @returns {void}
+     */
     const closeChatPanel = () => {
       showChat.value = false
       showHistory.value = false
     }
 
+    /**
+     * Toggles chat panel open/closed state
+     * @returns {void}
+     */
     const toggleChatPanel = () => {
       if (showChat.value) {
         closeChatPanel()
@@ -470,36 +555,43 @@ const sendMessage = async (message = null) => {
       }
     }
 
-const clearChatHistory = () => {
-  chatHistory.value = []
-  showHistory.value = false
-}
+    /**
+     * Clears all chat history
+     * @returns {void}
+     */
+    const clearChatHistory = () => {
+      chatHistory.value = []
+      showHistory.value = false
+    }
 
-    // Backend health check
+    /**
+     * Checks backend health and version
+     * @async
+     * @returns {Promise<void>}
+     */
     const checkBackend = async () => {
       try {
-        console.log('Checking backend connection...')
         const response = await axios.get(`${API_BASE}/health`, { timeout: 10000 })
         backendStatus.value = 'Connected'
         phase.value = response.data.version || 'Local Version'
-        console.log('Backend connected:', response.data)
       } catch (error) {
         backendStatus.value = 'Disconnected'
         console.error('Backend connection failed:', error)
       }
     }
 
-    // Transaction functions
+    /**
+     * Loads transactions with current filters and pagination
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadTransactions = async () => {
       if (!authStore.token) {
-        console.log('No token available, cannot load transactions')
         return
       }
       
       loading.value = true
       try {
-        console.log('Loading transactions...')
-        
         const params = new URLSearchParams({
           page: currentPage.value,
           limit: pageSize.value,
@@ -516,7 +608,6 @@ const clearChatHistory = () => {
         })
         
         transactions.value = response.data
-        console.log('Loaded transactions:', response.data.length)
       } catch (error) {
         console.error('Failed to load transactions:', error)
         if (error.response?.status === 401) {
@@ -527,26 +618,45 @@ const clearChatHistory = () => {
       }
     }
 
+    /**
+     * Refreshes transactions (resets to page 1)
+     * @returns {void}
+     */
     const refreshTransactions = () => {
       currentPage.value = 1
       loadTransactions()
     }
 
+    /**
+     * Changes current page and reloads transactions
+     * @param {number} newPage - Page number to load
+     * @returns {void}
+     */
     const changePage = (newPage) => {
       currentPage.value = newPage
       loadTransactions()
     }
 
+    /**
+     * Updates filter values
+     * @param {Object} newFilters - New filter object
+     * @returns {void}
+     */
     const updateFilters = (newFilters) => {
       filters.value = newFilters
     }
 
+    /**
+     * Categorizes a transaction
+     * @async
+     * @param {number} transactionId - Transaction ID
+     * @param {number} categoryId - Category ID
+     * @returns {Promise<void>}
+     */
     const categorizeTransaction = async (transactionId, categoryId) => {
       if (!authStore.token || !categoryId) return
       
       try {
-        console.log('Categorizing transaction:', transactionId, 'as', categoryId)
-        
         await axios.post(`${API_BASE}/transactions/categorize/${transactionId}`, 
           { category_id: categoryId },
           { 
@@ -573,26 +683,56 @@ const clearChatHistory = () => {
       }
     }
 
+    /**
+     * Handles transaction edit request
+     * @param {Object} transaction - Transaction object to edit
+     * @returns {void}
+     */
     const editTransaction = (transaction) => {
       console.log('Edit transaction:', transaction)
     }
 
+    /**
+     * Handles file upload event
+     * @param {Array} files - Array of file objects
+     * @returns {void}
+     */
     const handleFileUpload = (files) => {
       console.log('File upload event received:', files.length, 'files')
     }
 
+    /**
+     * Updates transaction count
+     * @param {number} count - New transaction count
+     * @returns {void}
+     */
     const updateTransactionCount = (count) => {
       transactionCount.value = count
     }
 
+    /**
+     * Selects a category
+     * @param {Object} category - Category object
+     * @returns {void}
+     */
     const selectCategory = (category) => {
       selectedCategory.value = category
     }
 
+    /**
+     * Formats date string to localized format
+     * @param {string} dateString - ISO date string
+     * @returns {string} Formatted date
+     */
     const formatDate = (dateString) => {
       return new Date(dateString).toLocaleDateString()
     }
 
+    /**
+     * Formats amount as USD currency
+     * @param {number|string} amount - Amount to format
+     * @returns {string} Formatted currency string
+     */
     const formatAmount = (amount) => {
       const num = parseFloat(amount)
       return new Intl.NumberFormat('en-US', {
@@ -601,6 +741,11 @@ const clearChatHistory = () => {
       }).format(Math.abs(num))
     }
 
+    /**
+     * Shows specific tab and loads data if needed
+     * @param {string} tabName - Tab name to show
+     * @returns {void}
+     */
     const showTab = (tabName) => {
       currentTab.value = tabName
       if (tabName === 'transactions' && authStore.token) {
@@ -608,6 +753,11 @@ const clearChatHistory = () => {
       }
     }
 
+    /**
+     * Handles user logout
+     * @async
+     * @returns {Promise<void>}
+     */
     const handleLogout = async () => {
       try {
         await authStore.logout()
@@ -622,19 +772,22 @@ const clearChatHistory = () => {
       }
     }
 
-    // Watchers for filters
+    /**
+     * Watch filters for changes and reload transactions
+     */
     watch(filters, () => {
       if (currentTab.value === 'transactions') {
         loadTransactions()
       }
     }, { deep: true })
 
-    // Watch auth store for user changes
+    /**
+     * Watch auth store for user changes
+     * Initialize welcome message for new authenticated users
+     */
     watch(() => authStore.user, (newUser) => {
       user.value = newUser
-      console.log('Auth state changed:', newUser ? newUser.email : 'signed out')
       
-      // Initialize welcome message for authenticated users only
       if (newUser && chatHistory.value.length === 0) {
         const userName = newUser.display_name || newUser.email.split('@')[0]
         
@@ -646,12 +799,11 @@ const clearChatHistory = () => {
       }
     }, { immediate: true })
 
-    // Initialize
+    /**
+     * Initialize application on mount
+     */
     onMounted(() => {
-      console.log('App initializing...')
       checkBackend()
-      
-      // Initialize auth store
       authStore.initAuth()
     })
 
@@ -682,9 +834,7 @@ const clearChatHistory = () => {
       showFilters,
       
       // Category state
-
       selectedCategory,
-
       
       // Functions
       toggleHistory,

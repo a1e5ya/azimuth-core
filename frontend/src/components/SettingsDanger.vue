@@ -1,9 +1,44 @@
+<!--
+  SettingsDanger Component - Dangerous Operations Management
+  
+  Provides interface for critical account operations:
+  - Logout current session
+  - Clear all chat history
+  - Delete all transactions (requires password)
+  - Delete entire account (requires password)
+  
+  Features:
+  - Confirmation modals for all dangerous actions
+  - Password verification for destructive operations
+  - Loading states during execution
+  - Session time display from activity log
+  - Auto-reload or redirect after operations
+  
+  Events:
+  - @transaction-deleted: Emitted after transactions deleted
+  - @account-deleted: Emitted after account deleted
+  - @chat-cleared: Emitted after chat history cleared
+  
+  Safety Measures:
+  - Password required for: delete transactions, delete account
+  - Confirmation dialog for all operations
+  - Clear warning messages
+  - Cannot be undone warnings
+  
+  API Endpoints:
+  - GET /system/activity-log - Load session info
+  - POST /dangerous/categories/reset - Reset categories
+  - DELETE /dangerous/transactions/delete-all - Delete transactions
+  - DELETE /dangerous/account - Delete account
+-->
+
 <template>
   <div class="card settings-card">
     <div class="card-header">
       <div class="card-title">Danger Zone</div>
     </div>
     
+    <!-- Logout Current Session -->
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Current Session</div>
@@ -11,6 +46,7 @@
       <button @click="logout" class="btn btn-danger">Logout</button>
     </div>
     
+    <!-- Clear Chat History -->
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Clear All Chat History</div>
@@ -18,6 +54,7 @@
       <button @click="confirmAction('clear-chat')" class="btn btn-danger">Clear Chat</button>
     </div>
     
+    <!-- Delete All Transactions -->
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Delete All Transactions</div>
@@ -25,6 +62,7 @@
       <button @click="confirmAction('delete-transactions')" class="btn btn-danger">Delete Transactions</button>
     </div>
     
+    <!-- Delete Account -->
     <div class="setting-row">
       <div class="setting-info">
         <div class="setting-label">Delete Account</div>
@@ -35,17 +73,23 @@
     <!-- Confirmation Modal -->
     <div v-if="showConfirmation" class="modal-overlay" @click="showConfirmation = false">
       <div class="modal-content" @click.stop>
+        <!-- Modal Header -->
         <div class="modal-header">
           <h3>{{ confirmationTitle }}</h3>
           <button class="close-btn" @click="showConfirmation = false">×</button>
         </div>
+        
+        <!-- Modal Body -->
         <div class="modal-body">
           <p>{{ confirmationMessage }}</p>
+          <!-- Password Input (for destructive operations) -->
           <div v-if="requiresPasswordConfirmation" class="form-row" style="margin-bottom: 1rem;">
             <label>Password</label>
             <input v-model="confirmationPassword" type="password" placeholder="Enter your password to confirm" class="form-input" @keyup.enter="executeAction">
           </div>
         </div>
+        
+        <!-- Modal Actions -->
         <div class="modal-actions">
           <button @click="cancelAction" class="btn btn-secondary">Cancel</button>
           <button @click="executeAction" class="btn btn-danger" :disabled="executing">
@@ -77,6 +121,11 @@ export default {
     const executing = ref(false)
     const sessionStartTime = ref('Unknown')
 
+    /**
+     * Loads session start time from activity log
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadSessionTime = async () => {
       try {
         const token = localStorage.getItem('token')
@@ -94,7 +143,6 @@ export default {
           const lastLogin = logs.find(log => log.entity === 'auth' && log.action === 'login')
           
           if (lastLogin && lastLogin.created_at) {
-            // Backend returns: "2025-11-25 12:58:59"
             sessionStartTime.value = lastLogin.created_at
             return
           }
@@ -105,15 +153,26 @@ export default {
       sessionStartTime.value = 'Unknown'
     }
 
+    /** @type {import('vue').ComputedRef<boolean>} */
     const requiresPasswordConfirmation = computed(() => {
       return ['delete-transactions', 'delete-account'].includes(pendingAction.value)
     })
 
+    /**
+     * Logs out current user and reloads page
+     * @async
+     * @returns {Promise<void>}
+     */
     const logout = async () => {
       await authStore.logout()
       window.location.reload()
     }
 
+    /**
+     * Shows confirmation modal for dangerous action
+     * @param {string} action - Action type (reset-categories, clear-chat, delete-transactions, delete-account)
+     * @returns {void}
+     */
     const confirmAction = (action) => {
       pendingAction.value = action
       confirmationPassword.value = ''
@@ -141,12 +200,21 @@ export default {
       showConfirmation.value = true
     }
 
+    /**
+     * Cancels current action and closes confirmation modal
+     * @returns {void}
+     */
     const cancelAction = () => {
       showConfirmation.value = false
       confirmationPassword.value = ''
       pendingAction.value = null
     }
 
+    /**
+     * Executes the pending dangerous action
+     * @async
+     * @returns {Promise<void>}
+     */
     const executeAction = async () => {
       if (requiresPasswordConfirmation.value && !confirmationPassword.value) {
         return
@@ -168,6 +236,11 @@ export default {
       }
     }
 
+    /**
+     * Resets all categories to default state
+     * @async
+     * @returns {Promise<void>}
+     */
     const resetCategories = async () => {
       await axios.post(`${API_BASE}/dangerous/categories/reset`, {}, {
         headers: { 'Authorization': `Bearer ${authStore.token}` }
@@ -175,10 +248,19 @@ export default {
       window.location.reload()
     }
 
+    /**
+     * Clears chat history
+     * @returns {void}
+     */
     const clearChatHistory = async () => {
       emit('chat-cleared')
     }
 
+    /**
+     * Deletes all user transactions (requires password)
+     * @async
+     * @returns {Promise<void>}
+     */
     const deleteAllTransactions = async () => {
       await axios.delete(`${API_BASE}/dangerous/transactions/delete-all`, {
         headers: { 
@@ -192,6 +274,11 @@ export default {
       window.location.reload()
     }
 
+    /**
+     * Deletes user account and all data (requires password)
+     * @async
+     * @returns {Promise<void>}
+     */
     const deleteAccount = async () => {
       await axios.delete(`${API_BASE}/dangerous/account`, {
         headers: { 

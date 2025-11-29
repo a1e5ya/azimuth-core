@@ -275,7 +275,7 @@ Text: {combined_text}
 Rules:
 - Single words or 2-word phrases
 - Focus on brands, places, activity types
-- Remove generic words
+- Remove generic words like "purchase"
 - Lowercase
 
 JSON array only:

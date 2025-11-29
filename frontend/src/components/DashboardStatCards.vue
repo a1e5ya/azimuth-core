@@ -1,9 +1,20 @@
+<!--
+  Dashboard Stat Cards - KPI summary with real-time calculations
+  
+  Four financial KPI cards: Spending, Income, Transfers, Net Savings.
+  Aggregates from filtered transactions by main_category.
+  
+  Key Features:
+  - Real-time calculation (computed from props)
+  - Savings rate: (Net/Income) * 100
+  - Dynamic net savings color (green profit, red loss)
+  - Transaction counts per category
+-->
 <template>
   <div class="stats-overview">
     <div class="grid grid-4">
-      <!-- Spending Card -->
-      <div 
-        class="container stat-card card-expenses">
+      <!-- Total Spending Card -->
+      <div class="container stat-card card-expenses">
         <div class="stat-label">Total Spending</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalSpending) }}</div>
         <div class="stat-detail">
@@ -11,9 +22,8 @@
         </div>
       </div>
 
-      <!-- Income Card -->
-      <div 
-        class="container stat-card card-income">
+      <!-- Total Income Card -->
+      <div class="container stat-card card-income">
         <div class="stat-label">Total Income</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalIncome) }}</div>
         <div class="stat-detail">
@@ -21,9 +31,8 @@
         </div>
       </div>
 
-      <!-- Transfers Card -->
-      <div 
-        class="container stat-card card-transfers">
+      <!-- Total Transfers Card -->
+      <div class="container stat-card card-transfers">
         <div class="stat-label">Total Transfers</div>
         <div class="stat-value">{{ formatCurrency(kpis.totalTransfers) }}</div>
         <div class="stat-detail">
@@ -31,9 +40,9 @@
         </div>
       </div>
 
-      <!-- Net Savings Card -->
+      <!-- Net Savings Card (dynamic color) -->
       <div 
-        class="container stat-card "
+        class="container stat-card"
         :style="{ backgroundColor: kpis.netSavings >= 0 ? 'rgba(34, 197, 94, 0.3)' : 'rgba(239, 68, 68, 0.3)' }"
       >
         <div class="stat-label">Net Savings</div>
@@ -54,16 +63,41 @@ import { computed } from 'vue'
 export default {
   name: 'DashboardStatCards',
   props: {
+    /**
+     * Filtered transactions array
+     * @type {Array}
+     */
     filteredTransactions: {
       type: Array,
       required: true
     },
+    /**
+     * Function to get color for transaction type
+     * @type {Function}
+     * @param {string} type - Type identifier
+     * @returns {string} Hex color
+     */
     getTypeColor: {
       type: Function,
       required: true
     }
   },
   setup(props) {
+    /**
+     * Calculate KPIs from filtered transactions
+     * Groups by main_category, sums amounts, counts transactions.
+     * Net savings = income - expenses. Rate = (net/income) * 100.
+     * 
+     * @returns {Object} KPI metrics
+     * @returns {number} totalSpending - Sum of EXPENSES
+     * @returns {number} totalIncome - Sum of INCOME
+     * @returns {number} totalTransfers - Sum of TRANSFERS
+     * @returns {number} netSavings - Income minus expenses
+     * @returns {number} savingsRate - Percentage saved (0-100)
+     * @returns {number} expenseTransactionCount
+     * @returns {number} incomeTransactionCount
+     * @returns {number} transferTransactionCount
+     */
     const kpis = computed(() => {
       if (props.filteredTransactions.length === 0) {
         return {
@@ -118,6 +152,13 @@ export default {
       }
     })
 
+    /**
+     * Convert hex to rgba (unused, available for future use)
+     * 
+     * @param {string} hex - Hex color (#RRGGBB)
+     * @param {number} alpha - Opacity 0-1
+     * @returns {string} RGBA color string
+     */
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
       const r = parseInt(hex.slice(1, 3), 16)
@@ -126,6 +167,12 @@ export default {
       return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
 
+    /**
+     * Format as EUR currency, no decimals, absolute value
+     * 
+     * @param {number} amount - Amount to format
+     * @returns {string} Formatted currency (e.g. "€1,234")
+     */
     function formatCurrency(amount) {
       return new Intl.NumberFormat('en-EU', {
         style: 'currency',
@@ -161,12 +208,13 @@ export default {
 }
 
 .card-expenses {
-  background-color: rgba(197, 145, 232, 0.5)
-;
+  background-color: rgba(197, 145, 232, 0.5);
 }
+
 .card-income {
   background-color: rgba(24, 234, 184, 0.5);
 } 
+
 .card-transfers {
   background-color: rgba(240, 196, 108, 0.5);
 }

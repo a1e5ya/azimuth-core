@@ -1,8 +1,12 @@
+<!--
+  Income vs Expenses Chart - Monthly trend with file import
+  
+  ApexCharts area chart showing income/expenses over time.
+  Shows file drop zone when empty for training data import.
+-->
 <template>
   <div class="container">
-
-
-    <!-- Empty State with Drop Zone -->
+    <!-- Empty state with file drop zone -->
     <div v-if="chartData.length === 0" class="empty-state-import">
       <div v-if="loading" class="loading-state">
         <div class="loading-spinner">⟳</div>
@@ -27,6 +31,7 @@
       >
     </div>
 
+    <!-- Chart display with income/expenses series -->
     <div v-else class="chart-container">
       <div class="chart-header">
         <h3>Income vs Expenses Trend</h3>
@@ -71,16 +76,25 @@ export default {
     const fileInput = ref(null)
     const loading = ref(false)
 
+    /** Trigger hidden file input dialog */
     const triggerFileInput = () => {
       fileInput.value?.click()
     }
 
+    /**
+     * Handle file selection from dialog
+     * Clears input value after to allow re-selection of same files
+     */
     const handleFileSelect = (event) => {
       const files = Array.from(event.target.files)
       processFiles(files)
       event.target.value = ''
     }
 
+    /**
+     * Handle drag-and-drop
+     * Filters for CSV/XLSX before processing
+     */
     const handleDrop = (event) => {
       const files = Array.from(event.dataTransfer.files)
       const validFiles = files.filter(f => 
@@ -90,6 +104,17 @@ export default {
       processFiles(validFiles)
     }
 
+    /**
+     * Upload files as training data
+     * 
+     * Parameters sent to API:
+     * - import_mode: 'training' (pre-categorized transactions)
+     * - auto_categorize: 'true' (auto-assign if missing)
+     * - timeout: 300000ms (5 minutes for large files)
+     * 
+     * Processes files sequentially, continues even if individual files fail.
+     * Emits import-complete when done so parent can refresh data.
+     */
     const processFiles = async (files) => {
       if (!files || files.length === 0) return
 
@@ -110,8 +135,6 @@ export default {
               },
               timeout: 300000
             })
-
-            console.log(`✅ Imported: ${file.name}`)
           } catch (error) {
             console.error(`❌ Import failed: ${file.name}`, error)
           }
@@ -123,6 +146,15 @@ export default {
       }
     }
 
+    /**
+     * Aggregate transactions by month
+     * 
+     * Groups by year-month (YYYY-MM format), excludes TRANSFERS.
+     * Sums absolute amounts for spending (EXPENSES) and income (INCOME).
+     * Sorts chronologically by period.
+     * 
+     * Returns array of { period: 'YYYY-MM', spending: number, income: number }
+     */
     const chartData = computed(() => {
       if (props.filteredTransactions.length === 0) return []
 
@@ -156,6 +188,13 @@ export default {
         .sort((a, b) => a.period.localeCompare(b.period))
     })
 
+    /**
+     * Convert to ApexCharts series format
+     * 
+     * Two series: Income and Expenses.
+     * Data points: { x: timestamp, y: amount }
+     * Converts period 'YYYY-MM' to first day of month timestamp
+     */
     const chartSeries = computed(() => {
       if (chartData.value.length === 0) return []
 
@@ -177,26 +216,28 @@ export default {
       ]
     })
 
+    /**
+     * ApexCharts configuration
+     * 
+     * Area chart with smooth curves, gradient fill (40% to 10% opacity).
+     * Colors from getTypeColor prop, shared tooltip, 300px height.
+     * X-axis: datetime formatted as 'MMM yyyy'
+     * Y-axis: EUR with rounded values
+     */
     const chartOptions = computed(() => ({
       chart: {
         type: 'area',
         height: 300,
         stacked: false,
-        toolbar: {
-          show: false
-        },
-        zoom: {
-          enabled: false
-        },
+        toolbar: { show: false },
+        zoom: { enabled: false },
         animations: {
           enabled: true,
           easing: 'easeinout',
           speed: 800
         }
       },
-      dataLabels: {
-        enabled: false
-      },
+      dataLabels: { enabled: false },
       stroke: {
         curve: 'smooth',
         width: 2
@@ -218,16 +259,8 @@ export default {
       grid: {
         borderColor: '#e5e7eb',
         strokeDashArray: 4,
-        xaxis: {
-          lines: {
-            show: true
-          }
-        },
-        yaxis: {
-          lines: {
-            show: true
-          }
-        }
+        xaxis: { lines: { show: true } },
+        yaxis: { lines: { show: true } }
       },
       xaxis: {
         type: 'datetime',
@@ -238,14 +271,8 @@ export default {
             fontSize: '12px'
           }
         },
-        axisBorder: {
-          show: true,
-          color: '#e5e7eb'
-        },
-        axisTicks: {
-          show: true,
-          color: '#e5e7eb'
-        }
+        axisBorder: { show: true, color: '#e5e7eb' },
+        axisTicks: { show: true, color: '#e5e7eb' }
       },
       yaxis: {
         title: {
@@ -267,20 +294,14 @@ export default {
       tooltip: {
         shared: true,
         intersect: false,
-        x: {
-          format: 'MMM yyyy'
-        },
-        y: {
-          formatter: (val) => '€' + val.toFixed(2)
-        },
+        x: { format: 'MMM yyyy' },
+        y: { formatter: (val) => '€' + val.toFixed(2) },
         theme: 'light'
       },
       colors: [props.getTypeColor('income'), props.getTypeColor('expenses')],
       markers: {
         size: 0,
-        hover: {
-          size: 5
-        }
+        hover: { size: 5 }
       }
     }))
 
@@ -336,12 +357,8 @@ export default {
 }
 
 @keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
 }
 
 .file-drop-zone {

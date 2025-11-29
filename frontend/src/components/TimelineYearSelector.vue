@@ -1,6 +1,46 @@
+<!--
+  TimelineYearSelector Component - Year Range Navigation
+  
+  Provides year range selector for timeline navigation:
+  - 2-year range buttons for quick navigation
+  - Active range highlighting
+  - Only visible at Month zoom level
+  - Automatic range generation from data
+  
+  Features:
+  - Dynamic range calculation from full data range
+  - 2-year chunks for easy navigation
+  - Active state detection with tolerance
+  - Click to scroll to specific range
+  - Auto-adjusts to current year
+  - Flexible wrapping layout
+  
+  Props:
+  - fullRangeStart: Date - Full data range start
+  - fullRangeEnd: Date - Full data range end (inflated +2 years)
+  - visibleRangeStart: Date - Currently visible range start
+  - visibleRangeEnd: Date - Currently visible range end
+  - currentZoomLevel: Number - Current zoom level (only shows at level 1)
+  
+  Events:
+  - @scroll-to: Emitted when range clicked
+    Payload: { start: Date, end: Date }
+  
+  Visibility:
+  - Only shown when currentZoomLevel === 1 (Month view)
+  - Hidden at Year and Quarter levels
+  
+  Range Calculation:
+  - Generates 2-year ranges (e.g., 2020-2021, 2022-2023)
+  - Adjusts end year based on actual data (not inflated range)
+  - Ensures ranges cover all historical data
+-->
+
 <template>
+  <!-- Only show at Month zoom level -->
   <div v-if="currentZoomLevel === 1" class="year-selector-wrapper">
     <div class="year-selector-bar">
+      <!-- Year Range Buttons -->
       <div 
         v-for="yearRange in yearRanges" 
         :key="yearRange.label"
@@ -15,7 +55,7 @@
 </template>
 
 <script>
-import { ref, computed, watch } from 'vue'
+import { computed } from 'vue'
 
 export default {
   name: 'TimelineYearSelector',
@@ -44,8 +84,9 @@ export default {
   emits: ['scroll-to'],
   setup(props, { emit }) {
     /**
-     * Calculate year ranges (2 years per range)
-     * Use the ACTUAL last transaction date from fullRangeEnd
+     * Calculates year ranges (2 years per range) from full data range
+     * Adjusts for inflated fullRangeEnd by subtracting 2 years
+     * @type {import('vue').ComputedRef<Array<{label: string, start: Date, end: Date}>>}
      */
     const yearRanges = computed(() => {
       if (!props.fullRangeStart || !props.fullRangeEnd) return []
@@ -53,28 +94,12 @@ export default {
       const ranges = []
       const startYear = props.fullRangeStart.getFullYear()
       
-      // fullRangeEnd is already inflated with +2 years in TimelineTab
-      // So we need to subtract 2 to get actual data end
-      // OR we can just use a reasonable calculation
-      // Since data ends Aug 2025, fullRangeEnd is probably Dec 2027
-      
-      // Let's use current date as reference - data shouldn't be more than 2 years in future
       const now = new Date()
       const currentYear = now.getFullYear()
       
-      // Assume data ends around current year (reasonable for financial data)
       const assumedDataEnd = Math.min(props.fullRangeEnd.getFullYear() - 2, currentYear)
       const lastYearNeeded = assumedDataEnd + 2
       
-      console.log('📊 Year selector calculation:', { 
-        startYear,
-        fullRangeEndYear: props.fullRangeEnd.getFullYear(),
-        assumedDataEnd,
-        lastYearNeeded,
-        currentYear
-      })
-      
-      // Generate ranges
       for (let year = startYear; year <= lastYearNeeded; year += 2) {
         const rangeStart = new Date(year, 0, 1)
         const rangeEnd = new Date(year + 1, 11, 31)
@@ -86,14 +111,14 @@ export default {
         })
       }
       
-      console.log('📅 Generated ranges:', ranges.map(r => r.label))
-      
       return ranges
     })
     
     /**
-     * Check if a range is currently active
-     * Simple: check if range start/end match visible range start/end (with some tolerance)
+     * Checks if a range is currently active
+     * Uses tolerance of 31 days for approximate matching
+     * @param {Object} range - Range object to check
+     * @returns {boolean} True if range is active
      */
     function isActiveRange(range) {
       const visStart = props.visibleRangeStart
@@ -101,37 +126,29 @@ export default {
       
       if (!visStart || !visEnd) return false
       
-      // Check if visible range approximately matches this range
-      // Allow 1 month tolerance on each side
-      const tolerance = 31 * 24 * 60 * 60 * 1000 // 31 days in ms
+      const tolerance = 31 * 24 * 60 * 60 * 1000
       
       const visStartTime = visStart.getTime()
       const visEndTime = visEnd.getTime()
       const rangeStartTime = range.start.getTime()
       const rangeEndTime = range.end.getTime()
       
-      // Check if visible range is approximately within this range
       const startMatches = Math.abs(visStartTime - rangeStartTime) < tolerance
       const endMatches = Math.abs(visEndTime - rangeEndTime) < tolerance
       
-      const isActive = startMatches && endMatches
-      
-      if (isActive) {
-        console.log('✅ Active range:', range.label)
-      }
-      
-      return isActive
+      return startMatches && endMatches
     }
     
     /**
-     * Select a year range
+     * Selects a year range and emits scroll-to event
+     * @param {Object} range - Range object with start and end dates
+     * @returns {void}
      */
     function selectRange(range) {
       emit('scroll-to', {
         start: range.start,
         end: range.end
       })
-      console.log('📅 Selected year range:', range.label)
     }
     
     return {
@@ -178,7 +195,5 @@ export default {
   border-color: var(--color-button-active);
 }
 
-.year-range.active {
 
-}
 </style>

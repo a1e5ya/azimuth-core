@@ -77,7 +77,7 @@ export const useAuthStore = defineStore('auth', () => {
         // Set axios default header for all future requests
         axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`
         
-        console.log('✅ Auth state restored from localStorage')
+
         
         // Verify token is still valid
         verifyToken()
@@ -118,7 +118,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Set axios default header for all future requests
       axios.defaults.headers.common['Authorization'] = `Bearer ${authToken}`
       
-      console.log('✅ Auth state saved')
+
     } catch (error) {
       console.error('❌ Error saving auth state:', error)
     }
@@ -148,7 +148,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Remove axios default header
       delete axios.defaults.headers.common['Authorization']
       
-      console.log('✅ Auth state cleared')
+
     } catch (error) {
       console.error('❌ Error clearing auth state:', error)
     }
@@ -183,7 +183,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      console.log('📝 Attempting registration for:', email)
+
       
       const response = await axios.post(`${API_BASE}/auth/register`, {
         email,
@@ -192,7 +192,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
       
       if (response.data.success) {
-        console.log('✅ Registration successful')
+
         
         // Save auth state
         saveAuthState(response.data.access_token, response.data.user)
@@ -249,7 +249,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      console.log('🔐 Attempting login for:', email)
+
       
       const response = await axios.post(`${API_BASE}/auth/login`, {
         email,
@@ -257,7 +257,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
       
       if (response.data.success) {
-        console.log('✅ Login successful')
+
         
         // Save auth state
         saveAuthState(response.data.access_token, response.data.user)
@@ -310,14 +310,14 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      console.log('📧 Requesting password reset for:', email)
+
       
       const response = await axios.post(`${API_BASE}/auth/forgot-password`, {
         email
       })
       
       if (response.data.success) {
-        console.log('✅ Password reset email sent')
+
         return { 
           success: true, 
           message: 'Password reset email sent successfully'
@@ -368,7 +368,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      console.log('🔑 Resetting password with token')
+
       
       const response = await axios.post(`${API_BASE}/auth/reset-password`, {
         token: resetToken,
@@ -426,7 +426,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     
     try {
-      console.log('🔍 Verifying token...')
+
       
       const response = await axios.post(`${API_BASE}/auth/verify`, {}, {
         headers: {
@@ -435,8 +435,7 @@ export const useAuthStore = defineStore('auth', () => {
       })
       
       if (response.data.authenticated) {
-        console.log('✅ Token verified')
-        
+
         // Update user data if provided
         if (response.data.user) {
           user.value = response.data.user
@@ -453,7 +452,7 @@ export const useAuthStore = defineStore('auth', () => {
       console.error('❌ Token verification failed:', error)
       
       if (error.response?.status === 401) {
-        console.log('🔄 Token expired, clearing auth state')
+
         clearAuthState()
       }
       
@@ -475,7 +474,7 @@ export const useAuthStore = defineStore('auth', () => {
     }
     
     try {
-      console.log('👤 Fetching current user profile...')
+
       
       const response = await axios.get(`${API_BASE}/auth/me`, {
         headers: {
@@ -483,7 +482,7 @@ export const useAuthStore = defineStore('auth', () => {
         }
       })
       
-      console.log('✅ User profile fetched')
+
       
       // Update stored user data
       user.value = response.data
@@ -516,7 +515,7 @@ export const useAuthStore = defineStore('auth', () => {
    */
   const logout = async () => {
     try {
-      console.log('🚪 Logging out...')
+
       
       // Call backend logout endpoint (for audit logging)
       if (token.value) {
@@ -534,7 +533,7 @@ export const useAuthStore = defineStore('auth', () => {
       // Clear local auth state
       clearAuthState()
       
-      console.log('✅ Logout successful')
+
       return { success: true, message: 'Logout successful' }
     } catch (error) {
       console.error('❌ Logout error:', error)
@@ -570,7 +569,7 @@ export const useAuthStore = defineStore('auth', () => {
     loading.value = true
     
     try {
-      console.log('🔒 Changing password...')
+
       
       const response = await axios.post(`${API_BASE}/auth/change-password`, {
         current_password: currentPassword,

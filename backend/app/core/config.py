@@ -29,12 +29,16 @@ File Structure:
 
 import os
 import secrets
+import warnings
 from typing import List
 from pathlib import Path
 from dotenv import load_dotenv
 
-# Load environment variables from .env file (if exists)
-load_dotenv()
+# Suppress Pydantic protected namespace warnings
+warnings.filterwarnings("ignore", message=".*conflict with protected namespace.*")
+
+# Load environment variables from .env.local file (if exists)
+load_dotenv(".env.local", verbose=False)
 
 # ============================================================================
 # PROJECT DIRECTORY STRUCTURE

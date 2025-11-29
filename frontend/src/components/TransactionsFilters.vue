@@ -1,3 +1,33 @@
+<!--
+  TransactionsFilters Component - Advanced Transaction Filtering Panel
+  
+  Provides comprehensive filtering interface for transactions:
+  - Date range filtering (start/end dates)
+  - Amount range filtering (min/max amounts)
+  - Hierarchical category filtering (Type → Category → Subcategory)
+  - Owner and account type filtering
+  - Merchant/memo text search
+  - Quick filters (uncategorized, clear all)
+  
+  Features:
+  - Cascading filter dependencies (Type → Category → Subcategory)
+  - Cascading owner/account type dependencies
+  - Real-time filter application
+  - Debounced search input (500ms delay)
+  - Filter state synchronization with parent
+  - Slide-down animation on show/hide
+  
+  Props:
+  - show: Boolean - Controls filter panel visibility
+  - filterOptions: Object - Available filter values from backend
+  - modelValue: Object - Current filter state (v-model)
+  
+  Events:
+  - @update:modelValue: Filter state changed
+  - @update:show: Visibility toggle requested
+  - @apply: Filters applied, trigger data reload
+-->
+
 <template>
   <transition name="slide-down">
     <div class="filters-panel-compact" v-if="show">
@@ -196,6 +226,10 @@ export default {
   },
   emits: ['update:modelValue', 'update:show', 'apply'],
   setup(props, { emit }) {
+    /**
+     * Local filter state synchronized with parent v-model
+     * @type {Ref<Object>}
+     */
     const localFilters = ref({
       startDate: '',
       endDate: '',
@@ -209,10 +243,17 @@ export default {
       subcategories: []
     })
 
+    /**
+     * Timeout handle for debounced search input
+     * @type {number|null}
+     */
     let searchTimeout = null
 
+    /**
+     * Syncs local filters with parent modelValue prop
+     * Ensures proper array cloning for reactive updates
+     */
     watch(() => props.modelValue, (newVal) => {
-      // Force complete sync with proper array cloning
       localFilters.value = {
         startDate: newVal.startDate || '',
         endDate: newVal.endDate || '',
@@ -227,11 +268,20 @@ export default {
       }
     }, { immediate: true, deep: true })
 
+    /**
+     * Computed list of available account owners sorted alphabetically
+     * @returns {Array<string>}
+     */
     const availableOwners = computed(() => {
       if (!props.filterOptions.ownerAccountMap) return []
       return Object.keys(props.filterOptions.ownerAccountMap).sort()
     })
 
+    /**
+     * Computed list of available account types based on selected owners
+     * If no owners selected, shows all types
+     * @returns {Array<string>}
+     */
     const availableAccountTypes = computed(() => {
       if (!props.filterOptions.ownerAccountMap) return []
       
@@ -251,10 +301,19 @@ export default {
       return Array.from(types).sort()
     })
 
+    /**
+     * Computed list of main category types (Income, Expense, etc.)
+     * @returns {Array<string>}
+     */
     const availableTypes = computed(() => {
       return props.filterOptions.mainCategories || []
     })
 
+    /**
+     * Computed list of available categories based on selected types
+     * Disabled when no types selected
+     * @returns {Array<string>}
+     */
     const availableCategories = computed(() => {
       if (!props.filterOptions.categoryMap) return []
       
@@ -268,6 +327,11 @@ export default {
       return Array.from(categories).sort()
     })
 
+    /**
+     * Computed list of available subcategories based on selected types and categories
+     * Disabled when no categories selected
+     * @returns {Array<string>}
+     */
     const availableSubcategories = computed(() => {
       if (!props.filterOptions.subcategoryMap) return []
       
@@ -284,6 +348,12 @@ export default {
       return Array.from(subcategories).sort()
     })
 
+    /**
+     * Toggles item in array (add if not present, remove if present)
+     * @param {Array} array - Target array to modify
+     * @param {*} item - Item to toggle
+     * @returns {void}
+     */
     const toggleArrayItem = (array, item) => {
       const index = array.indexOf(item)
       if (index > -1) {
@@ -293,11 +363,19 @@ export default {
       }
     }
 
+    /**
+     * Emits filter update to parent and triggers apply event
+     * @returns {void}
+     */
     const applyFilters = () => {
       emit('update:modelValue', { ...localFilters.value })
       emit('apply')
     }
 
+    /**
+     * Debounces search input with 500ms delay
+     * @returns {void}
+     */
     const debounceSearch = () => {
       if (searchTimeout) clearTimeout(searchTimeout)
       searchTimeout = setTimeout(() => {
@@ -305,6 +383,11 @@ export default {
       }, 500)
     }
 
+    /**
+     * Handles owner selection change
+     * Clears invalid account types when owner selection changes
+     * @returns {void}
+     */
     const handleOwnerChange = () => {
       const validTypes = availableAccountTypes.value
       localFilters.value.accountTypes = localFilters.value.accountTypes.filter(
@@ -313,6 +396,11 @@ export default {
       applyFilters()
     }
 
+    /**
+     * Handles type (main category) selection change
+     * Cascades down to clear invalid categories and subcategories
+     * @returns {void}
+     */
     const handleTypeChange = () => {
       const validCategories = availableCategories.value
       localFilters.value.categories = localFilters.value.categories.filter(
@@ -327,6 +415,11 @@ export default {
       applyFilters()
     }
 
+    /**
+     * Handles category selection change
+     * Cascades down to clear invalid subcategories
+     * @returns {void}
+     */
     const handleCategoryChange = () => {
       const validSubcategories = availableSubcategories.value
       localFilters.value.subcategories = localFilters.value.subcategories.filter(
@@ -336,6 +429,10 @@ export default {
       applyFilters()
     }
 
+    /**
+     * Resets all filters to default empty state
+     * @returns {void}
+     */
     const clearAllFilters = () => {
       localFilters.value = {
         startDate: '',
@@ -352,6 +449,11 @@ export default {
       applyFilters()
     }
 
+    /**
+     * Quick filter for uncategorized transactions
+     * Sets category filter to 'Uncategorized'
+     * @returns {void}
+     */
     const filterUncategorized = () => {
       localFilters.value.categories = ['Uncategorized']
       applyFilters()

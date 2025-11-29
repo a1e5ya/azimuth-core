@@ -1,8 +1,52 @@
+<!--
+  TransactionsCRUD Component - Transaction Create/Update/Delete
+  
+  Provides modal dialogs for transaction management:
+  - Add new transaction
+  - Edit existing transaction
+  - Delete single transaction
+  - Bulk delete multiple transactions
+  - Category selection with hierarchy
+  - Account selection by owner
+  
+  Features:
+  - Full CRUD operations for transactions
+  - Date and amount validation
+  - Merchant and memo fields
+  - Owner and account type selection
+  - Category tree navigation (Type > Category > Subcategory)
+  - Bulk delete with confirmation
+  - Loading states
+  - Error handling
+  - Chat notifications
+  
+  Events:
+  - @transaction-updated: Transaction created or edited
+  - @transaction-deleted: Transaction deleted
+  - @add-chat-message: Show message in chat component
+  
+  Public Methods (via expose):
+  - addTransaction(): Opens add transaction modal
+  - editTransaction(transaction): Opens edit modal with data
+  - deleteTransaction(transaction): Shows delete confirmation
+  - bulkDelete(ids): Shows bulk delete confirmation
+  
+  Form Fields:
+  - posted_at: Transaction date (required)
+  - amount: Transaction amount (required)
+  - merchant: Merchant name
+  - memo: Transaction notes
+  - owner: Account owner
+  - bank_account_type: Account type
+  - category_id: Selected category ID
+-->
+
 <template>
   <div>
     <!-- Edit/Add Transaction Modal -->
     <div v-if="showEditModal" class="modal-overlay" @click="closeEditModal">
       <div class="modal-content transaction-edit-modal" @click.stop>
+        <!-- Modal Header -->
         <div class="modal-header">
           <h3>{{ isAddMode ? 'Add Transaction' : 'Edit Transaction' }}</h3>
           <button class="close-btn" @click="closeEditModal">×</button>
@@ -10,6 +54,7 @@
         
         <div class="modal-body">
           <div class="edit-form">
+            <!-- Date and Amount Row -->
             <div class="form-row">
               <div class="form-group">
                 <label>Date *</label>
@@ -33,6 +78,7 @@
               </div>
             </div>
             
+            <!-- Merchant Field -->
             <div class="form-group">
               <label>Merchant</label>
               <input 
@@ -43,6 +89,7 @@
               >
             </div>
             
+            <!-- Memo Field -->
             <div class="form-group">
               <label>Memo</label>
               <textarea 
@@ -53,6 +100,7 @@
               ></textarea>
             </div>
             
+            <!-- Owner & Account Type Selection -->
             <div class="form-group">
               <label>Owner & Account Type</label>
               <div v-if="loadingAccounts" class="loading-text">Loading accounts...</div>
@@ -227,8 +275,13 @@ export default {
 
     const selectedOwnerAccount = ref('')
 
+    /** @type {import('vue').ComputedRef<Array>} */
     const categoryTree = computed(() => categoryStore.categories || [])
 
+    /**
+     * Groups accounts by owner name
+     * @type {import('vue').ComputedRef<Array<{owner: string, accounts: Array}>>}
+     */
     const groupedAccounts = computed(() => {
       const groups = {}
       for (const account of accounts.value) {
@@ -244,10 +297,16 @@ export default {
       return Object.values(groups)
     })
 
+    /** @type {import('vue').ComputedRef<boolean>} */
     const isFormValid = computed(() => {
       return editForm.value.posted_at && editForm.value.amount !== 0
     })
 
+    /**
+     * Loads available accounts from backend
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadAccounts = async () => {
       loadingAccounts.value = true
       try {
@@ -255,9 +314,8 @@ export default {
           headers: { Authorization: `Bearer ${authStore.token}` }
         })
         accounts.value = response.data.accounts || []
-        console.log('✅ Loaded accounts:', accounts.value.length)
       } catch (error) {
-        console.error('❌ Failed to load accounts:', error)
+        console.error('Failed to load accounts:', error)
       } finally {
         loadingAccounts.value = false
       }
@@ -269,6 +327,10 @@ export default {
       }
     })
 
+    /**
+     * Handles owner/account selection change
+     * @returns {void}
+     */
     const onOwnerAccountChange = () => {
       if (!selectedOwnerAccount.value) {
         editForm.value.owner = ''
@@ -279,9 +341,12 @@ export default {
       const [owner, accountType] = selectedOwnerAccount.value.split('|')
       editForm.value.owner = owner
       editForm.value.bank_account_type = accountType
-      console.log('✅ Selected:', { owner, accountType })
     }
 
+    /**
+     * Opens add transaction modal with empty form
+     * @returns {void}
+     */
     const addTransaction = () => {
       isAddMode.value = true
       showEditModal.value = true
@@ -297,12 +362,16 @@ export default {
       }
     }
 
+    /**
+     * Opens edit modal with transaction data
+     * @param {Object} transaction - Transaction to edit
+     * @returns {void}
+     */
     const editTransaction = (transaction) => {
       isAddMode.value = false
       editingTransaction.value = transaction
       showEditModal.value = true
       
-      // Set combined owner|account value
       if (transaction.owner && transaction.bank_account_type) {
         selectedOwnerAccount.value = `${transaction.owner}|${transaction.bank_account_type}`
       } else {
@@ -320,6 +389,10 @@ export default {
       }
     }
 
+    /**
+     * Closes edit modal and resets form
+     * @returns {void}
+     */
     const closeEditModal = () => {
       showEditModal.value = false
       isAddMode.value = false
@@ -336,6 +409,11 @@ export default {
       }
     }
 
+    /**
+     * Saves transaction (create or update)
+     * @async
+     * @returns {Promise<void>}
+     */
     const saveEdit = async () => {
       if (!isFormValid.value || saving.value) return
       
@@ -353,8 +431,6 @@ export default {
           bank_account_type: editForm.value.bank_account_type || null,
           category_id: editForm.value.category_id || null
         }
-        
-        console.log('💾 Saving transaction:', data)
         
         if (isAddMode.value) {
           const response = await axios.post(
@@ -374,14 +450,12 @@ export default {
             `${API_BASE}/transactions/${editingTransaction.value.id}`,
             data,
             {
-              headers: { 
+              headers: {
                 'Authorization': `Bearer ${token}`,
                 'Cache-Control': 'no-cache'
               }
             }
           )
-          
-          console.log('✅ Update response:', response.data)
           
           emit('add-chat-message', {
             message: 'Transaction updated',
@@ -403,15 +477,28 @@ export default {
       }
     }
 
+    /**
+     * Shows delete confirmation modal for transaction
+     * @param {Object} transaction - Transaction to delete
+     * @returns {void}
+     */
     const deleteTransaction = (transaction) => {
       deletingTransaction.value = transaction
-      console.log('🗑️ Deleting transaction:', transaction.id)
     }
 
+    /**
+     * Closes delete confirmation modal
+     * @returns {void}
+     */
     const closeDeleteModal = () => {
       deletingTransaction.value = null
     }
 
+    /**
+     * Confirms and executes transaction deletion
+     * @async
+     * @returns {Promise<void>}
+     */
     const confirmDelete = async () => {
       if (!deletingTransaction.value || deleting.value) return
       
@@ -421,9 +508,7 @@ export default {
         const token = authStore.token
         const transactionId = deletingTransaction.value.id
         
-        console.log('🗑️ DELETE request for:', transactionId)
-        
-        const response = await axios.delete(
+        await axios.delete(
           `${API_BASE}/transactions/${transactionId}`,
           {
             headers: { 
@@ -432,8 +517,6 @@ export default {
             }
           }
         )
-        
-        console.log('✅ Delete response:', response.data)
         
         emit('add-chat-message', {
           message: 'Transaction deleted',
@@ -444,7 +527,7 @@ export default {
         emit('transaction-deleted')
         
       } catch (error) {
-        console.error('❌ Delete failed:', error)
+        console.error('Delete failed:', error)
         emit('add-chat-message', {
           response: error.response?.data?.detail || 'Failed to delete transaction. Please try again.'
         })
@@ -453,16 +536,30 @@ export default {
       }
     }
 
+    /**
+     * Shows bulk delete confirmation modal
+     * @param {Array<number>} transactionIds - IDs of transactions to delete
+     * @returns {void}
+     */
     const bulkDelete = (transactionIds) => {
       bulkDeleteIds.value = transactionIds
       showBulkDeleteModal.value = true
     }
 
+    /**
+     * Closes bulk delete modal
+     * @returns {void}
+     */
     const closeBulkDeleteModal = () => {
       showBulkDeleteModal.value = false
       bulkDeleteIds.value = []
     }
 
+    /**
+     * Confirms and executes bulk deletion
+     * @async
+     * @returns {Promise<void>}
+     */
     const confirmBulkDelete = async () => {
       if (bulkDeleteIds.value.length === 0 || deleting.value) return
       

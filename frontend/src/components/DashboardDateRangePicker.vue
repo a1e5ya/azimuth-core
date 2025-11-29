@@ -1,6 +1,24 @@
+<!--
+  Dashboard Date Range Picker - Multi-mode date selection interface
+  
+  Four selection modes with intelligent navigation and boundary constraints.
+  
+  Modes:
+  - Monthly: Single month (start = end, synced navigation)
+  - Yearly: Full year (Jan 1 - Dec 31 of selected year)
+  - Range: Custom range (independent start/end controls)
+  - All Time: Min to max available dates (auto-set from data)
+  
+  Features:
+  - Dual-column layout for range selection (hidden in monthly/yearly)
+  - Year/month navigation with arrow buttons
+  - Boundary constraints from minAvailableDate/maxAvailableDate
+  - Automatic month wrapping (Dec→Jan next year, Jan→Dec previous year)
+  - Disabled navigation at min/max boundaries
+-->
 <template>
   <div class="time-range-picker">
-    <!-- Mode Toggle Buttons -->
+    <!-- Mode toggle buttons -->
     <div class="mode-buttons">
       <button
         v-for="mode in modes"
@@ -13,11 +31,11 @@
       </button>
     </div>
 
-    <!-- Navigation Controls -->
+    <!-- Navigation controls (two columns, right hidden in monthly/yearly) -->
     <div class="navigation-container two-column">
-      <!-- Single Column (Monthly/Yearly) or Left Column (Range/All Time) -->
+      <!-- Left column: start date or single date (monthly/yearly) -->
       <div class="date-column">
-        <!-- Year Navigation -->
+        <!-- Year navigation -->
         <div class="nav-row">
           <button class="btn btn-icon nav-btn" @click="adjustYear('start', -1)" :disabled="isStartYearMin">
             <span>←</span>
@@ -28,7 +46,7 @@
           </button>
         </div>
 
-        <!-- Month Navigation (only for Monthly, Range, and All Time) -->
+        <!-- Month navigation (invisible in yearly mode) -->
         <div class="nav-row" :class="{ invisible: currentMode === 'yearly' }">
           <button class="btn btn-icon nav-btn" @click="adjustMonth('start', -1)" :disabled="isStartMonthMin">
             <span>←</span>
@@ -40,9 +58,9 @@
         </div>
       </div>
 
-      <!-- Right Column (Range and All Time modes only, invisible otherwise) -->
+      <!-- Right column: end date (invisible in monthly/yearly) -->
       <div class="date-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
-        <!-- Year Navigation -->
+        <!-- Year navigation -->
         <div class="nav-row">
           <button class="btn btn-icon nav-btn" @click="adjustYear('end', -1)" :disabled="isEndYearMin">
             <span>←</span>
@@ -53,7 +71,7 @@
           </button>
         </div>
 
-        <!-- Month Navigation -->
+        <!-- Month navigation -->
         <div class="nav-row">
           <button class="btn btn-icon nav-btn" @click="adjustMonth('end', -1)" :disabled="isEndMonthMin">
             <span>←</span>
@@ -66,7 +84,7 @@
       </div>
     </div>
 
-    <!-- Labels Row (always present for consistent sizing) -->
+    <!-- Labels row (always present for layout stability, invisible in monthly/yearly) -->
     <div class="labels-row">
       <div class="label-column" :class="{ invisible: currentMode !== 'range' && currentMode !== 'all-time' }">
         FROM
@@ -84,6 +102,10 @@ import { ref, computed, watch } from 'vue'
 export default {
   name: 'DashboardDateRangePicker',
   props: {
+    /**
+     * Current date range
+     * @type {Object}
+     */
     dateRange: {
       type: Object,
       required: true,
@@ -91,16 +113,30 @@ export default {
         return value.startDate instanceof Date && value.endDate instanceof Date
       }
     },
+    /**
+     * Minimum available date (from dataset)
+     * @type {Date|String}
+     */
     minAvailableDate: {
       type: [Date, String],
       default: null
     },
+    /**
+     * Maximum available date (from dataset)
+     * @type {Date|String}
+     */
     maxAvailableDate: {
       type: [Date, String],
       default: null
     }
   },
-  emits: ['update:dateRange'],
+  emits: [
+    /**
+     * Date range update event
+     * @param {Object} range - New date range {startDate, endDate}
+     */
+    'update:dateRange'
+  ],
   setup(props, { emit }) {
     const currentMode = ref('all-time')
     
@@ -121,6 +157,7 @@ export default {
       'July', 'August', 'September', 'October', 'November', 'December'
     ]
 
+    /** Sync local state when prop changes */
     watch(() => props.dateRange, (newRange) => {
       startYear.value = newRange.startDate.getFullYear()
       startMonth.value = newRange.startDate.getMonth()
@@ -128,6 +165,7 @@ export default {
       endMonth.value = newRange.endDate.getMonth()
     }, { deep: true })
 
+    /** Min year from dataset */
     const minYear = computed(() => {
       if (!props.minAvailableDate) return 2000
       const date = props.minAvailableDate instanceof Date 
@@ -136,6 +174,7 @@ export default {
       return date.getFullYear()
     })
     
+    /** Max year from dataset */
     const maxYear = computed(() => {
       if (!props.maxAvailableDate) return new Date().getFullYear()
       const date = props.maxAvailableDate instanceof Date 
@@ -144,6 +183,7 @@ export default {
       return date.getFullYear()
     })
     
+    /** Min month from dataset */
     const minMonth = computed(() => {
       if (!props.minAvailableDate) return 0
       const date = props.minAvailableDate instanceof Date 
@@ -152,6 +192,7 @@ export default {
       return date.getMonth()
     })
     
+    /** Max month from dataset */
     const maxMonth = computed(() => {
       if (!props.maxAvailableDate) return 11
       const date = props.maxAvailableDate instanceof Date 
@@ -160,10 +201,12 @@ export default {
       return date.getMonth()
     })
 
+    /** Start year at minimum boundary */
     const isStartYearMin = computed(() => {
       return startYear.value <= minYear.value
     })
 
+    /** Start year at maximum boundary (varies by mode) */
     const isStartYearMax = computed(() => {
       if (currentMode.value === 'monthly' || currentMode.value === 'yearly') {
         return startYear.value >= maxYear.value
@@ -171,14 +214,17 @@ export default {
       return startYear.value >= endYear.value
     })
 
+    /** End year cannot be before start year */
     const isEndYearMin = computed(() => {
       return endYear.value <= startYear.value
     })
 
+    /** End year at maximum boundary */
     const isEndYearMax = computed(() => {
       return endYear.value >= maxYear.value
     })
 
+    /** Start month at minimum boundary (considers year) */
     const isStartMonthMin = computed(() => {
       if (startYear.value === minYear.value) {
         return startMonth.value <= minMonth.value
@@ -186,6 +232,7 @@ export default {
       return startMonth.value <= 0
     })
 
+    /** Start month at maximum boundary (varies by mode) */
     const isStartMonthMax = computed(() => {
       if (currentMode.value === 'monthly') {
         if (startYear.value === maxYear.value) {
@@ -199,6 +246,7 @@ export default {
       return startMonth.value >= 11
     })
 
+    /** End month cannot be before start month (same year) */
     const isEndMonthMin = computed(() => {
       if (startYear.value === endYear.value) {
         return endMonth.value <= startMonth.value
@@ -206,6 +254,7 @@ export default {
       return endMonth.value <= 0
     })
 
+    /** End month at maximum boundary */
     const isEndMonthMax = computed(() => {
       if (endYear.value === maxYear.value) {
         return endMonth.value >= maxMonth.value
@@ -213,10 +262,23 @@ export default {
       return endMonth.value >= 11
     })
 
+    /**
+     * Get month name from index
+     * @param {number} monthIndex - 0-11
+     * @returns {string} Month name
+     */
     function getMonthName(monthIndex) {
       return monthNames[monthIndex]
     }
 
+    /**
+     * Switch mode and update date range
+     * - Monthly: Sets to current month, syncs start=end
+     * - Yearly: Sets to current year (Jan 1 - Dec 31)
+     * - Range: Keeps current selection
+     * - All Time: Sets to min/max available dates
+     * @param {string} modeId - Mode identifier
+     */
     function switchMode(modeId) {
       currentMode.value = modeId
 
@@ -262,6 +324,12 @@ export default {
       }
     }
 
+    /**
+     * Adjust year
+     * In monthly/yearly modes, syncs end year to start year
+     * @param {'start'|'end'} target - Which year to adjust
+     * @param {number} delta - +1 or -1
+     */
     function adjustYear(target, delta) {
       if (target === 'start') {
         const newYear = startYear.value + delta
@@ -285,11 +353,19 @@ export default {
       }
     }
 
+    /**
+     * Adjust month with year wrapping
+     * Dec→Jan next year, Jan→Dec previous year
+     * In monthly mode, syncs end month to start month
+     * @param {'start'|'end'} target - Which month to adjust
+     * @param {number} delta - +1 or -1
+     */
     function adjustMonth(target, delta) {
       if (target === 'start') {
         let newMonth = startMonth.value + delta
         let newYear = startYear.value
 
+        // Handle month wrapping
         if (newMonth < 0) {
           newMonth = 11
           newYear -= 1
@@ -299,20 +375,21 @@ export default {
         }
 
         if (newYear >= minYear.value && newYear <= maxYear.value) {
-          startYear.value = newYear
           startMonth.value = newMonth
-
+          startYear.value = newYear
+          
           if (currentMode.value === 'monthly') {
-            endYear.value = newYear
             endMonth.value = newMonth
+            endYear.value = newYear
           }
-
+          
           emitDateRange()
         }
       } else {
         let newMonth = endMonth.value + delta
         let newYear = endYear.value
 
+        // Handle month wrapping
         if (newMonth < 0) {
           newMonth = 11
           newYear -= 1
@@ -322,13 +399,19 @@ export default {
         }
 
         if (newYear >= startYear.value && newYear <= maxYear.value) {
-          endYear.value = newYear
           endMonth.value = newMonth
+          endYear.value = newYear
           emitDateRange()
         }
       }
     }
 
+    /**
+     * Emit date range to parent
+     * Constructs Date objects:
+     * - Start: First day of month (day 1, 00:00:00)
+     * - End: Last day of month (new Date(year, month+1, 0) trick)
+     */
     function emitDateRange() {
       const startDate = new Date(startYear.value, startMonth.value, 1)
       const endDate = new Date(endYear.value, endMonth.value + 1, 0)
@@ -368,55 +451,37 @@ export default {
   display: flex;
   flex-direction: column;
   width: 450px;
-  gap: var(--gap-standard);
-  padding: 1.25rem;
+  gap: var(--gap-small);
+  padding:  1rem;
 }
 
 .mode-buttons {
   display: flex;
-  gap: var(--gap-small);
-  flex-wrap: wrap;
-  justify-content: space-between;
+  gap: 0.5rem;
 }
 
 .mode-btn {
   margin: 0;
-}
-
-.labels-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: var(--gap-standard);
-  margin-top: var(--gap-small);
-}
-
-.label-column {
-  font-size: 0.6875rem;
-  font-weight: 600;
-  color: var(--color-text-light);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  text-align: center;
-}
-
-.label-column.invisible {
-  visibility: hidden;
+  flex: 1;
+  padding: 0.5rem 0.75rem;
+  font-size: var(--text-small);
 }
 
 .navigation-container {
   display: flex;
-  gap: var(--gap-standard);
+  gap: var(--gap-small);
 }
 
 .navigation-container.two-column {
   display: grid;
   grid-template-columns: 1fr 1fr;
+  gap: var(--gap-small);
 }
 
 .date-column {
   display: flex;
   flex-direction: column;
-  gap: var(--gap-small);
+  gap: 0.375rem;
 }
 
 .date-column.invisible {
@@ -424,10 +489,10 @@ export default {
 }
 
 .nav-row {
-  display: grid;
-  grid-template-columns: 2.5rem 1fr 2.5rem;
-  gap: var(--gap-small);
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 0.25rem;
 }
 
 .nav-row.invisible {
@@ -435,20 +500,34 @@ export default {
 }
 
 .nav-btn {
-  width: 2.5rem;
-  height: 2.5rem;
-  margin: 0;
-  font-size: 1rem;
+  padding: 0.25rem 0.5rem;
+  min-width: 2rem;
 }
 
 .date-display {
+  flex: 1;
   text-align: center;
   font-size: var(--text-small);
+  font-weight: 500;
+  padding: 0.25rem;
+}
+
+.labels-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--gap-small);
+  margin-top: 0.25rem;
+}
+
+.label-column {
+  text-align: center;
+  font-size: 0.6875rem;
   font-weight: 600;
-  color: var(--color-text);
-  padding: var(--gap-small);
-  background: var(--color-background);
-  border: 0.0625rem solid rgba(0, 0, 0, 0.1);
-  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  letter-spacing: 0.05em;
+}
+
+.label-column.invisible {
+  visibility: hidden;
 }
 </style>

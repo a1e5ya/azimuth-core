@@ -10,7 +10,7 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables first
-load_dotenv()
+load_dotenv(verbose=False)
 
 # Add app to path
 sys.path.append(os.path.join(os.path.dirname(__file__), "."))

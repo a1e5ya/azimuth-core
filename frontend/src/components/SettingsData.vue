@@ -1,6 +1,40 @@
+<!--
+  SettingsData Component - Database Backup & Restore
+  
+  Provides database management operations:
+  - Backup database to downloadable .db file
+  - Restore database from uploaded .db file
+  - Confirmation modals for all operations
+  
+  Features:
+  - One-click database backup download
+  - Database restore with confirmation
+  - Automatic filename with current date
+  - Success/error notifications
+  - Auto-reload after restore
+  - Loading states during operations
+  
+  Events:
+  - @data-imported: Emitted after successful restore
+  
+  Authentication:
+  - Uses localStorage token (azimuth_token)
+  - All requests require Bearer authentication
+  
+  API Endpoints:
+  - GET /backup/export - Download database backup
+  - POST /backup/import - Upload and restore database
+  
+  Safety:
+  - Confirmation required for restore operation
+  - Warning about data replacement
+  - Cannot be undone notice
+-->
+
 <template>
   <div class="card settings-card">
     
+    <!-- Backup and Restore Buttons -->
     <div class="btn-row">
       <button @click="backupData" class="btn btn-primary" :disabled="backingUp">
         {{ backingUp ? 'Backing up...' : 'Backup Database' }}
@@ -10,6 +44,7 @@
       </button>
     </div>
     
+    <!-- Hidden File Input for Restore -->
     <input 
       ref="restoreFileInput" 
       type="file" 
@@ -18,16 +53,21 @@
       @change="handleRestoreFile"
     />
 
-    <!-- Confirmation Modal -->
+    <!-- Confirmation/Notification Modal -->
     <div v-if="showModal" class="modal-overlay" @click="showModal = false">
       <div class="modal-content" @click.stop>
+        <!-- Modal Header -->
         <div class="modal-header">
           <h3>{{ modalTitle }}</h3>
           <button class="close-btn" @click="showModal = false">×</button>
         </div>
+        
+        <!-- Modal Body -->
         <div class="modal-body">
           <p>{{ modalMessage }}</p>
         </div>
+        
+        <!-- Modal Actions -->
         <div class="modal-actions">
           <button @click="cancelModal" class="btn btn-secondary">{{ modalCancelText }}</button>
           <button v-if="modalConfirmAction" @click="modalConfirmAction" class="btn btn-primary">
@@ -56,6 +96,13 @@ export default {
     const modalCancelText = ref('Cancel')
     const modalConfirmAction = ref(null)
 
+    /**
+     * Shows notification modal
+     * @param {string} title - Modal title
+     * @param {string} message - Modal message
+     * @param {string} confirmText - Confirm button text
+     * @returns {void}
+     */
     const showNotification = (title, message, confirmText = 'OK') => {
       modalTitle.value = title
       modalMessage.value = message
@@ -65,6 +112,13 @@ export default {
       showModal.value = true
     }
 
+    /**
+     * Shows confirmation modal with callback
+     * @param {string} title - Modal title
+     * @param {string} message - Modal message
+     * @param {Function} onConfirm - Callback function on confirmation
+     * @returns {void}
+     */
     const showConfirmation = (title, message, onConfirm) => {
       modalTitle.value = title
       modalMessage.value = message
@@ -77,11 +131,20 @@ export default {
       showModal.value = true
     }
 
+    /**
+     * Cancels modal and resets action
+     * @returns {void}
+     */
     const cancelModal = () => {
       showModal.value = false
       modalConfirmAction.value = null
     }
 
+    /**
+     * Downloads database backup as .db file
+     * @async
+     * @returns {Promise<void>}
+     */
     const backupData = async () => {
       try {
         backingUp.value = true
@@ -116,6 +179,10 @@ export default {
       }
     }
 
+    /**
+     * Opens file picker for database restore
+     * @returns {void}
+     */
     const restoreData = () => {
       showConfirmation(
         'Restore Database?',
@@ -126,6 +193,12 @@ export default {
       )
     }
 
+    /**
+     * Handles database restore file upload
+     * @async
+     * @param {Event} event - File input change event
+     * @returns {Promise<void>}
+     */
     const handleRestoreFile = async (event) => {
       const file = event.target.files?.[0]
       if (!file) return

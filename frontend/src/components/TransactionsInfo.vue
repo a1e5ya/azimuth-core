@@ -1,35 +1,69 @@
+<!--
+  TransactionsInfo Component - Transaction Statistics Display
+  
+  Displays key transaction metrics and statistics:
+  - Total transaction count
+  - Filtered results count
+  - Total transaction volume (sum of amounts)
+  - CSV upload progress indicator
+  
+  Features:
+  - Real-time statistics display
+  - Currency formatting (EUR)
+  - Upload progress tracking with status indicators
+  - Responsive grid layout
+  - Loading states for ongoing uploads
+  
+  Props:
+  - summary: Object - Overall transaction statistics
+  - filteredStats: Object - Statistics for currently filtered view
+  - uncategorizedCount: Number - Count of uncategorized transactions
+  - uploads: Array - Active CSV upload progress items
+  
+  Upload Status Indicators:
+  - ✓ Success - Upload completed
+  - ✗ Error - Upload failed
+  - ⟳ Loading - Upload in progress
+-->
+
 <template>
   <div class="transactions-info">
-    <!-- Column 1: Counts -->
+    <!-- Column 1: Transaction Counts -->
     <div class="info-column">
+      <!-- Total transactions in database -->
       <div class="info-item">
         <span class="info-label">Total Transactions</span>
         <span class="info-value">{{ summary?.total_transactions?.toLocaleString() || 0 }}</span>
       </div>
       
+      <!-- Current filtered result count -->
       <div class="info-item">
         <span class="info-label">Filtered Results</span>
         <span class="info-value">{{ filteredStats?.filtered_count?.toLocaleString() || 0 }}</span>
       </div>
     </div>
 
-    <!-- Column 2: Categorization -->
+    <!-- Column 2: Financial Metrics -->
     <div class="info-column">
-
-
+      <!-- Total volume of filtered transactions -->
       <div class="info-item">
         <span class="info-label">Total Volume</span>
         <span class="info-value">{{ formatCurrency(filteredStats?.total_amount) }}</span>
       </div>
     </div>
 
-    <!-- Upload Progress -->
+    <!-- CSV Upload Progress (appears when uploads active) -->
     <div class="upload-progress" v-if="uploads.length > 0">
       <div v-for="upload in uploads.slice(0, 1)" :key="upload.id" class="upload-item">
+        <!-- Status icon -->
         <span v-if="upload.status === 'success'">✓</span>
         <span v-else-if="upload.status === 'error'">✗</span>
         <span v-else class="loading-spinner">⟳</span>
+        
+        <!-- File name -->
         <span class="upload-filename">{{ upload.filename }}</span>
+        
+        <!-- Row count on success -->
         <span v-if="upload.status === 'success'" class="upload-count">
           {{ upload.rows }} rows
         </span>
@@ -60,6 +94,11 @@ export default {
     }
   },
   setup() {
+    /**
+     * Formats numeric amount as EUR currency
+     * @param {number|null|undefined} amount - Amount to format
+     * @returns {string} Formatted currency string
+     */
     const formatCurrency = (amount) => {
       if (amount === null || amount === undefined) return '€0.00'
       return new Intl.NumberFormat('en-EU', {

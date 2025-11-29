@@ -1,6 +1,47 @@
+<!--
+  TransactionImportModal Component - CSV/Excel Transaction Import
+  
+  Provides file upload and import configuration interface:
+  - Multiple file selection (CSV, Excel)
+  - Drag-and-drop file upload
+  - Two import modes: Training Data, Direct to Account
+  - Account selection for direct import
+  - Auto-categorization toggle
+  - Real-time import progress polling
+  
+  Features:
+  - Multi-file upload support (.csv, .xlsx)
+  - Drag-and-drop zone
+  - Import mode selection
+  - Account grouping by owner
+  - Auto-categorization option
+  - Background job polling
+  - Progress tracking
+  - Error handling
+  
+  Import Modes:
+  - Training Data: Pre-categorized data with auto-creation
+  - Direct to Account: Import to specific account with optional auto-categorization
+  
+  Props:
+  - show: Boolean - Controls modal visibility
+  
+  Events:
+  - @close: Emitted when modal closes
+  - @import-started: Emitted when import begins
+  - @import-completed: Emitted when import finishes with result data
+  
+  Job Polling:
+  - Polls backend every 500ms for job status
+  - Shows progress updates
+  - Handles success/failure states
+  - Auto-cleanup on completion
+-->
+
 <template>
   <div v-if="show" class="modal-overlay" @click="$emit('close')">
     <div class="modal-content import-modal" @click.stop>
+      <!-- Modal Header -->
       <div class="modal-header">
         <h3>Import Transactions</h3>
         <button class="close-btn" @click="$emit('close')">×</button>
@@ -14,11 +55,13 @@
                @drop.prevent="handleDrop" 
                @dragover.prevent
                @click="triggerFileInput">
+            <!-- Empty State -->
             <div v-if="selectedFiles.length === 0" class="drop-placeholder">
               <AppIcon name="file-add" size="large" />
               <p>Drop CSV files here or click to browse</p>
               <p class="help-text">Multiple files supported</p>
             </div>
+            <!-- File List -->
             <div v-else class="file-list">
               <div v-for="(file, idx) in selectedFiles" :key="idx" class="file-item">
                 <AppIcon name="file" size="small" />
@@ -27,6 +70,7 @@
               </div>
             </div>
           </div>
+          <!-- Hidden File Input -->
           <input 
             ref="fileInput" 
             type="file" 
@@ -41,6 +85,7 @@
         <div class="form-section">
           <h4>Import Mode</h4>
           <div class="radio-group">
+            <!-- Training Data Mode -->
             <label class="radio-option">
               <input 
                 type="radio" 
@@ -53,6 +98,7 @@
               </div>
             </label>
             
+            <!-- Direct to Account Mode -->
             <label class="radio-option" :class="{ 'disabled': !hasAccounts }">
               <input 
                 type="radio" 
@@ -75,6 +121,7 @@
           <div v-if="loadingAccounts" class="loading-text">
             Loading accounts...
           </div>
+          <!-- Account Dropdown -->
           <select v-else v-model="selectedAccountId" class="form-select">
             <option value="">Select an account...</option>
             <optgroup 
@@ -92,6 +139,7 @@
             </optgroup>
           </select>
           
+          <!-- Selected Account Preview -->
           <div v-if="selectedAccount" class="account-preview">
             <div class="preview-label">Selected:</div>
             <div class="preview-content">
@@ -104,7 +152,7 @@
           </div>
         </div>
 
-        <!-- Options (only for account mode) -->
+        <!-- Auto-categorization Option (only for account mode) -->
         <div v-if="importMode === 'account'" class="form-section">
           <h4>Options</h4>
           <label class="checkbox-option">
@@ -114,6 +162,7 @@
         </div>
       </div>
       
+      <!-- Modal Actions -->
       <div class="modal-actions">
         <button 
           class="btn btn-primary" 
@@ -163,12 +212,18 @@ export default {
     const pollInterval = ref(null)
     const importStatus = ref(null)
 
+    /** @type {import('vue').ComputedRef<boolean>} */
     const hasAccounts = computed(() => accounts.value.length > 0)
 
+    /** @type {import('vue').ComputedRef<Object|undefined>} */
     const selectedAccount = computed(() => {
       return accounts.value.find(a => a.id === selectedAccountId.value)
     })
 
+    /**
+     * Groups accounts by owner name for dropdown
+     * @type {import('vue').ComputedRef<Array<{owner: string, accounts: Array}>>}
+     */
     const groupedAccounts = computed(() => {
       const groups = {}
       for (const account of accounts.value) {
@@ -184,22 +239,37 @@ export default {
       return Object.values(groups)
     })
 
+    /** @type {import('vue').ComputedRef<boolean>} */
     const canImport = computed(() => {
       if (selectedFiles.value.length === 0) return false
       if (importMode.value === 'account' && !selectedAccountId.value) return false
       return true
     })
 
+    /**
+     * Triggers hidden file input click
+     * @returns {void}
+     */
     const triggerFileInput = () => {
       fileInput.value?.click()
     }
 
+    /**
+     * Handles file selection from input
+     * @param {Event} event - File input change event
+     * @returns {void}
+     */
     const handleFileSelect = (event) => {
       const files = Array.from(event.target.files)
       selectedFiles.value.push(...files)
       event.target.value = ''
     }
 
+    /**
+     * Handles drag-and-drop file upload
+     * @param {DragEvent} event - Drop event
+     * @returns {void}
+     */
     const handleDrop = (event) => {
       const files = Array.from(event.dataTransfer.files)
       const validFiles = files.filter(f => 
@@ -209,10 +279,20 @@ export default {
       selectedFiles.value.push(...validFiles)
     }
 
+    /**
+     * Removes file from selection by index
+     * @param {number} index - File index to remove
+     * @returns {void}
+     */
     const removeFile = (index) => {
       selectedFiles.value.splice(index, 1)
     }
 
+    /**
+     * Loads available accounts from backend
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadAccounts = async () => {
       loadingAccounts.value = true
       try {
@@ -232,6 +312,11 @@ export default {
       }
     }
 
+    /**
+     * Starts import process for all selected files
+     * @async
+     * @returns {Promise<void>}
+     */
     const startImport = async () => {
       if (!canImport.value || importing.value) return
       
@@ -249,7 +334,6 @@ export default {
             formData.append('account_id', selectedAccountId.value)
           }
           
-          // ✅ START IMPORT - GET JOB_ID
           const response = await axios.post(`${API_BASE}/transactions/import`, formData, {
             headers: {
               'Authorization': `Bearer ${authStore.token}`,
@@ -259,7 +343,6 @@ export default {
           
           const jobId = response.data.job_id
           
-          // ✅ START POLLING
           await pollJobStatus(jobId, file.name)
         }
         
@@ -274,6 +357,13 @@ export default {
       }
     }
 
+    /**
+     * Polls backend for import job status until completion
+     * @async
+     * @param {string} jobId - Job ID to poll
+     * @param {string} filename - Original filename for progress tracking
+     * @returns {Promise<void>}
+     */
     const pollJobStatus = async (jobId, filename) => {
       return new Promise((resolve, reject) => {
         const interval = setInterval(async () => {
@@ -286,7 +376,6 @@ export default {
             const status = response.data
             importStatus.value = status
             
-            // ✅ EMIT PROGRESS TO PARENT
             if (status.message) {
               emit('import-progress', {
                 filename,
@@ -297,14 +386,12 @@ export default {
               })
             }
             
-            // ✅ CHECK IF DONE
             if (status.status === 'complete') {
               clearInterval(interval)
               
               const result = status.result || {}
               const stats = result.summary || {}
               
-              // Build detailed message
               let message = `Imported ${stats.rows_inserted || 0} transactions!\n\n`
               
               if (stats.categories_trained) {

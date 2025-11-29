@@ -1,6 +1,38 @@
+<!--
+  SettingsAccount Component - User Profile & Password Management
+  
+  Provides user account settings interface:
+  - Display name and email editing
+  - Profile data management (currency, locale)
+  - Password change with validation
+  - Loading states for async operations
+  
+  Features:
+  - Profile update (display name, email, currency, locale)
+  - Password change with validation (min 8 chars, match confirmation)
+  - Current password verification required
+  - Error handling with console.error
+  - Automatic profile loading on mount
+  
+  Authentication:
+  - Uses authStore for token management
+  - All requests require Bearer token
+  - Auto-loads user data from /auth/me endpoint
+  
+  API Endpoints:
+  - GET /auth/me - Load user profile
+  - PUT /auth/profile - Update profile data
+  - POST /auth/change-password - Change password
+  
+  Data Structure:
+  - userProfile: { displayName, email, currency, locale }
+  - passwordForm: { currentPassword, newPassword, confirmPassword }
+-->
+
 <template>
   <div class="card settings-card">
     
+    <!-- Profile Information Section -->
     <div class="form-row">
       <label>Display Name</label>
       <input v-model="userProfile.displayName" type="text" placeholder="Your name" class="form-input">
@@ -11,32 +43,38 @@
       <input v-model="userProfile.email" type="email" placeholder="your.email@example.com" class="form-input">
     </div>
 
-        <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
+    <!-- Save Profile Button -->
+    <button @click="saveProfile" class="btn btn-primary" :disabled="saving">
       {{ saving ? 'Saving...' : 'Save Profile' }}
     </button>
     
     <hr class="divider">
     
-    <div class="form-row">
-      <label>Current Password</label>
-      <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" class="form-input">
-    </div>
-    
-    <div class="form-row">
-      <label>New Password</label>
-      <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" class="form-input">
-    </div>
-    
-    <div class="form-row">
-      <label>Confirm New Password</label>
-      <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" class="form-input">
-    </div>
-    
-
-    
-    <button @click="changePassword" class="btn btn-primary" :disabled="changingPassword" style="margin-top: 12px;">
-      {{ changingPassword ? 'Changing...' : 'Change Password' }}
-    </button>
+    <!-- Password Change Section -->
+    <form @submit.prevent="changePassword">
+      <!-- Hidden username field for accessibility -->
+      <input type="text" v-model="userProfile.email" autocomplete="username" style="display: none;" aria-hidden="true">
+      
+      <div class="form-row">
+        <label>Current Password</label>
+        <input v-model="passwordForm.currentPassword" type="password" placeholder="Enter current password" class="form-input" autocomplete="current-password">
+      </div>
+      
+      <div class="form-row">
+        <label>New Password</label>
+        <input v-model="passwordForm.newPassword" type="password" placeholder="Enter new password" class="form-input" autocomplete="new-password">
+      </div>
+      
+      <div class="form-row">
+        <label>Confirm New Password</label>
+        <input v-model="passwordForm.confirmPassword" type="password" placeholder="Confirm new password" class="form-input" autocomplete="new-password">
+      </div>
+      
+      <!-- Change Password Button -->
+      <button type="submit" class="btn btn-primary" :disabled="changingPassword" style="margin-top: 12px;">
+        {{ changingPassword ? 'Changing...' : 'Change Password' }}
+      </button>
+    </form>
   </div>
 </template>
 
@@ -64,6 +102,11 @@ export default {
     const saving = ref(false)
     const changingPassword = ref(false)
 
+    /**
+     * Loads user profile data from the backend
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadUserProfile = async () => {
       try {
         const token = authStore.token
@@ -87,15 +130,17 @@ export default {
       }
     }
 
+    /**
+     * Saves user profile data to the backend
+     * @async
+     * @returns {Promise<void>}
+     */
     const saveProfile = async () => {
-      console.log('💾 Save profile clicked')
       try {
         saving.value = true
         const token = authStore.token
-        console.log('Token:', token ? 'exists' : 'missing')
         if (!token) return
 
-        console.log('Sending request to /auth/profile')
         const response = await fetch('http://localhost:8001/auth/profile', {
           method: 'PUT',
           headers: {
@@ -110,10 +155,7 @@ export default {
           })
         })
 
-        console.log('Response status:', response.status)
-        if (response.ok) {
-          console.log('✅ Profile saved')
-        } else {
+        if (!response.ok) {
           const data = await response.json()
           console.error('Failed to save profile:', data)
         }
@@ -124,35 +166,33 @@ export default {
       }
     }
 
+    /**
+     * Changes user password with validation
+     * @async
+     * @returns {Promise<void>}
+     */
     const changePassword = async () => {
-      console.log('🔑 Change password clicked')
       if (!passwordForm.value.currentPassword) {
-        console.log('❌ Missing current password')
         return
       }
 
       if (!passwordForm.value.newPassword) {
-        console.log('❌ Missing new password')
         return
       }
 
       if (passwordForm.value.newPassword.length < 8) {
-        console.log('❌ Password too short')
         return
       }
 
       if (passwordForm.value.newPassword !== passwordForm.value.confirmPassword) {
-        console.log('❌ Passwords do not match')
         return
       }
 
       try {
         changingPassword.value = true
         const token = authStore.token
-        console.log('Token:', token ? 'exists' : 'missing')
         if (!token) return
 
-        console.log('Sending password change request')
         const params = new URLSearchParams({
           current_password: passwordForm.value.currentPassword,
           new_password: passwordForm.value.newPassword

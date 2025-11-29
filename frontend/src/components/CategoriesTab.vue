@@ -1,7 +1,23 @@
+<!--
+  Categories Tab - Category management with training workflow
+  
+  Main interface for managing category hierarchy and training patterns.
+  Implements 3-state workflow: import training data → train patterns → manage hierarchy.
+  
+  Workflow States:
+  - STATE 1: No transactions → File drop zone for CSV import
+  - STATE 2: Has transactions, not trained → "Start Training" button
+  - STATE 3: Trained categories → Full tree with pattern editing
+  
+  Hierarchy: Type (INCOME/EXPENSES/TRANSFERS/TARGETS) → Category → Subcategory
+  
+  Training: Extracts merchant patterns and keywords from categorized transactions.
+  Patterns used by LLM for auto-categorization of new imports.
+-->
 <template>
   <div class="categories-layout">
     
-    <!-- ALWAYS show sidebar if we have types -->
+    <!-- Vertical sidebar with type navigation tabs -->
     <div v-if="typeCategories.length > 0" class="vertical-tabs">
       <button
         v-for="type in typeCategories"
@@ -16,10 +32,10 @@
       </button>
     </div>
     
-    <!-- Main Content Area -->
+    <!-- Main content area with action menu and category tree -->
     <div class="categories-scroll-container" :class="{ 'no-sidebar': typeCategories.length === 0 }" ref="scrollContainer">
       
-      <!-- Top Action Menu (ALWAYS visible when categories exist) -->
+      <!-- Action menu: Add Type/Category, Edit Types, Retrain -->
       <div v-if="typeCategories.length > 0" class="add-category-button">
         <button 
           class="btn-menu-dots always-visible"
@@ -28,7 +44,7 @@
           <AppIcon name="menu-dots" size="small" />
         </button>
         
-        <!-- Retrain Button (only if trained categories exist) -->
+        <!-- Retrain button (only if trained categories exist) -->
         <button 
           v-if="trainedCategories.length > 0"
           class="btn btn-small" 
@@ -40,7 +56,7 @@
           {{ training ? 'Training...' : 'Retrain' }}
         </button>
         
-        <!-- Create Menu Dropdown -->
+        <!-- Create menu dropdown -->
         <div v-if="showCreateMenu" class="create-dropdown">
           <button class="create-option" @click="handleCreateType">
             <AppIcon name="apps-add" size="small" />
@@ -56,11 +72,10 @@
           </button>
         </div>
         
-        <!-- Backdrop to close menu -->
         <div v-if="showCreateMenu" class="menu-backdrop" @click="showCreateMenu = false"></div>
       </div>
 
-      <!-- STATE 1: No transactions - Show drop zone -->
+      <!-- STATE 1: No transactions - show file drop zone -->
       <div v-if="!hasTransactions" class="empty-state-wrapper">
         <div v-if="loading" class="loading-state">
           <div class="loading-spinner">⟳</div>
@@ -85,7 +100,7 @@
         >
       </div>
 
-      <!-- STATE 2: Has transactions but not trained - Show Start Training button -->
+      <!-- STATE 2: Has transactions but not trained -->
       <div v-else-if="hasTransactions && trainedCategories.length === 0 && typeCategories.length > 0" class="empty-categories">
         <AppIcon name="graduation-cap" size="large" />
         <h3>Ready to Train Categories</h3>
@@ -99,9 +114,9 @@
         </div>
       </div>
 
-      <!-- STATE 3: Trained categories exist - Show category tree -->
+      <!-- STATE 3: Trained categories - show full tree -->
       <div v-else-if="typeCategories.length > 0">
-        <!-- Training Status Banner (only when actively training) -->
+        <!-- Training status banner (only when actively training) -->
         <div v-if="training" class="training-banner">
           <div class="training-content">
             <AppIcon name="graduation-cap" size="medium" />
@@ -111,13 +126,12 @@
           </div>
         </div>
         
-        <!-- Loading State -->
         <div v-if="loading" class="loading-state">
           <div class="loading-spinner">⟳</div>
           <div>Loading categories...</div>
         </div>
 
-        <!-- Category Tree -->
+        <!-- Category tree: Types → Categories → Subcategories with patterns -->
         <div v-else class="all-categories">
           <section
             v-for="type in typeCategories"
@@ -126,6 +140,7 @@
             class="type-section"
           >
             <div class="categories-grid">
+              <!-- Main category card -->
               <div
                 v-for="mainCat in type.children"
                 :key="mainCat.id"
@@ -151,6 +166,7 @@
                   />
                 </div>
 
+                <!-- Subcategories with keyword/merchant patterns -->
                 <div v-if="mainCat.children && mainCat.children.length > 0" class="subcategories">
                   <div
                     v-for="subcat in mainCat.children"
@@ -176,6 +192,7 @@
                       />
                     </div>
 
+                    <!-- Editable keywords (saves on blur/enter) -->
                     <input
                       type="text"
                       class="keyword-input"
@@ -185,6 +202,7 @@
                       @keyup.enter="$event.target.blur()"
                     >
 
+                    <!-- Read-only merchant patterns -->
                     <div class="merchant-tags">
                       <span v-for="merchant in getMerchants(subcat.id)" :key="merchant" class="tag">
                         {{ merchant }}
@@ -208,7 +226,7 @@
       </div>
     </div>
     
-    <!-- Edit Types Modal -->
+    <!-- Edit types modal -->
     <div v-if="showEditTypesModal" class="modal-overlay" @click="showEditTypesModal = false">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
@@ -241,7 +259,7 @@
       </div>
     </div>
     
-    <!-- CRUD Component -->
+    <!-- CRUD modal component -->
     <CategoriesCRUD
       ref="crudComponent"
       @category-updated="handleCategoryUpdated"
@@ -255,7 +273,7 @@
 import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import axios from 'axios'
 import { useAuthStore } from '@/stores/auth'
-import { useCategoryStore } from '@/stores/categories'
+/**import { useCategoryStore } from '@/stores/categories'*/
 import AppIcon from './AppIcon.vue'
 import ActionsMenu from './ActionsMenu.vue'
 import CategoriesCRUD from './CategoriesCRUD.vue'
@@ -268,17 +286,29 @@ export default {
     CategoriesCRUD
   },
   props: {
-    // Accept active tab prop to detect when this tab is shown
+    /**
+     * Active tab indicator
+     * Triggers data refresh when tab becomes visible
+     * @type {Boolean}
+     */
     isActive: {
       type: Boolean,
       default: false
     }
   },
-  emits: ['add-chat-message'],
+  emits: [
+    /**
+     * Chat message event for status updates
+     * @param {Object} data - Message payload
+     * @param {string} data.message - User action
+     * @param {string} data.response - System response
+     */
+    'add-chat-message'
+  ],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
-    const categoryStore = useCategoryStore()
+    /**const categoryStore = useCategoryStore()*/
     
     const allCategories = ref([])
     const loading = ref(false)
@@ -294,7 +324,11 @@ export default {
     const trainingMessage = ref('')
     let scrollTimeout = null
 
-    // Type categories (level 0 - INCOME, EXPENSES, etc)
+    /**
+     * Type-level categories (INCOME, EXPENSES, TRANSFERS, TARGETS)
+     * Sorted by predefined order, filtered to only parent-less categories
+     * @returns {Array<Object>} Type categories
+     */
     const typeCategories = computed(() => {
       const types = (allCategories.value || []).filter(cat => !cat.parent_id)
       const order = ['income', 'expenses', 'transfers', 'targets']
@@ -306,9 +340,14 @@ export default {
       })
     })
 
+    /** Pattern cache: maps subcategory ID to {keywords, merchants} */
     const categoryPatterns = ref({})
 
-    // Trained categories (subcategories with training patterns)
+    /**
+     * Trained categories (subcategories with patterns)
+     * Has training data if merchants or keywords exist
+     * @returns {Array<Object>} Subcategories with training patterns
+     */
     const trainedCategories = computed(() => {
       const trained = []
       
@@ -318,7 +357,6 @@ export default {
         for (const mainCat of type.children) {
           if (mainCat.children) {
             for (const subCat of mainCat.children) {
-              // Check if has training merchants or keywords
               const patterns = categoryPatterns.value[subCat.id]
               if (patterns && (patterns.merchants?.length > 0 || patterns.keywords?.length > 0)) {
                 trained.push(subCat)
@@ -328,15 +366,20 @@ export default {
         }
       }
       
-      console.log('🎯 Trained categories:', trained.length, 'Has transactions:', hasTransactions.value, 'Transaction count:', transactionCount.value)
-      
       return trained
     })
 
+    /** Type categories sorted for modal display */
     const sortedTypes = computed(() => {
       return typeCategories.value
     })
 
+    /**
+     * Convert hex to rgba
+     * @param {string} hex - Hex color
+     * @param {number} alpha - Opacity 0-1
+     * @returns {string} RGBA color
+     */
     function hexToRgba(hex, alpha) {
       if (!hex) return 'transparent'
       const r = parseInt(hex.slice(1, 3), 16)
@@ -345,6 +388,11 @@ export default {
       return `rgba(${r}, ${g}, ${b}, ${alpha})`
     }
 
+    /**
+     * Scroll to type section
+     * Temporarily highlights active tab for 1 second
+     * @param {string} typeId - Type category ID
+     */
     function scrollToType(typeId) {
       const section = document.getElementById(`type-${typeId}`)
       if (section) {
@@ -360,6 +408,10 @@ export default {
       }, 1000)
     }
 
+    /**
+     * Handle scroll events
+     * Debounced (100ms) to update active tab based on viewport position
+     */
     function handleScroll() {
       if (scrollTimeout) clearTimeout(scrollTimeout)
       
@@ -380,6 +432,10 @@ export default {
       }, 100)
     }
 
+    /**
+     * Check transaction count
+     * Determines workflow state (STATE 1, 2, or 3)
+     */
     async function checkTransactions() {
       try {
         const response = await axios.get(`${API_BASE}/transactions/summary`, {
@@ -387,12 +443,15 @@ export default {
         })
         hasTransactions.value = response.data.total_transactions > 0
         transactionCount.value = response.data.total_transactions || 0
-        console.log('📊 Transaction check:', hasTransactions.value, transactionCount.value)
       } catch (error) {
         console.error('Failed to check transactions:', error)
       }
     }
 
+    /**
+     * Load category tree from API
+     * Sets initial active type to first in list
+     */
     async function loadCategories() {
       loading.value = true
       
@@ -402,7 +461,6 @@ export default {
         })
         
         allCategories.value = response.data.tree || []
-        console.log('✅ Categories loaded:', allCategories.value.length)
         
         if (typeCategories.value.length > 0 && !activeTypeId.value) {
           activeTypeId.value = typeCategories.value[0].id
@@ -419,6 +477,11 @@ export default {
       }
     }
 
+    /**
+     * Start category training
+     * Extracts merchant patterns and keywords from categorized transactions.
+     * Updates all categories, shows success message, refreshes data.
+     */
     async function startTraining() {
       training.value = true
       trainingMessage.value = 'Starting training...'
@@ -435,7 +498,6 @@ export default {
           response: response.data.message
         })
         
-        // Auto-refresh
         await loadCategories()
         await loadAllPatterns()
         
@@ -454,16 +516,25 @@ export default {
       }
     }
 
+    /** Trigger file input dialog */
     function triggerFileInput() {
       fileInput.value?.click()
     }
 
+    /**
+     * Handle file selection from dialog
+     * @param {Event} event - File input change event
+     */
     function handleFileSelect(event) {
       const files = Array.from(event.target.files)
       processFiles(files)
       event.target.value = ''
     }
 
+    /**
+     * Handle drag-and-drop
+     * @param {DragEvent} event - Drop event
+     */
     function handleDrop(event) {
       const files = Array.from(event.dataTransfer.files)
       const validFiles = files.filter(f => 
@@ -473,6 +544,11 @@ export default {
       processFiles(validFiles)
     }
 
+    /**
+     * Process imported training files
+     * Mode: 'training', auto_categorize: true, timeout: 5min
+     * @param {File[]} files - Files to import
+     */
     async function processFiles(files) {
       if (!files || files.length === 0) return
 
@@ -480,20 +556,22 @@ export default {
 
       try {
         for (const file of files) {
-          const formData = new FormData()
-          formData.append('file', file)
-          formData.append('import_mode', 'training')
-          formData.append('auto_categorize', 'true')
+          try {
+            const formData = new FormData()
+            formData.append('file', file)
+            formData.append('import_mode', 'training')
+            formData.append('auto_categorize', 'true')
 
-          await axios.post(`${API_BASE}/transactions/import`, formData, {
-            headers: {
-              'Authorization': `Bearer ${authStore.token}`,
-              'Content-Type': 'multipart/form-data'
-            },
-            timeout: 300000
-          })
-
-          console.log(`✅ Imported: ${file.name}`)
+            await axios.post(`${API_BASE}/transactions/import`, formData, {
+              headers: {
+                'Authorization': `Bearer ${authStore.token}`,
+                'Content-Type': 'multipart/form-data'
+              },
+              timeout: 300000
+            })
+          } catch (error) {
+            console.error(`❌ Import failed: ${file.name}`, error)
+          }
         }
 
         await checkTransactions()
@@ -514,46 +592,74 @@ export default {
       }
     }
 
+    /**
+     * Open edit modal for category
+     * @param {Object} category - Category to edit
+     */
     function handleEdit(category) {
       crudComponent.value.editCategory(category)
     }
 
+    /**
+     * Open delete confirmation for category
+     * @param {Object} category - Category to delete
+     */
     function handleDelete(category) {
       crudComponent.value.deleteCategory(category)
     }
 
+    /**
+     * Open create modal for subcategory
+     * @param {Object} parent - Parent category
+     */
     function handleAdd(parent) {
       crudComponent.value.createCategory(parent)
     }
 
+    /** Open create modal for main category */
     function handleAddMainCategory() {
       crudComponent.value.createCategory(null, true)
       showCreateMenu.value = false
     }
 
+    /** Open create modal for type */
     function handleCreateType() {
       crudComponent.value.createCategory(null, false)
       showCreateMenu.value = false
     }
 
+    /** Open edit types modal */
     function handleEditTypes() {
       showEditTypesModal.value = true
       showCreateMenu.value = false
     }
 
+    /**
+     * Handle category updated event
+     * Refreshes categories and patterns
+     */
     async function handleCategoryUpdated() {
       await loadCategories()
       await loadAllPatterns()
     }
 
+    /** Handle category deleted event */
     async function handleCategoryDeleted() {
       await loadCategories()
     }
 
+    /**
+     * Emit chat message to parent
+     * @param {Object} messageData - Message payload
+     */
     function addChatMessage(messageData) {
       emit('add-chat-message', messageData)
     }
 
+    /**
+     * Load patterns for subcategory
+     * @param {string} subcategoryId - Subcategory UUID
+     */
     async function loadCategoryPatterns(subcategoryId) {
       try {
         const response = await axios.get(
@@ -566,6 +672,7 @@ export default {
       }
     }
 
+    /** Load patterns for all subcategories */
     async function loadAllPatterns() {
       for (const type of typeCategories.value) {
         for (const cat of type.children || []) {
@@ -576,14 +683,30 @@ export default {
       }
     }
 
+    /**
+     * Get keywords for subcategory
+     * @param {string} subcategoryId - Subcategory UUID
+     * @returns {string} Comma-separated keywords
+     */
     function getKeywords(subcategoryId) {
       return categoryPatterns.value[subcategoryId]?.keywords?.join(', ') || ''
     }
 
+    /**
+     * Get merchants for subcategory
+     * @param {string} subcategoryId - Subcategory UUID
+     * @returns {Array<string>} Merchant names
+     */
     function getMerchants(subcategoryId) {
       return categoryPatterns.value[subcategoryId]?.merchants || []
     }
 
+    /**
+     * Update keywords for subcategory
+     * Saves on blur or enter key press
+     * @param {string} subcategoryId - Subcategory UUID
+     * @param {string} value - Comma-separated keywords
+     */
     async function updateKeywords(subcategoryId, value) {
       const keywords = value.split(',').map(k => k.trim()).filter(k => k)
       
@@ -594,40 +717,40 @@ export default {
           { headers: { Authorization: `Bearer ${authStore.token}` } }
         )
         
-        // Update local cache
         if (!categoryPatterns.value[subcategoryId]) {
           categoryPatterns.value[subcategoryId] = {}
         }
         categoryPatterns.value[subcategoryId].keywords = keywords
         
-        console.log('✅ Keywords updated')
       } catch (error) {
         console.error('Failed to update keywords:', error)
       }
     }
 
-    // Watch for tab becoming active - reload data
+    /** Refresh data when tab becomes active */
     watch(() => props.isActive, async (isActive) => {
       if (isActive) {
-        console.log('🔄 Categories tab became active')
         await checkTransactions()
         await loadCategories()
         await loadAllPatterns()
       }
     })
 
-    watch(allCategories, async (newCats) => {
+    /** Load patterns when categories change */
+    watch(allCategories, async () => {
       if (typeCategories.value.length > 0) {
         await loadAllPatterns()
       }
     })
 
+    /** Initialize: check transactions, load categories, setup scroll listener */
     onMounted(async () => {
       await checkTransactions()
       await loadCategories()
       scrollContainer.value?.addEventListener('scroll', handleScroll)
     })
 
+    /** Cleanup: clear timeout, remove scroll listener */
     onUnmounted(() => {
       if (scrollTimeout) clearTimeout(scrollTimeout)
       scrollContainer.value?.removeEventListener('scroll', handleScroll)

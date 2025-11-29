@@ -1,8 +1,45 @@
+<!--
+  LoginModal Component - User Authentication Interface
+  
+  Provides login and registration modal dialogs:
+  - Email/password authentication
+  - Toggle between login and signup modes
+  - Optional display name for registration
+  - Support for fullscreen and overlay modes
+  
+  Features:
+  - Email and password validation
+  - Loading states during authentication
+  - Error message display
+  - Form reset on close
+  - Fullscreen mode for initial setup
+  - Overlay mode for quick access
+  
+  Props:
+  - showModal: Boolean - Controls modal visibility
+  - isFullScreen: Boolean - Fullscreen mode (no close button, no overlay click)
+  
+  Events:
+  - @close: Emitted when modal closes (overlay mode only)
+  
+  Authentication:
+  - Uses authStore.login() for sign in
+  - Uses authStore.register() for sign up
+  - Auto-closes on successful authentication (overlay mode)
+  
+  Modes:
+  - Overlay: Standard modal with close button and overlay click
+  - Fullscreen: Initial setup mode, cannot be closed manually
+-->
+
 <template>
+  <!-- Modal Container (Fullscreen or Overlay) -->
   <div v-if="showModal" :class="modalClasses" @click="handleOverlayClick">
     <div :class="contentClasses" @click.stop>
+      <!-- Modal Title -->
       <h2 v-if="!isFullScreen">{{ isLogin ? 'Sign In' : 'Sign Up' }}</h2>
       
+      <!-- Authentication Form -->
       <form @submit.prevent="handleEmailAuth">
         <input v-model="email" type="email" placeholder="Email" required :class="inputClasses" />
         <input v-if="!isLogin" v-model="displayName" type="text" placeholder="Display Name (optional)" :class="inputClasses" />
@@ -12,6 +49,7 @@
         </button>
       </form>
       
+      <!-- Toggle Between Login/Signup -->
       <p :class="toggleTextClasses">
         {{ isLogin ? "Don't have an account?" : "Already have an account?" }}
         <button @click="isLogin = !isLogin" class="toggle-btn">
@@ -19,8 +57,10 @@
         </button>
       </p>
       
+      <!-- Error Message Display -->
       <div v-if="error" class="error-message">{{ error }}</div>
       
+      <!-- Close Button (Overlay Mode Only) -->
       <button v-if="!isFullScreen" @click="closeModal" class="close-btn">×</button>
     </div>
   </div>
@@ -46,6 +86,10 @@ export default {
     const error = ref('')
     const loading = ref(false)
     
+    /**
+     * Closes the modal and resets the form (overlay mode only)
+     * @returns {void}
+     */
     const closeModal = () => {
       if (!props.isFullScreen) {
         emit('close')
@@ -53,10 +97,18 @@ export default {
       }
     }
     
+    /**
+     * Handles click on overlay background (overlay mode only)
+     * @returns {void}
+     */
     const handleOverlayClick = () => {
       if (!props.isFullScreen) closeModal()
     }
     
+    /**
+     * Resets all form fields and error state
+     * @returns {void}
+     */
     const resetForm = () => {
       email.value = ''
       password.value = ''
@@ -65,6 +117,11 @@ export default {
       loading.value = false
     }
     
+    /**
+     * Handles email authentication (login or registration)
+     * @async
+     * @returns {Promise<void>}
+     */
     const handleEmailAuth = async () => {
       loading.value = true
       error.value = ''
@@ -86,10 +143,15 @@ export default {
       loading.value = false
     }
     
+    /** @type {import('vue').ComputedRef<string[]>} */
     const modalClasses = computed(() => [props.isFullScreen ? 'fullscreen-modal' : 'modal-overlay'])
+    /** @type {import('vue').ComputedRef<string[]>} */
     const contentClasses = computed(() => [props.isFullScreen ? 'fullscreen-content' : 'modal-content'])
+    /** @type {import('vue').ComputedRef<string[]>} */
     const inputClasses = computed(() => ['form-input', props.isFullScreen ? 'fullscreen-input' : ''])
+    /** @type {import('vue').ComputedRef<string[]>} */
     const authBtnClasses = computed(() => ['btn', 'btn-primary', props.isFullScreen ? 'fullscreen-auth-btn' : ''])
+    /** @type {import('vue').ComputedRef<string[]>} */
     const toggleTextClasses = computed(() => ['toggle-text', props.isFullScreen ? 'fullscreen-toggle-text' : ''])
     
     return {

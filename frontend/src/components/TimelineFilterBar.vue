@@ -1,3 +1,37 @@
+<!--
+  TimelineFilterBar Component - Data Breakdown Filters
+  
+  Provides filtering options for timeline data:
+  - Breakdown mode selection (All, Owner, Account)
+  - Multi-select owner filtering
+  - Multi-select account filtering
+  - Automatic data extraction from transactions
+  
+  Features:
+  - Three view modes: All, Owner, Account
+  - Dynamic owner list from transaction data
+  - Dynamic account list (Owner_AccountType format)
+  - Multi-select with active state indicators
+  - Prevents deselecting last item (at least one must be selected)
+  - Auto-sorted lists
+  
+  Props:
+  - breakdownMode: String - Current mode ('all', 'owner', 'account')
+  - selectedOwners: Array - Currently selected owners
+  - selectedAccounts: Array - Currently selected accounts
+  - transactions: Array - All transaction data for extraction
+  
+  Events:
+  - @update:breakdownMode: Emitted when mode changes
+  - @update:selectedOwners: Emitted when owner selection changes
+  - @update:selectedAccounts: Emitted when account selection changes
+  
+  Breakdown Modes:
+  - All: Show all transactions combined
+  - Owner: Filter by transaction owners
+  - Account: Filter by owner + account type combinations
+-->
+
 <template>
   <div class="timeline-filter-bar container">
     <!-- Breakdown Mode Toggle -->
@@ -87,7 +121,10 @@ export default {
   },
   emits: ['update:breakdownMode', 'update:selectedOwners', 'update:selectedAccounts'],
   setup(props, { emit }) {
-    // Extract unique owners from transactions
+    /**
+     * Extracts unique owners from transactions
+     * @type {import('vue').ComputedRef<string[]>}
+     */
     const availableOwners = computed(() => {
       const owners = new Set()
       props.transactions.forEach(t => {
@@ -96,7 +133,10 @@ export default {
       return Array.from(owners).sort()
     })
 
-    // Extract unique account combinations (Owner_AccountType)
+    /**
+     * Extracts unique account combinations (Owner_AccountType)
+     * @type {import('vue').ComputedRef<string[]>}
+     */
     const availableAccounts = computed(() => {
       const accounts = new Set()
       props.transactions.forEach(t => {
@@ -107,12 +147,16 @@ export default {
       return Array.from(accounts).sort()
     })
 
+    /**
+     * Toggles owner selection (prevents deselecting last item)
+     * @param {string} owner - Owner name to toggle
+     * @returns {void}
+     */
     function toggleOwner(owner) {
       const current = [...props.selectedOwners]
       const index = current.indexOf(owner)
       
       if (index > -1) {
-        // Don't allow deselecting if it's the last one
         if (current.length > 1) {
           current.splice(index, 1)
         }
@@ -123,12 +167,16 @@ export default {
       emit('update:selectedOwners', current)
     }
 
+    /**
+     * Toggles account selection (prevents deselecting last item)
+     * @param {string} account - Account identifier (Owner_AccountType)
+     * @returns {void}
+     */
     function toggleAccount(account) {
       const current = [...props.selectedAccounts]
       const index = current.indexOf(account)
       
       if (index > -1) {
-        // Don't allow deselecting if it's the last one
         if (current.length > 1) {
           current.splice(index, 1)
         }

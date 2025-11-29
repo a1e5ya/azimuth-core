@@ -1,14 +1,20 @@
+<!--
+  Dashboard Tab - Main financial overview
+  
+  Orchestrates KPI cards, trend chart, date picker, and account management.
+  Loads transactions with pagination (1000/page, 10K max), filters by date range.
+-->
 <template>
   <div class="tab-content">
-    <!-- Loading State -->
+    <!-- Loading state during transaction fetch -->
     <div v-if="loading" class="loading-state">
       <div class="loading-spinner">⟳</div>
       <div>Loading data...</div>
     </div>
 
-    <!-- Dashboard Content -->
+    <!-- Main dashboard layout: stats row, chart, accounts -->
     <template v-else>
-      <!-- Stats Overview with Date Picker -->
+      <!-- Stats cards + date picker horizontal layout -->
       <div class="stats-with-controls">
         <DashboardStatCards
           :filtered-transactions="filteredTransactions"
@@ -23,13 +29,14 @@
         />
       </div>
 
-      <!-- Income vs Expenses Chart -->
+      <!-- Trend chart with ±1 month context for smooth edges -->
       <DashboardIncomeExpensesChart
         :filtered-transactions="filteredTransactionsWithContext"
         :get-type-color="getTypeColor"
         @import-complete="handleImportComplete"
       />
 
+      <!-- Account management with real-time stats -->
       <DashboardAccountsManagement
         :filtered-transactions="filteredTransactions"
         @import-success="handleImportComplete"
@@ -38,7 +45,7 @@
       />
     </template>
 
-    <!-- Import Modal -->
+    <!-- General import modal (currently unused) -->
     <TransactionImportModal
       :show="showImportModal"
       @close="showImportModal = false"
@@ -66,7 +73,7 @@ export default {
     DashboardAccountsManagement,
     TransactionImportModal
   },
-  emits: ['add-chat-message'], 
+  emits: ['add-chat-message'],
   setup(props, { emit }) {
     const authStore = useAuthStore()
     const categoryStore = useCategoryStore()
@@ -80,18 +87,31 @@ export default {
       endDate: new Date()
     })
 
+    /**
+     * Earliest transaction date
+     * Used by date picker for minimum boundary constraint
+     */
     const minAvailableDate = computed(() => {
       if (transactions.value.length === 0) return null
       const dates = transactions.value.map(t => new Date(t.posted_at))
       return new Date(Math.min(...dates))
     })
 
+    /**
+     * Latest transaction date  
+     * Used by date picker for maximum boundary constraint
+     */
     const maxAvailableDate = computed(() => {
       if (transactions.value.length === 0) return null
       const dates = transactions.value.map(t => new Date(t.posted_at))
       return new Date(Math.max(...dates))
     })
 
+    /**
+     * Filter transactions to exact date range
+     * Used by KPI cards and account statistics for accurate calculations.
+     * Sets time to start of day (00:00:00) and end of day (23:59:59.999)
+     */
     const filteredTransactions = computed(() => {
       if (transactions.value.length === 0) return []
 
@@ -107,6 +127,11 @@ export default {
       })
     })
 
+    /**
+     * Filter transactions with ±1 month context
+     * Used by chart to provide smooth edges when viewing specific periods.
+     * Prevents abrupt chart start/end, shows trend leading into/out of range.
+     */
     const filteredTransactionsWithContext = computed(() => {
       if (transactions.value.length === 0) return []
 
@@ -127,21 +152,39 @@ export default {
       })
     })
 
+    /**
+     * Forward chat message to parent
+     * Pass-through for messages from child components (mainly accounts management)
+     */
     function addChatMessage(data) {
       emit('add-chat-message', data)
     }
 
-    
+    /**
+     * Update date range from picker
+     * Triggers re-computation of filtered transaction lists
+     */
     function handleDateRangeChange(newRange) {
       dateRange.value = newRange
     }
 
+    /**
+     * Reload all transactions after import
+     * Called by chart drop zone, account imports, and import modal
+     */
     async function handleImportComplete() {
-
-        await loadTransactions()
-      
+      await loadTransactions()
     }
 
+    /**
+     * Load all transactions with pagination
+     * 
+     * Fetches in batches of 1000, up to 10 pages (10K transactions max).
+     * Stops when: empty response OR partial batch (<1000 records).
+     * 
+     * After loading, sets date range to min/max of dataset for initial view.
+     * Handles 401 errors by triggering token verification.
+     */
     async function loadTransactions() {
       if (!authStore.token) return
       
@@ -182,6 +225,7 @@ export default {
         
         transactions.value = allTransactions
 
+        // Set range to full dataset
         if (allTransactions.length > 0) {
           const dates = allTransactions.map(t => new Date(t.posted_at))
           dateRange.value = {
@@ -189,8 +233,6 @@ export default {
             endDate: new Date(Math.max(...dates))
           }
         }
-        
-        console.log('Dashboard loaded:', allTransactions.length, 'transactions')
         
       } catch (error) {
         console.error('Failed to load transactions:', error)
@@ -202,6 +244,18 @@ export default {
       }
     }
 
+    /**
+     * Get color for transaction type
+     * 
+     * Returns color for income, expenses, or transfers.
+     * First tries category store (custom colors), then falls back to defaults.
+     * 
+     * Default colors:
+     * - income: #00C9A0 (teal)
+     * - expenses: #F17D99 (pink)  
+     * - transfers: #F0C46C (orange)
+     * - unknown: #94a3b8 (gray)
+     */
     function getTypeColor(typeId) {
       const typeMap = {
         'income': '#00C9A0',
@@ -215,12 +269,14 @@ export default {
       return typeMap[typeId] || '#94a3b8'
     }
 
+    /** Load transactions on user login */
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
         loadTransactions()
       }
     })
     
+    /** Initial load: categories then transactions */
     onMounted(async () => {
       if (authStore.user) {
         await categoryStore.loadCategories()
@@ -232,11 +288,11 @@ export default {
       loading,
       transactions,
       dateRange,
+      showImportModal,
       minAvailableDate,
       maxAvailableDate,
       filteredTransactions,
       filteredTransactionsWithContext,
-      showImportModal,
       handleDateRangeChange,
       handleImportComplete,
       addChatMessage,

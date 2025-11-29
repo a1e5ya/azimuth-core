@@ -1,3 +1,42 @@
+<!--
+  TimelineCategoryLegend Component - Category Filter Sidebar
+  
+  Provides interactive legend for timeline chart filtering:
+  - Type-level toggles (INCOME, EXPENSES, TRANSFERS, TARGETS)
+  - Category-level toggles with color indicators
+  - Subcategory expansion and toggles
+  - Empty state when no categories exist
+  
+  Features:
+  - Hierarchical category display (Type > Category > Subcategory)
+  - Color-coded indicators for each level
+  - Expandable/collapsible subcategories
+  - Click to toggle visibility in chart
+  - Icon mapping for category types
+  - Responsive design (mobile stacks vertically)
+  
+  Props:
+  - expenseCategories: Array - Expense category tree
+  - incomeCategories: Array - Income category tree
+  - transferCategories: Array - Transfer category tree
+  - targetCategories: Array - Target category tree
+  - visibleTypes: Array - Currently visible type IDs
+  - visibleCategories: Array - Currently visible category IDs
+  - visibleSubcategories: Array - Currently visible subcategory IDs
+  - expandedCategories: Array - Currently expanded category IDs
+  
+  Events:
+  - @toggle-type: Toggle type visibility
+  - @toggle-category: Toggle category visibility
+  - @toggle-subcategory: Toggle subcategory visibility
+  - @toggle-category-expanded: Toggle category expansion
+  
+  Hierarchy:
+  - Level 1 (Type): INCOME, EXPENSES, TRANSFERS, TARGETS
+  - Level 2 (Category): Food, Transport, Salary, etc.
+  - Level 3 (Subcategory): Groceries, Fuel, etc.
+-->
+
 <template>
   <div class="timeline-legend-sidebar container">
     <!-- Empty State -->
@@ -10,6 +49,7 @@
     <template v-else>
       <!-- EXPENSES Section -->
       <div v-if="expenseCategories.length > 0" class="legend-section">
+        <!-- Type Header - Click to toggle all expenses -->
         <div 
           class="legend-type-header" 
           @click="$emit('toggle-type', 'expenses')"
@@ -21,6 +61,7 @@
           <span class="legend-type-name">EXPENSES</span>
         </div>
         
+        <!-- Expense Categories List -->
         <div class="legend-categories-list">
           <div 
             class="legend-category-item" 
@@ -28,6 +69,7 @@
             :key="category.id"
           >
             <div class="legend-category-row">
+              <!-- Category Header - Click to toggle category -->
               <div 
                 class="legend-category-header"
                 @click="$emit('toggle-category', category.id)"
@@ -39,6 +81,7 @@
                 <span class="legend-item-name">{{ category.name }}</span>
               </div>
               
+              <!-- Expand/Collapse Button (if has subcategories) -->
               <button 
                 v-if="category.children && category.children.length > 0"
                 class="legend-expand-btn"
@@ -51,6 +94,7 @@
               </button>
             </div>
             
+            <!-- Subcategories List (when expanded) -->
             <div 
               v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
               class="legend-subcategories-list"
@@ -74,6 +118,7 @@
 
       <!-- INCOME Section -->
       <div v-if="incomeCategories.length > 0" class="legend-section">
+        <!-- Type Header - Click to toggle all income -->
         <div 
           class="legend-type-header" 
           @click="$emit('toggle-type', 'income')"
@@ -85,6 +130,7 @@
           <span class="legend-type-name">INCOME</span>
         </div>
         
+        <!-- Income Categories List -->
         <div class="legend-categories-list">
           <div 
             class="legend-category-item" 
@@ -92,6 +138,7 @@
             :key="category.id"
           >
             <div class="legend-category-row">
+              <!-- Category Header -->
               <div 
                 class="legend-category-header"
                 @click="$emit('toggle-category', category.id)"
@@ -103,6 +150,7 @@
                 <span class="legend-item-name">{{ category.name }}</span>
               </div>
               
+              <!-- Expand/Collapse Button -->
               <button 
                 v-if="category.children && category.children.length > 0"
                 class="legend-expand-btn"
@@ -115,6 +163,7 @@
               </button>
             </div>
             
+            <!-- Subcategories List -->
             <div 
               v-if="category.children && category.children.length > 0 && isCategoryExpanded(category.id)" 
               class="legend-subcategories-list"
@@ -138,6 +187,7 @@
 
       <!-- TRANSFERS Section -->
       <div v-if="transferCategories.length > 0" class="legend-section">
+        <!-- Type Header -->
         <div 
           class="legend-type-header" 
           @click="$emit('toggle-type', 'transfers')"
@@ -149,6 +199,7 @@
           <span class="legend-type-name">TRANSFERS</span>
         </div>
         
+        <!-- Transfer Categories List -->
         <div class="legend-categories-list">
           <div 
             class="legend-category-item" 
@@ -202,6 +253,7 @@
 
       <!-- TARGETS Section -->
       <div v-if="targetCategories.length > 0" class="legend-section">
+        <!-- Type Header -->
         <div 
           class="legend-type-header" 
           @click="$emit('toggle-type', 'targets')"
@@ -213,6 +265,7 @@
           <span class="legend-type-name">TARGETS</span>
         </div>
         
+        <!-- Target Categories List -->
         <div class="legend-categories-list">
           <div 
             class="legend-category-item" 
@@ -315,6 +368,7 @@ export default {
   setup(props) {
     const categoryStore = useCategoryStore()
     
+    /** @type {import('vue').ComputedRef<boolean>} */
     const hasCategories = computed(() => {
       return props.expenseCategories.length > 0 || 
              props.incomeCategories.length > 0 || 
@@ -322,6 +376,11 @@ export default {
              props.targetCategories.length > 0
     })
     
+    /**
+     * Gets color for category type
+     * @param {string} typeId - Type identifier (income, expenses, transfers, targets)
+     * @returns {string} Hex color code
+     */
     function getTypeColor(typeId) {
       const typeMap = {
         'income': '#00C9A0',
@@ -336,18 +395,38 @@ export default {
       return typeMap[typeId] || '#94a3b8'
     }
     
+    /**
+     * Checks if type is visible
+     * @param {string} typeId - Type identifier
+     * @returns {boolean} True if type is visible
+     */
     function isTypeVisible(typeId) {
       return props.visibleTypes.includes(typeId)
     }
     
+    /**
+     * Checks if category is visible
+     * @param {number} categoryId - Category ID
+     * @returns {boolean} True if category is visible
+     */
     function isCategoryVisible(categoryId) {
       return props.visibleCategories.includes(categoryId)
     }
     
+    /**
+     * Checks if subcategory is visible
+     * @param {number} subcategoryId - Subcategory ID
+     * @returns {boolean} True if subcategory is visible
+     */
     function isSubcategoryVisible(subcategoryId) {
       return props.visibleSubcategories.includes(subcategoryId)
     }
     
+    /**
+     * Checks if category is expanded (showing subcategories)
+     * @param {number} categoryId - Category ID
+     * @returns {boolean} True if category is expanded
+     */
     function isCategoryExpanded(categoryId) {
       return props.expandedCategories.includes(categoryId)
     }

@@ -1,12 +1,44 @@
+<!--
+  SettingsSecurity Component - Session & Activity Monitoring
+  
+  Provides security information display:
+  - Current session duration
+  - Activity log with entity icons
+  - Real-time session time updates
+  
+  Features:
+  - Session start time calculation
+  - Activity log display (transactions, categories, chat, auth, system)
+  - Icon mapping for different activity types
+  - Auto-refresh session time every minute
+  - Date/time formatting
+  
+  Activity Types:
+  - transaction: Credit card icon
+  - category: Apps add icon
+  - chat: Comment icon
+  - auth: Lock icon
+  - system: Settings icon
+  
+  API Endpoints:
+  - GET /system/activity-log - Load session info and activity logs
+  
+  Authentication:
+  - Uses localStorage token
+  - Requires Bearer authentication
+-->
+
 <!-- Settings Security -->
 <template>
   <div class="card settings-card">
     
+    <!-- Session Information -->
     <div class="stat-row">
       <span>Session Started:</span>
       <span>{{ sessionStartTime }}</span>
     </div>
     
+    <!-- Activity Log List -->
     <div class="log-list">
       <div v-for="log in activityLogs" :key="log.id" class="log-item">
         <AppIcon :name="getActivityIcon(log.entity)" size="small" />
@@ -29,11 +61,21 @@ export default {
     const sessionStartTime = ref('Loading...')
     const activityLogs = ref([])
 
+    /**
+     * Formats date string to locale string
+     * @param {string} dateStr - Date string from backend
+     * @returns {string} Formatted date and time
+     */
     const formatDate = (dateStr) => {
       const date = new Date(dateStr)
       return date.toLocaleString()
     }
 
+    /**
+     * Gets icon name for activity entity type
+     * @param {string} entity - Entity type (transaction, category, chat, auth, system)
+     * @returns {string} Icon name
+     */
     const getActivityIcon = (entity) => {
       const icons = { 
         'transaction': 'credit-card', 
@@ -45,6 +87,11 @@ export default {
       return icons[entity] || 'circle'
     }
 
+    /**
+     * Loads session info and calculates session duration
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadSessionInfo = async () => {
       try {
         const token = localStorage.getItem('token')
@@ -62,7 +109,6 @@ export default {
           const lastLogin = logs.find(log => log.entity === 'auth' && log.action === 'login')
           
           if (lastLogin && lastLogin.created_at) {
-            // Backend returns: "2025-11-25 12:58:59"
             const loginDate = new Date(lastLogin.created_at.replace(' ', 'T'))
             const elapsed = Date.now() - loginDate.getTime()
             const hours = Math.floor(elapsed / (1000 * 60 * 60))
@@ -77,6 +123,11 @@ export default {
       sessionStartTime.value = 'Unknown'
     }
 
+    /**
+     * Loads activity log from backend
+     * @async
+     * @returns {Promise<void>}
+     */
     const loadActivityLog = async () => {
       try {
         const token = localStorage.getItem('token')

@@ -23,13 +23,6 @@
   - @category-deleted: Category deleted
   - @add-chat-message: Show message in chat component
   
-  Usage:
-  <CategoriesCRUD 
-    ref="crud"
-    @category-updated="refreshCategories"
-    @add-chat-message="addMessage"
-  />
-  
   // Call from parent:
   crud.value.createCategory(parentCategory, isMainCategory)
   crud.value.editCategory(category)
@@ -373,8 +366,7 @@ export default {
         })
         
         availableTypes.value = (response.data.tree || []).filter(cat => !cat.parent_id)
-        console.log('✅ Types loaded:', availableTypes.value.length)
-      } catch (error) {
+        } catch (error) {
         console.error('Failed to load types:', error)
       }
     }
@@ -408,8 +400,7 @@ export default {
           return filename.replace('fi-rr-', '').replace('.svg', '')
         })
         availableIcons.value = iconNames.sort()
-        console.log('✅ Loaded icons:', availableIcons.value.length)
-      } catch (error) {
+        } catch (error) {
         console.error('Failed to load icons:', error)
       } finally {
         loadingIcons.value = false

@@ -1,17 +1,48 @@
+<!--
+  SettingsTab Component - Main Settings Container
+  
+  Provides masonry layout for settings components:
+  - Account settings (profile, password)
+  - AI settings configuration
+  - Data management (backup/restore)
+  - Danger zone (logout, delete operations)
+  
+  Features:
+  - Masonry grid layout (3 columns)
+  - System status monitoring (API, Database, Ollama)
+  - Event propagation from child components
+  - Auto-refresh system status every 30 seconds
+  - Responsive column layout
+  
+  Events:
+  - @chat-cleared: Emitted when chat history cleared
+  
+  Child Components:
+  - SettingsAccount: Profile and password management
+  - SettingsAI: AI model configuration
+  - SettingsData: Database backup/restore
+  - SettingsDanger: Dangerous operations
+  
+  System Status:
+  - database: Database connection status
+  - api: API endpoint availability
+  - ollama: AI model availability
+  - transactions: Transaction count
+-->
+
 <template>
   <div class="settings-container">
     <div class="settings-masonry">
       
-      <!-- User Account -->
+      <!-- User Account Settings -->
       <SettingsAccount />
       
-      <!-- AI Settings -->
+      <!-- AI Configuration Settings -->
       <SettingsAI />
       
-      <!-- Data & Privacy -->
+      <!-- Data & Privacy Settings -->
       <SettingsData @data-imported="handleDataImported" />
       
-    
       <!-- Danger Zone -->
       <SettingsDanger 
         @transaction-deleted="handleTransactionDeleted" 
@@ -57,6 +88,11 @@ export default {
 
     const showSystemDetails = ref(false)
 
+    /**
+     * Checks system status (API, Database, Ollama)
+     * @async
+     * @returns {Promise<void>}
+     */
     const checkSystemStatus = async () => {
       try {
         const token = localStorage.getItem('token')
@@ -89,18 +125,34 @@ export default {
       }
     }
 
+    /**
+     * Handles data imported event
+     * @returns {void}
+     */
     const handleDataImported = () => {
       checkSystemStatus()
     }
 
+    /**
+     * Handles transaction deleted event
+     * @returns {void}
+     */
     const handleTransactionDeleted = () => {
       checkSystemStatus()
     }
 
+    /**
+     * Handles account deleted event (no action needed - will redirect)
+     * @returns {void}
+     */
     const handleAccountDeleted = () => {
       // This will redirect, so no need to refresh
     }
 
+    /**
+     * Handles chat cleared event and emits to parent
+     * @returns {void}
+     */
     const handleChatCleared = () => {
       emit('chat-cleared')
     }

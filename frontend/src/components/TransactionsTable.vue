@@ -1,9 +1,55 @@
+<!--
+  TransactionsTable Component - Transaction Data Table with Bulk Actions
+  
+  Displays transactions in sortable table with bulk operations:
+  - Transaction list with sortable columns
+  - Bulk selection (individual and select-all)
+  - Bulk categorization
+  - Bulk deletion
+  - Visual category indicators (colored shapes)
+  - Loading and empty states
+  
+  Features:
+  - Sortable columns (date, amount, merchant)
+  - Multi-select with checkboxes
+  - Inline category display with hierarchy
+  - Color-coded type indicators (shapes change by amount sign)
+  - Hover actions menu (edit, delete)
+  - Empty state with contextual messages
+  - Loading spinner during data fetch
+  
+  Props:
+  - transactions: Array - Transaction data to display
+  - loading: Boolean - Loading state flag
+  - hasActiveFilters: Boolean - Whether filters are applied
+  - sortBy: String - Current sort column
+  - sortOrder: String - Sort direction (asc/desc)
+  - groupedCategories: Array - Category options grouped by type
+  - categoryTree: Array - Hierarchical category structure
+  
+  Events:
+  - @edit: Edit transaction requested
+  - @delete: Delete single transaction
+  - @sort: Sort column clicked
+  - @bulk-categorize: Apply category to selected transactions
+  - @bulk-delete: Delete selected transactions
+  - @category-updated: Category assignment changed
+  
+  Bulk Actions Bar (visible when items selected):
+  - Category dropdown (Type → Category → Subcategory format)
+  - Apply Category button
+  - Delete Selected button
+  - Clear selection button
+  
+-->
+
 <template>
   <div>
-    <!-- Bulk Actions -->
+    <!-- Bulk Actions Bar (shown when items selected) -->
     <div class="bulk-actions" v-if="selectedIds.length > 0">
       <span class="bulk-selection">{{ selectedIds.length }} selected</span>
       
+      <!-- Category selection dropdown -->
       <div class="bulk-category-dropdown">
         <select v-model="bulkCategoryId" class="form-input">
           <option value="">Select subcategory...</option>
@@ -21,6 +67,7 @@
         </select>
       </div>
       
+      <!-- Bulk action buttons -->
       <button class="btn btn-small" @click="handleBulkCategorize" :disabled="!bulkCategoryId">
         Apply Category
       </button>
@@ -38,7 +85,7 @@
       <div>Loading transactions...</div>
     </div>
     
-    <!-- Empty State -->
+    <!-- Empty State (no results) -->
     <div v-else-if="transactions.length === 0" class="empty-state">
       <div class="empty-title">No transactions found</div>
       <div class="empty-subtitle">
@@ -51,6 +98,7 @@
       <table class="transactions-table">
         <thead>
           <tr>
+            <!-- Select all checkbox -->
             <th class="col-select">
               <input 
                 type="checkbox" 
@@ -58,24 +106,31 @@
                 @change="toggleAll"
               >
             </th>
+            
+            <!-- Sortable date column -->
             <th class="col-date clickable" @click="$emit('sort', 'posted_at')">
               Date
               <span v-if="sortBy === 'posted_at'">
                 {{ sortOrder === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
+            
+            <!-- Sortable amount column -->
             <th class="col-amount clickable" @click="$emit('sort', 'amount')">
               Amount
               <span v-if="sortBy === 'amount'">
                 {{ sortOrder === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
+            
+            <!-- Sortable merchant column -->
             <th class="col-merchant clickable" @click="$emit('sort', 'merchant')">
               Merchant
               <span v-if="sortBy === 'merchant'">
                 {{ sortOrder === 'desc' ? '↓' : '↑' }}
               </span>
             </th>
+            
             <th class="col-owner">Owner</th>
             <th class="col-category">Category</th>
             <th class="col-type">Type</th>
@@ -90,6 +145,7 @@
             class="transaction-row"
             :class="{ 'selected': selectedIds.includes(transaction.id) }"
           >
+            <!-- Selection checkbox -->
             <td class="col-select">
               <input 
                 type="checkbox" 
@@ -98,15 +154,18 @@
               >
             </td>
             
+            <!-- Date cell (DD/MM/YYYY + weekday) -->
             <td class="col-date">
               <div class="date-primary">{{ formatDate(transaction.posted_at) }}</div>
               <div class="date-secondary">{{ transaction.weekday }}</div>
             </td>
             
+            <!-- Amount cell (with sign and color) -->
             <td class="col-amount" :class="getAmountClass(transaction)">
               <div class="amount-primary">{{ formatAmount(transaction.amount) }}</div>
             </td>
             
+            <!-- Merchant cell (name + memo) -->
             <td class="col-merchant">
               <div class="merchant-primary">{{ transaction.merchant || 'Unknown Merchant' }}</div>
               <div class="merchant-secondary" v-if="transaction.memo">
@@ -114,12 +173,15 @@
               </div>
             </td>
             
+            <!-- Owner cell (owner + account type) -->
             <td class="col-owner">
               <div class="owner-primary">{{ transaction.owner || '-' }}</div>
               <div class="owner-secondary">{{ transaction.bank_account_type || '-' }}</div>
             </td>
             
+            <!-- Category cell (hierarchical display) -->
             <td class="col-category">
+              <!-- Database category (assigned via UI) -->
               <div v-if="transaction.category_name" class="category-assigned">
                 <div v-if="transaction.parent_category_name" class="category-primary">
                   {{ transaction.parent_category_name }}
@@ -128,21 +190,26 @@
                   {{ transaction.category_name }}
                 </div>
               </div>
+              <!-- CSV category (from imported file) -->
               <div v-else-if="transaction.category" class="category-csv">
                 <div class="category-primary">{{ transaction.category }}</div>
                 <div v-if="transaction.subcategory" class="category-secondary">
                   {{ transaction.subcategory }}
                 </div>
               </div>
+              <!-- Uncategorized -->
               <div v-else class="text-muted">Uncategorized</div>
             </td>
             
+            <!-- Type cell (Income/Expense/Transfer) -->
             <td class="col-type">
               <div class="type-text" v-if="transaction.main_category">
                 {{ transaction.main_category }}
               </div>
               <div v-else class="text-muted">-</div>
             </td>
+            
+            <!-- Visual indicator (colored shape) -->
             <td class="col-indicator">
               <div 
                 v-if="getCategoryColor(transaction)"
@@ -150,6 +217,8 @@
                 v-html="getTypeShape(transaction)"
               ></div>
             </td>
+            
+            <!-- Actions menu (edit/delete) -->
             <td class="col-actions">
               <div class="actions-cell">
                 <ActionsMenu
@@ -210,14 +279,32 @@ export default {
   },
   emits: ['edit', 'delete', 'sort', 'bulk-categorize', 'bulk-delete', 'category-updated'],
   setup(props, { emit }) {
+    /**
+     * Array of selected transaction IDs for bulk operations
+     * @type {Ref<Array<number>>}
+     */
     const selectedIds = ref([])
+    
+    /**
+     * Selected category ID for bulk categorization
+     * @type {Ref<string>}
+     */
     const bulkCategoryId = ref('')
 
+    /**
+     * Checks if all transactions are selected
+     * @returns {boolean}
+     */
     const allSelected = computed(() => {
       return props.transactions.length > 0 && 
              props.transactions.every(t => selectedIds.value.includes(t.id))
     })
 
+    /**
+     * Toggles selection state of a single transaction
+     * @param {number} id - Transaction ID to toggle
+     * @returns {void}
+     */
     const toggleSelection = (id) => {
       const index = selectedIds.value.indexOf(id)
       if (index > -1) {
@@ -227,6 +314,11 @@ export default {
       }
     }
 
+    /**
+     * Toggles selection of all transactions
+     * Selects all if none/some selected, deselects all if all selected
+     * @returns {void}
+     */
     const toggleAll = () => {
       if (allSelected.value) {
         selectedIds.value = []
@@ -235,11 +327,20 @@ export default {
       }
     }
 
+    /**
+     * Clears all selections and resets bulk category
+     * @returns {void}
+     */
     const clearSelection = () => {
       selectedIds.value = []
       bulkCategoryId.value = ''
     }
 
+    /**
+     * Handles bulk categorization action
+     * Emits event with selected IDs and category
+     * @returns {void}
+     */
     const handleBulkCategorize = () => {
       if (!bulkCategoryId.value || selectedIds.value.length === 0) return
       
@@ -251,12 +352,23 @@ export default {
       clearSelection()
     }
 
+    /**
+     * Handles bulk delete action
+     * Emits event with selected transaction IDs
+     * @returns {void}
+     */
     const handleBulkDelete = () => {
       if (selectedIds.value.length === 0) return
       
       emit('bulk-delete', selectedIds.value)
     }
 
+    /**
+     * Finds category by ID in category tree
+     * Recursively searches through nested category structure
+     * @param {number} categoryId - Category ID to find
+     * @returns {Object|null} Category object or null if not found
+     */
     const findCategoryById = (categoryId) => {
       const searchInTree = (categories) => {
         for (const cat of categories) {
@@ -272,6 +384,11 @@ export default {
       return searchInTree(props.categoryTree)
     }
 
+    /**
+     * Gets category color for visual indicator
+     * @param {Object} transaction - Transaction object
+     * @returns {string|null} Color hex code or null
+     */
     const getCategoryColor = (transaction) => {
       if (!transaction.category_id) return null
       
@@ -279,23 +396,36 @@ export default {
       return category?.color || null
     }
 
+    /**
+     * Generates SVG shape based on transaction amount sign
+     * @param {Object} transaction - Transaction object
+     * @returns {string} SVG markup with color
+     */
     const getTypeShape = (transaction) => {
       const color = getCategoryColor(transaction)
       if (!color) return ''
       
       const amount = parseFloat(transaction.amount)
       
+      // Upward triangle for positive (income)
       if (amount > 0) {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858 1000" fill="${color}"><path d="M0,995.3C142.08,666.06,284.15,336.82,429.5,0c144.66,336.09,286.58,665.83,428.5,995.57-.95,1.48-1.9,2.95-2.85,4.43-136.09-78.77-269.66-161.99-404.48-243.08-15.79-9.62-28.28-9.41-44.01.15-134.05,80.88-267.52,162.59-402.48,241.8-1.4-1.19-2.79-2.38-4.19-3.57Z"/></svg>`
       }
+      // Downward triangle for negative (expense)
       else if (amount < 0) {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 858.01 1000" fill="${color}"><path d="M858,4.7c-142.08,329.24-284.15,658.48-429.5,995.3C283.84,663.91,141.92,334.17,0,4.43.95,2.95,1.9,1.48,2.85,0c136.09,78.77,269.66,161.99,404.48,243.08,15.79,9.62,28.28,9.41,44.01-.15C585.39,162.05,718.86,80.34,853.82,1.13c1.4,1.19,2.79,2.38,4.19,3.57h-.01Z"/></svg>`
       }
+      // Diamond for zero/neutral
       else {
         return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 858.01" fill="${color}"><path d="M4.7.01c329.24,142.08,658.48,284.15,995.3,429.5C663.91,574.17,334.17,716.09,4.43,858.01c-1.48-.95-2.95-1.9-4.43-2.85,78.77-136.09,161.99-269.66,243.08-404.48,9.62-15.79,9.41-28.28-.15-44.01C162.05,272.62,80.34,139.15,1.13,4.19,2.32,2.79,3.51,1.4,4.7,0h0Z"/></svg>`
       }
     }
 
+    /**
+     * Formats date string to DD/MM/YYYY
+     * @param {string} dateString - ISO date string
+     * @returns {string} Formatted date
+     */
     const formatDate = (dateString) => {
       return new Date(dateString).toLocaleDateString('en-EU', {
         day: '2-digit',
@@ -304,6 +434,11 @@ export default {
       })
     }
 
+    /**
+     * Formats amount as EUR currency with sign
+     * @param {number|string} amount - Amount to format
+     * @returns {string} Formatted currency string with +/- sign
+     */
     const formatAmount = (amount) => {
       const num = parseFloat(amount)
       const formattedValue = new Intl.NumberFormat('en-EU', {
@@ -319,6 +454,11 @@ export default {
       return formattedValue
     }
 
+    /**
+     * Returns CSS class based on amount sign
+     * @param {Object} transaction - Transaction object
+     * @returns {string} CSS class name
+     */
     const getAmountClass = (transaction) => {
       const amount = parseFloat(transaction.amount)
       if (amount > 0) {
@@ -329,6 +469,12 @@ export default {
       return 'amount-neutral'
     }
 
+    /**
+     * Truncates text to maximum length with ellipsis
+     * @param {string} text - Text to truncate
+     * @param {number} maxLength - Maximum character length
+     * @returns {string} Truncated text
+     */
     const truncateText = (text, maxLength) => {
       if (!text || text.length <= maxLength) return text
       return text.substring(0, maxLength) + '...'

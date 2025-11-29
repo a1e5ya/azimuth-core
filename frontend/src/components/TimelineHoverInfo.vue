@@ -1,11 +1,58 @@
+<!--
+  TimelineHoverInfo Component - Period Detail Display
+  
+  Provides detailed breakdown of hovered timeline period:
+  - Period name and date range
+  - Total balance calculation
+  - Multi-column layout for multiple breakdowns
+  - Category tree with subcategory expansion
+  - Income, expenses, transfers display
+  
+  Features:
+  - Empty state when no data hovered
+  - Dynamic grid layout (1, 2, or 3 columns)
+  - Category hierarchy display (main → subcategories)
+  - Color-coded balance indicators
+  - Icon display for categories
+  - Sortable by amount (highest first)
+  - Unpin button to close detail view
+  
+  Props:
+  - hoveredData: Object - Period data to display
+    Structure: {
+      periodName: string,
+      breakdownMode: string,
+      breakdownData: {
+        [key]: {
+          balance, income, expenses, transfersIn, transfersOut,
+          incomeByCategory, expensesByCategory, etc.
+        }
+      }
+    }
+  
+  Events:
+  - @unpin: Emitted when close button clicked
+  
+  Layout:
+  - Single breakdown: 1 column
+  - Two breakdowns: 2 columns
+  - Three+ breakdowns: 3 columns
+  
+  Category Display:
+  - Main categories shown with totals
+  - Subcategories indented with individual amounts
+  - Sorted by amount (descending)
+-->
+
 <template>
   <div class="hover-info-field" :class="{ 'hover-info-empty': !hoveredData }">
+    <!-- Empty State (No Data Hovered) -->
     <div v-if="!hoveredData" class="hover-info-placeholder">
       
     </div>
     
     <template v-else>
-      <!-- Header with period name and total balance -->
+      <!-- Header with Period Name and Total Balance -->
       <div class="hover-info-header">
         <div class="hover-header-left">
           <h4>{{ hoveredData.periodName }}</h4>
@@ -18,19 +65,20 @@
           </span>
         </div>
         
+        <!-- Close/Unpin Button -->
         <button class="btn btn-icon hover-close-btn" @click="$emit('unpin')">
           <AppIcon name="cross" size="small" />
         </button>
       </div>
       
-      <!-- Breakdown sections - multi-column when multiple breakdowns -->
+      <!-- Breakdown Sections (multi-column when multiple breakdowns) -->
       <div class="hover-info-content" :class="contentGridClass">
         <div 
           v-for="(data, key) in hoveredData.breakdownData" 
           :key="key"
           class="breakdown-section"
         >
-          <!-- Breakdown header (Owner/Account name) -->
+          <!-- Breakdown Header (Owner/Account name) -->
           <div v-if="hoveredData.breakdownMode !== 'all'" class="breakdown-header">
             <h5>{{ key }}</h5>
             <span class="breakdown-balance" :class="data.balance >= 0 ? 'positive' : 'negative'">
@@ -42,7 +90,7 @@
           <div class="hover-info-grid">
             <!-- LEFT COLUMN -->
             <div class="hover-info-column">
-              <!-- INCOME -->
+              <!-- INCOME Section -->
               <div v-if="data.income > 0" class="hover-info-type-section">
                 <div class="hover-type-header">
                   <AppIcon name="apps-add" size="small" />
@@ -50,6 +98,7 @@
                   <span class="hover-type-total positive">{{ formatCurrency(data.income) }}</span>
                 </div>
                 
+                <!-- Income Category Tree -->
                 <div class="hover-info-tree" v-if="data.incomeByCategory">
                   <template v-for="item in buildCategoryTree(data.incomeByCategory, 'income')" :key="item.id">
                     <div class="hover-tree-main">
@@ -67,7 +116,7 @@
                 </div>
               </div>
 
-              <!-- TRANSFERS OUT -->
+              <!-- TRANSFERS OUT Section -->
               <div v-if="data.transfersOut > 0" class="hover-info-type-section">
                 <div class="hover-type-header">
                   <AppIcon name="apps-sort" size="small" />
@@ -75,6 +124,7 @@
                   <span class="hover-type-total neutral">{{ formatCurrency(data.transfersOut) }}</span>
                 </div>
                 
+                <!-- Transfers Out Category Tree -->
                 <div class="hover-info-tree" v-if="data.transfersOutByCategory">
                   <template v-for="item in buildCategoryTree(data.transfersOutByCategory, 'transfers')" :key="item.id + '-out'">
                     <div class="hover-tree-main">
@@ -92,7 +142,7 @@
                 </div>
               </div>
               
-              <!-- TRANSFERS IN -->
+              <!-- TRANSFERS IN Section -->
               <div v-if="data.transfersIn > 0" class="hover-info-type-section">
                 <div class="hover-type-header">
                   <AppIcon name="apps-sort" size="small" />
@@ -100,6 +150,7 @@
                   <span class="hover-type-total neutral">{{ formatCurrency(data.transfersIn) }}</span>
                 </div>
                 
+                <!-- Transfers In Category Tree -->
                 <div class="hover-info-tree" v-if="data.transfersInByCategory">
                   <template v-for="item in buildCategoryTree(data.transfersInByCategory, 'transfers')" :key="item.id + '-in'">
                     <div class="hover-tree-main">
@@ -120,7 +171,7 @@
 
             <!-- RIGHT COLUMN: Expenses -->
             <div class="hover-info-column">
-              <!-- EXPENSES -->
+              <!-- EXPENSES Section -->
               <div v-if="data.expenses > 0" class="hover-info-type-section">
                 <div class="hover-type-header">
                   <AppIcon name="apps-delete" size="small" />
@@ -128,6 +179,7 @@
                   <span class="hover-type-total negative">{{ formatCurrency(data.expenses) }}</span>
                 </div>
                 
+                <!-- Expenses Category Tree -->
                 <div class="hover-info-tree" v-if="data.expensesByCategory">
                   <template v-for="item in buildCategoryTree(data.expensesByCategory, 'expenses')" :key="item.id">
                     <div class="hover-tree-main">
@@ -173,7 +225,10 @@ export default {
   setup(props) {
     const categoryStore = useCategoryStore()
     
-    // Calculate total balance across all breakdowns
+    /**
+     * Calculates total balance across all breakdowns
+     * @type {import('vue').ComputedRef<number>}
+     */
     const totalBalance = computed(() => {
       if (!props.hoveredData?.breakdownData) return 0
       
@@ -182,7 +237,10 @@ export default {
       }, 0)
     })
     
-    // Determine grid columns based on number of breakdowns
+    /**
+     * Determines grid columns based on number of breakdowns
+     * @type {import('vue').ComputedRef<string>}
+     */
     const contentGridClass = computed(() => {
       if (!props.hoveredData?.breakdownData) return ''
       
@@ -190,9 +248,15 @@ export default {
       
       if (count === 1) return 'grid-single'
       if (count === 2) return 'grid-two'
-      return 'grid-three' // 3+ breakdowns
+      return 'grid-three'
     })
     
+    /**
+     * Finds category in category store by name and type
+     * @param {string} categoryName - Category name to find
+     * @param {string} typeCode - Type code (income, expenses, transfers)
+     * @returns {Object|null} Category object or null if not found
+     */
     function findCategory(categoryName, typeCode) {
       if (!categoryStore.categories) return null
       
@@ -212,6 +276,12 @@ export default {
       return null
     }
     
+    /**
+     * Builds hierarchical category tree with subcategories
+     * @param {Object} categoryData - Category data with amounts
+     * @param {string} typeCode - Type code (income, expenses, transfers)
+     * @returns {Array} Sorted category tree array
+     */
     function buildCategoryTree(categoryData, typeCode) {
       if (!categoryData) return []
       
@@ -223,7 +293,6 @@ export default {
         const catInfo = findCategory(catName, typeCode)
         
         if (!catInfo) {
-          // Category not found in tree - show it anyway with default icon
           const fallbackId = `fallback-${catName}`
           if (!mainCategories[fallbackId]) {
             mainCategories[fallbackId] = {

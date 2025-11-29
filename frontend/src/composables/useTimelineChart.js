@@ -1,4 +1,34 @@
-// frontend/src/composables/useTimelineChart.js
+/**
+ * Timeline Chart Composable - Chart configuration and series generation with breakdown support
+ * 
+ * This composable manages the ApexCharts timeline visualization for financial transactions.
+ * It handles chart series generation, visibility filtering, breakdown modes (All/Owner/Account),
+ * hover interactions, and dynamic Y-axis scaling.
+ * 
+ * Features:
+ * - Multi-breakdown support (All transactions, By Owner, By Account)
+ * - Category visibility filtering with expand/collapse
+ * - Stacked bar charts with separate positive/negative stacks per breakdown
+ * - Dynamic Y-axis scaling based on visible data
+ * - Hover info panel with period breakdowns
+ * - Pin/unpin functionality for detailed inspection
+ * - Automatic category hierarchy resolution
+ * - Transfer direction tracking (In/Out)
+ * - Memoization for performance optimization
+ * 
+ * Breakdown Modes:
+ * - 'all': Single view of all transactions combined
+ * - 'owner': Separate stacks for each owner (e.g., Alexa, John)
+ * - 'account': Separate stacks for each owner_accountType combination
+ * 
+ * Chart Structure:
+ * - Each breakdown gets its own stack group
+ * - Within each stack: Expenses (bottom) → Transfers Out → Income → Transfers In (top)
+ * - Negative values (expenses, transfers out) shown below zero line
+ * - Positive values (income, transfers in) shown above zero line
+ * 
+ * @module composables/useTimelineChart
+ */
 
 import { ref, computed, watch } from 'vue'
 import { 
@@ -8,8 +38,26 @@ import {
   findParentCategory 
 } from '@/utils/timelineHelpers'
 
+// ========================================
+// HELPER FUNCTIONS
+// ========================================
+
 /**
- * Get period name from date and grouping
+ * Get human-readable period name from date and grouping level
+ * 
+ * Formats dates according to the current zoom level:
+ * - Year grouping: "2024"
+ * - Quarter grouping: "Jan - Mar 2024"
+ * - Month grouping: "January 2024"
+ * 
+ * @param {number} date - Timestamp in milliseconds
+ * @param {string} grouping - Grouping level ('year', 'quarter', 'month')
+ * @returns {string} Formatted period name
+ * 
+ * @example
+ * getPeriodName(1704067200000, 'year') // "2024"
+ * getPeriodName(1704067200000, 'quarter') // "Jan - Mar 2024"
+ * getPeriodName(1704067200000, 'month') // "January 2024"
  */
 function getPeriodName(date, grouping) {
   const d = new Date(date)
@@ -33,8 +81,40 @@ function getPeriodName(date, grouping) {
   return d.toLocaleDateString()
 }
 
+// ========================================
+// MAIN COMPOSABLE
+// ========================================
+
 /**
- * Composable for managing timeline chart configuration and series WITH BREAKDOWN
+ * Timeline Chart Composable
+ * 
+ * Creates and manages the timeline chart configuration with breakdown support.
+ * Handles data aggregation, visibility filtering, and chart interactions.
+ * 
+ * @param {Ref<Array>} timelineData - Array of date points with timestamps
+ * @param {Ref<Array>} transactions - All transactions for the user
+ * @param {Ref<Object>} dateRange - Date range with start/end dates
+ * @param {Ref<number>} currentZoomLevel - Current zoom level (-1: year, 0: quarter, 1: month)
+ * @param {Object} categoryStore - Pinia category store
+ * @param {Object} visibilityState - Visibility state (types, categories, subcategories, expanded)
+ * @param {Ref<Object>} customVisibleRange - Optional custom visible date range
+ * @param {Ref<Object>} chartRef - Reference to ApexCharts instance
+ * @param {Ref<string>} breakdownMode - Breakdown mode ('all', 'owner', 'account')
+ * @param {Ref<Array<string>>} selectedOwners - Selected owners for breakdown filtering
+ * @param {Ref<Array<string>>} selectedAccounts - Selected accounts for breakdown filtering
+ * 
+ * @returns {Object} Chart composable object
+ * @returns {Ref<Object>} hoveredData - Currently hovered period data with breakdowns
+ * @returns {Ref<boolean>} isPinned - Whether hover data is pinned
+ * @returns {Ref<Array>} chartSeries - ApexCharts series data
+ * @returns {Ref<Object>} chartOptions - ApexCharts configuration
+ * @returns {Ref<Array>} expenseCategories - Expense category tree
+ * @returns {Ref<Array>} incomeCategories - Income category tree
+ * @returns {Ref<Array>} transferCategories - Transfer category tree
+ * @returns {Ref<Array>} targetCategories - Target category tree
+ * @returns {Ref<Object>} visibleDateRange - Currently visible date range
+ * @returns {Function} handleChartHover - Handle chart hover events
+ * @returns {Function} unpinHoverData - Unpin hover data
  */
 export function useTimelineChart(
   timelineData,
@@ -49,13 +129,26 @@ export function useTimelineChart(
   selectedOwners = ref([]),
   selectedAccounts = ref([])
 ) {
+  // ========================================
+  // STATE
+  // ========================================
+  
+  /** Currently hovered data with period breakdown information */
   const hoveredData = ref(null)
+  
+  /** Whether hover data is pinned for detailed inspection */
   const isPinned = ref(false)
+  
+  /** Y-axis scale values (max positive/negative, has positive/negative flags) */
   const yAxisValues = ref({ maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false })
   
+  /** Memoized category aggregation data to avoid recalculation */
   const memoizedCategoryData = ref(null)
+  
+  /** Hash of last visibility state to detect changes */
   const lastVisibilityHash = ref('')
   
+  // Extract visibility functions from state
   const {
     isTypeVisible,
     isCategoryVisible,
@@ -63,26 +156,54 @@ export function useTimelineChart(
     isCategoryExpanded
   } = visibilityState
   
+  // ========================================
+  // CATEGORY TREES
+  // ========================================
+  
+  /**
+   * Expense categories from category store
+   * Filtered to only show EXPENSES type children
+   */
   const expenseCategories = computed(() => {
     const expenseType = categoryStore.categories?.find(t => t.code === 'expenses')
     return expenseType?.children || []
   })
   
+  /**
+   * Income categories from category store
+   * Filtered to only show INCOME type children
+   */
   const incomeCategories = computed(() => {
     const incomeType = categoryStore.categories?.find(t => t.code === 'income')
     return incomeType?.children || []
   })
   
+  /**
+   * Transfer categories from category store
+   * Filtered to only show TRANSFERS type children
+   */
   const transferCategories = computed(() => {
     const transferType = categoryStore.categories?.find(t => t.code === 'transfers')
     return transferType?.children || []
   })
   
+  /**
+   * Target categories from category store
+   * Filtered to only show TARGETS type children
+   */
   const targetCategories = computed(() => {
     const targetType = categoryStore.categories?.find(t => t.code === 'targets')
     return targetType?.children || []
   })
   
+  // ========================================
+  // DATE RANGE MANAGEMENT
+  // ========================================
+  
+  /**
+   * Currently visible date range
+   * Uses custom range if set, otherwise calculates from zoom level
+   */
   const visibleDateRange = computed(() => {
     if (customVisibleRange && customVisibleRange.value) {
       return {
@@ -98,6 +219,10 @@ export function useTimelineChart(
     )
   })
   
+  /**
+   * Current grouping level based on timeline data spacing
+   * Determines how data points are aggregated (year/quarter/month)
+   */
   const currentGrouping = computed(() => {
     if (!timelineData.value[0] || !timelineData.value[1]) return 'quarter'
     const diff = timelineData.value[1]?.date - timelineData.value[0]?.date
@@ -106,8 +231,15 @@ export function useTimelineChart(
     return 'month'
   })
   
+  // ========================================
+  // BREAKDOWN MANAGEMENT
+  // ========================================
+  
   /**
-   * Get breakdown keys based on mode
+   * Breakdown keys based on current mode
+   * - 'all': ['all']
+   * - 'owner': ['Alexa', 'John', ...]
+   * - 'account': ['Alexa_Main', 'Alexa_Kopio', ...]
    */
   const breakdownKeys = computed(() => {
     if (breakdownMode.value === 'all') {
@@ -120,6 +252,16 @@ export function useTimelineChart(
     return ['all']
   })
   
+  // ========================================
+  // VISIBILITY HASH FOR MEMOIZATION
+  // ========================================
+  
+  /**
+   * Generate hash of current visibility state
+   * Used to detect changes and invalidate memoized data
+   * 
+   * @returns {string} JSON string representing current visibility state
+   */
   function getVisibilityHash() {
     return JSON.stringify({
       types: visibilityState.visibleTypes.value.slice().sort(),
@@ -132,19 +274,62 @@ export function useTimelineChart(
     })
   }
   
+  // ========================================
+  // CATEGORY DATA AGGREGATION
+  // ========================================
+  
   /**
-   * Build categories WITH BREAKDOWN - separate by owner/account
-   * FIX: Only filter by owner/account when NOT in 'all' mode
+   * Build aggregated category data with breakdown support
+   * 
+   * This is the core data aggregation function that:
+   * 1. Groups transactions by breakdown key (all/owner/account)
+   * 2. Filters by visibility settings (type/category/subcategory)
+   * 3. Aggregates amounts by category and date period
+   * 4. Tracks positive and negative transfers separately
+   * 
+   * Process:
+   * 1. Check memoized data (return if visibility unchanged)
+   * 2. Initialize breakdown buckets for each key
+   * 3. Process each transaction:
+   *    - Determine breakdown key (owner/account)
+   *    - Skip if not in selected breakdowns
+   *    - Extract category names with hierarchy
+   *    - Check visibility (type → category → subcategory)
+   *    - Calculate period key (year/quarter/month)
+   *    - Add amount to appropriate category map
+   * 4. Return structured data by breakdown and category type
+   * 
+   * @returns {Object} Aggregated data structure
+   * @returns {Object} expensesByBreakdown - { breakdownKey: { categoryName: Map<date, amount> } }
+   * @returns {Object} incomeByBreakdown - { breakdownKey: { categoryName: Map<date, amount> } }
+   * @returns {Object} transfersNegativeByBreakdown - { breakdownKey: { categoryName: Map<date, amount> } }
+   * @returns {Object} transfersPositiveByBreakdown - { breakdownKey: { categoryName: Map<date, amount> } }
+   * 
+   * @example
+   * // Returns structure like:
+   * {
+   *   expensesByBreakdown: {
+   *     'Alexa': {
+   *       'Groceries': Map { 1704067200000 => 150.50, ... },
+   *       'Transport': Map { 1704067200000 => 45.20, ... }
+   *     }
+   *   },
+   *   incomeByBreakdown: { ... },
+   *   transfersNegativeByBreakdown: { ... },
+   *   transfersPositiveByBreakdown: { ... }
+   * }
    */
   function buildAllCategoriesSinglePass() {
+    // Check memoized cache
     const currentVisibilityHash = getVisibilityHash()
     
     if (memoizedCategoryData.value && lastVisibilityHash.value === currentVisibilityHash) {
       return memoizedCategoryData.value
     }
 
+    // Validate category store loaded
     if (!categoryStore.categories || categoryStore.categories.length === 0) {
-      console.warn('⚠️ Categories not loaded yet')
+      console.error('⚠️ Categories not loaded yet')
       return { 
         expensesByBreakdown: {}, 
         incomeByBreakdown: {}, 
@@ -153,9 +338,7 @@ export function useTimelineChart(
       }
     }
     
-    console.log('🔄 Building categories - Mode:', breakdownMode.value, 'Keys:', breakdownKeys.value)
-    
-    // Structure: { breakdownKey: { categoryName: Map<date, amount> } }
+    // Initialize data structure: { breakdownKey: { categoryName: Map<date, amount> } }
     const expensesByBreakdown = {}
     const incomeByBreakdown = {}
     const transfersNegativeByBreakdown = {}
@@ -177,10 +360,12 @@ export function useTimelineChart(
       transfersPositiveByBreakdown[key] = {}
     })
     
+    // Counters for debugging
     let processedCount = 0
     let skippedByMode = 0
     let skippedByVisibility = 0
     
+    // Process each transaction
     transactions.value.forEach(t => {
       // Determine breakdown key for this transaction
       let breakdownKey = 'all'
@@ -202,26 +387,19 @@ export function useTimelineChart(
       }
       // For 'all' mode: breakdownKey='all' and we process ALL transactions
       
+      // Extract transaction details
       const mainCat = (t.main_category || '').toUpperCase()
       const subcategoryName = t.subcategory
       const categoryName = t.category || 'Uncategorized'
       const amount = Math.abs(parseFloat(t.amount))
       const rawAmount = parseFloat(t.amount)
       
-      // Debug: log Savings Transfer transactions
-      if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
-        console.log('🔍 Processing Savings Transfer transaction:', {
-          category: categoryName,
-          subcategory: subcategoryName,
-          amount: rawAmount
-        })
-      }
-      
+      // Find parent category if subcategory exists
       const parentCategory = subcategoryName ? findParentCategory(allCategories, subcategoryName) : null
       let displayName = categoryName
       let shouldInclude = true
       
-      // Check category visibility
+      // Check visibility filters
       // First check if the TYPE is visible
       if (mainCat === 'INCOME' && !isTypeVisible('income')) {
         shouldInclude = false
@@ -230,7 +408,7 @@ export function useTimelineChart(
       } else if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) {
         shouldInclude = false
       } else if (parentCategory) {
-        // Has a parent category
+        // Has a parent category - check parent visibility
         if (!isCategoryVisible(parentCategory.id)) {
           shouldInclude = false
         } else if (isCategoryExpanded(parentCategory.id)) {
@@ -246,7 +424,7 @@ export function useTimelineChart(
             displayName = categoryName
           }
         } else {
-          // Parent not expanded - group under parent
+          // Parent not expanded - group under parent name
           displayName = parentCategory.name
         }
       } else {
@@ -259,35 +437,15 @@ export function useTimelineChart(
         }
       }
       
+      // Skip if not visible
       if (!shouldInclude) {
-        if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
-          console.log('❌ HIDING Savings Transfer:', {
-            subcategoryName,
-            categoryName,
-            displayName,
-            parentCategory: parentCategory?.name,
-            parentId: parentCategory?.id,
-            parentVisible: parentCategory ? isCategoryVisible(parentCategory.id) : 'no parent',
-            parentExpanded: parentCategory ? isCategoryExpanded(parentCategory.id) : 'no parent'
-          })
-        }
         skippedByVisibility++
         return
       }
       
-      if (mainCat === 'TRANSFERS' && (subcategoryName === 'Savings Transfer' || categoryName === 'Savings Transfer')) {
-        console.log('✅ SHOWING Savings Transfer:', {
-          subcategoryName,
-          categoryName,
-          displayName,
-          parentCategory: parentCategory?.name,
-          parentExpanded: parentCategory ? isCategoryExpanded(parentCategory.id) : 'no parent'
-        })
-      }
-      
       processedCount++
       
-      // Calculate period key
+      // Calculate period key based on grouping level
       const date = new Date(t.posted_at)
       let key
       
@@ -305,7 +463,7 @@ export function useTimelineChart(
         key = new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime()
       }
       
-      // Add to appropriate breakdown bucket
+      // Add to appropriate breakdown bucket based on transaction type
       if (mainCat === 'EXPENSES') {
         if (!expensesByBreakdown[breakdownKey][displayName]) {
           expensesByBreakdown[breakdownKey][displayName] = new Map()
@@ -323,7 +481,7 @@ export function useTimelineChart(
           (incomeByBreakdown[breakdownKey][displayName].get(key) || 0) + amount
         )
       } else if (mainCat === 'TRANSFERS') {
-        // Track positive and negative transfers separately 
+        // Track positive and negative transfers separately for directional visualization
         if (rawAmount < 0) {
           if (!transfersNegativeByBreakdown[breakdownKey][displayName]) {
             transfersNegativeByBreakdown[breakdownKey][displayName] = new Map()
@@ -344,8 +502,7 @@ export function useTimelineChart(
       }
     })
     
-    console.log('📊 Processed:', processedCount, '| Skipped by mode:', skippedByMode, '| Skipped by visibility:', skippedByVisibility)
-    
+    // Cache results
     const result = { expensesByBreakdown, incomeByBreakdown, transfersNegativeByBreakdown, transfersPositiveByBreakdown }
     memoizedCategoryData.value = result
     lastVisibilityHash.value = currentVisibilityHash
@@ -353,8 +510,42 @@ export function useTimelineChart(
     return result
   }
   
+  // ========================================
+  // CHART SERIES GENERATION
+  // ========================================
+  
   /**
-   * Build chart series WITH BREAKDOWN - single stack per breakdown
+   * Generate ApexCharts series data with breakdown support
+   * 
+   * Creates stacked bar chart series where each breakdown gets its own stack group.
+   * Within each stack, series are ordered: Expenses → Transfers Out → Income → Transfers In
+   * 
+   * Series Structure:
+   * - Each series represents one category (e.g., "Groceries", "Salary")
+   * - Each series belongs to one breakdown (e.g., "Alexa", "John")
+   * - Each series belongs to one stack group (e.g., "breakdown-0", "breakdown-1")
+   * - Data points are { x: timestamp, y: amount } pairs
+   * 
+   * Stacking Rules:
+   * - 'all' mode: All series in one stack ("all")
+   * - 'owner' mode: Each owner gets separate stack ("breakdown-0", "breakdown-1", ...)
+   * - 'account' mode: Each account gets separate stack
+   * 
+   * @returns {Array<Object>} ApexCharts series array
+   * 
+   * @example
+   * // Returns series like:
+   * [
+   *   {
+   *     name: "Groceries - Alexa",
+   *     type: "bar",
+   *     data: [{ x: 1704067200000, y: -150.50 }, ...],
+   *     color: "#F17D99",
+   *     breakdownKey: "Alexa",
+   *     group: "breakdown-0"
+   *   },
+   *   ...
+   * ]
    */
   const chartSeries = computed(() => {
     if (!timelineData.value.length) return []
@@ -367,7 +558,7 @@ export function useTimelineChart(
       const suffix = breakdownMode.value === 'all' ? '' : ` - ${breakdownKey}`
       const stackGroup = breakdownMode.value === 'all' ? 'all' : `breakdown-${breakdownIndex}`
       
-      // EXPENSES - all go into same stack group
+      // EXPENSES - all go into same stack group (negative values)
       if (isTypeVisible('expenses') && expensesByBreakdown[breakdownKey]) {
         Object.entries(expensesByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
@@ -388,7 +579,7 @@ export function useTimelineChart(
         })
       }
       
-      // NEGATIVE TRANSFERS - same stack group
+      // NEGATIVE TRANSFERS - same stack group (negative values)
       if (isTypeVisible('transfers') && transfersNegativeByBreakdown[breakdownKey]) {
         Object.entries(transfersNegativeByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
@@ -413,7 +604,7 @@ export function useTimelineChart(
         })
       }
       
-      // INCOME - same stack group
+      // INCOME - same stack group (positive values)
       if (isTypeVisible('income') && incomeByBreakdown[breakdownKey]) {
         Object.entries(incomeByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
@@ -434,7 +625,7 @@ export function useTimelineChart(
         })
       }
       
-      // POSITIVE TRANSFERS - same stack group
+      // POSITIVE TRANSFERS - same stack group (positive values)
       if (isTypeVisible('transfers') && transfersPositiveByBreakdown[breakdownKey]) {
         Object.entries(transfersPositiveByBreakdown[breakdownKey]).forEach(([categoryName, dateMap]) => {
           const color = getCategoryColor(categoryStore.categories, categoryName)
@@ -460,11 +651,42 @@ export function useTimelineChart(
       }
     })
     
-    console.log('📊 Final series count:', series.length)
-    
     return series
   })
   
+  // ========================================
+  // Y-AXIS SCALING
+  // ========================================
+  
+  /**
+   * Calculate Y-axis maximum values based on visible data
+   * 
+   * Analyzes stacked totals per breakdown group to find maximum positive/negative values.
+   * Ensures symmetrical scaling when both positive and negative values exist.
+   * 
+   * Process:
+   * 1. Filter data points to visible range (if zoomed to year view)
+   * 2. For each data point:
+   *    - Group series by stack group (breakdown)
+   *    - Sum positive and negative values within each group
+   * 3. Find maximum positive and negative across all groups
+   * 4. Add 15% padding for visual spacing
+   * 
+   * @returns {Object} Y-axis scale configuration
+   * @returns {number} maxPositive - Maximum positive value with padding
+   * @returns {number} maxNegative - Maximum negative value (absolute) with padding
+   * @returns {boolean} hasPositive - Whether any positive values exist
+   * @returns {boolean} hasNegative - Whether any negative values exist
+   * 
+   * @example
+   * // Returns something like:
+   * {
+   *   maxPositive: 3450.75,
+   *   maxNegative: 2890.50,
+   *   hasPositive: true,
+   *   hasNegative: true
+   * }
+   */
   function calculateYAxisMax() {
     if (!chartSeries.value.length || !timelineData.value.length) {
       return { maxPositive: 1000, maxNegative: 1000, hasPositive: false, hasNegative: false }
@@ -475,6 +697,7 @@ export function useTimelineChart(
     let hasPositive = false
     let hasNegative = false
     
+    // Filter to visible range if zoomed to month level
     const visibleRange = visibleDateRange.value
     const dataToAnalyze = (currentZoomLevel.value === 1 && visibleRange)
       ? timelineData.value.filter(d => {
@@ -483,6 +706,7 @@ export function useTimelineChart(
         })
       : timelineData.value
     
+    // Analyze each data point
     dataToAnalyze.forEach((dataPoint, index) => {
       const actualIndex = timelineData.value.findIndex(d => d.date === dataPoint.date)
       if (actualIndex === -1) return
@@ -520,6 +744,7 @@ export function useTimelineChart(
       })
     })
     
+    // Add 15% padding
     maxPositive = maxPositive * 1.15
     maxNegative = maxNegative * 1.15
     
@@ -531,8 +756,44 @@ export function useTimelineChart(
     }
   }
   
+  // ========================================
+  // CHART INTERACTIONS
+  // ========================================
+  
   /**
-   * Handle chart hover - track transfer directions separately (In/Out)
+   * Handle chart hover/click interactions
+   * 
+   * When user hovers or clicks a bar, this function:
+   * 1. Finds the corresponding data point in timelineData
+   * 2. Filters transactions for that period
+   * 3. Aggregates by breakdown (all/owner/account)
+   * 4. Calculates totals and breakdowns by category
+   * 5. Updates hoveredData with formatted information
+   * 6. Updates chart annotation line
+   * 
+   * Breakdown Data Structure:
+   * {
+   *   date: timestamp,
+   *   periodName: "January 2024",
+   *   breakdownMode: "owner",
+   *   breakdownData: {
+   *     "Alexa": {
+   *       income: 3500,
+   *       expenses: 2100,
+   *       transfersOut: 500,
+   *       transfersIn: 200,
+   *       balance: 1100,
+   *       incomeByCategory: { "Salary": 3500 },
+   *       expensesByCategory: { "Groceries": 450, "Transport": 120, ... },
+   *       transfersOutByCategory: { ... },
+   *       transfersInByCategory: { ... }
+   *     },
+   *     "John": { ... }
+   *   }
+   * }
+   * 
+   * @param {Object} config - ApexCharts event config
+   * @param {number} config.dataPointIndex - Index of clicked data point
    */
   function handleChartHover(config) {
     if (!config || config.dataPointIndex === -1) return
@@ -543,11 +804,13 @@ export function useTimelineChart(
     const breakdownData = {}
     
     if (breakdownMode.value === 'all') {
+      // Single breakdown - all transactions together
       const incomeByCategory = {}
       const expensesByCategory = {}
       const transfersOutByCategory = {}
       const transfersInByCategory = {}
       
+      // Filter transactions for this period
       const grouping = currentGrouping.value
       const periodTransactions = transactions.value.filter(t => {
         const tDate = new Date(t.posted_at)
@@ -571,6 +834,7 @@ export function useTimelineChart(
       let transfersOut = 0
       let transfersIn = 0
       
+      // Aggregate by category
       periodTransactions.forEach(t => {
         const amount = Math.abs(parseFloat(t.amount))
         const rawAmount = parseFloat(t.amount)
@@ -578,6 +842,7 @@ export function useTimelineChart(
         const categoryName = t.category || 'Uncategorized'
         const mainCat = (t.main_category || '').toUpperCase()
         
+        // Skip if type not visible
         if (mainCat === 'INCOME' && !isTypeVisible('income')) return
         if (mainCat === 'EXPENSES' && !isTypeVisible('expenses')) return
         if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) return
@@ -614,6 +879,7 @@ export function useTimelineChart(
         transfersInByCategory
       }
     } else {
+      // Multiple breakdowns - separate data for each owner/account
       breakdownKeys.value.forEach(key => {
         const keyTransactions = transactions.value.filter(t => {
           const tDate = new Date(t.posted_at)
@@ -657,7 +923,6 @@ export function useTimelineChart(
           if (mainCat === 'EXPENSES' && !isTypeVisible('expenses')) return
           if (mainCat === 'TRANSFERS' && !isTypeVisible('transfers')) return
           
-          // Use subcategory if available, otherwise use category
           const displayName = subcategoryName || categoryName
           
           if (mainCat === 'INCOME') {
@@ -691,6 +956,7 @@ export function useTimelineChart(
       })
     }
     
+    // Update hover data
     hoveredData.value = {
       date: dataPoint.date,
       periodName: getPeriodName(dataPoint.date, currentGrouping.value),
@@ -701,12 +967,19 @@ export function useTimelineChart(
     updateLineAnnotation()
   }
   
+  /**
+   * Update vertical line annotation on chart
+   * 
+   * Draws a vertical line at hovered date and horizontal line at zero.
+   * Line style changes when pinned (solid vs dashed).
+   */
   function updateLineAnnotation() {
     const chart = chartRef?.value?.chart
     if (!chart || !hoveredData.value) return
     
     chart.clearAnnotations()
     
+    // Add zero line
     chart.addYaxisAnnotation({
       y: 0,
       borderColor: '#374151',
@@ -714,6 +987,7 @@ export function useTimelineChart(
       opacity: 0.2
     })
     
+    // Add vertical line at hovered date
     chart.addXaxisAnnotation({
       x: hoveredData.value.date,
       borderColor: isPinned.value ? '#3a3a3aff' : '#5b636eff',
@@ -723,6 +997,11 @@ export function useTimelineChart(
     })
   }
   
+  /**
+   * Unpin hover data and clear annotations
+   * 
+   * Resets chart to default state with only zero line visible.
+   */
   function unpinHoverData() {
     isPinned.value = false
     hoveredData.value = null
@@ -739,12 +1018,23 @@ export function useTimelineChart(
     }
   }
   
+  // ========================================
+  // WATCHERS
+  // ========================================
+  
+  /**
+   * Watch pinned state and update annotation style
+   */
   watch(() => isPinned.value, () => {
     if (hoveredData.value) {
       updateLineAnnotation()
     }
   })
   
+  /**
+   * Watch visibility changes and recalculate Y-axis
+   * Debounced to avoid excessive recalculations
+   */
   let visibilityDebounceTimer = null
   watch([
     () => visibilityState.visibleCategories.value,
@@ -767,27 +1057,33 @@ export function useTimelineChart(
       const chart = chartRef?.value?.chart
       if (chart) {
         yAxisValues.value = calculateYAxisMax()
-        console.log('📏 Y-axis recalculated after visibility/breakdown change')
       }
     }, 100)
   }, { deep: true })
   
+  /**
+   * Watch zoom level changes and recalculate Y-axis
+   */
   watch(currentZoomLevel, () => {
     memoizedCategoryData.value = null
     yAxisValues.value = calculateYAxisMax()
-    console.log('📏 Y-axis recalculated on zoom')
   })
   
+  /**
+   * Watch visible date range changes and update chart
+   * Updates both X-axis and Y-axis for zoomed views
+   */
   watch(() => visibleDateRange.value, (newRange, oldRange) => {
     const chart = chartRef?.value?.chart
     if (!chart || !newRange) return
     
+    // Recalculate Y-axis for year-level zoom
     if (currentZoomLevel.value === 1) {
       memoizedCategoryData.value = null
       yAxisValues.value = calculateYAxisMax()
-      console.log('📏 Y-axis recalculated for year range:', yAxisValues.value)
     }
     
+    // Update chart axes
     chart.updateOptions({
       xaxis: {
         min: newRange.start.getTime(),
@@ -802,14 +1098,30 @@ export function useTimelineChart(
           : yAxisValues.value.hasPositive ? yAxisValues.value.maxPositive : 0
       }
     }, false, false)
-    
-    console.log('📊 X-axis and Y-axis updated')
   }, { deep: true })
   
+  // ========================================
+  // CHART OPTIONS
+  // ========================================
+  
+  /**
+   * ApexCharts configuration object
+   * 
+   * Configures all chart behavior including:
+   * - Stacking behavior
+   * - Animations (disabled for performance)
+   * - Event handlers (hover, click)
+   * - Axes configuration
+   * - Grid styling
+   * - Tooltip (disabled, using custom hover info)
+   * 
+   * @returns {Object} ApexCharts options configuration
+   */
   const chartOptions = computed(() => {
     const range = visibleDateRange.value
     const yAxis = yAxisValues.value
     
+    // Calculate Y-axis min/max with symmetry for dual-sided charts
     let yMin, yMax
     
     if (yAxis.hasPositive && yAxis.hasNegative) {
@@ -827,6 +1139,7 @@ export function useTimelineChart(
       yMax = 1000
     }
     
+    // Adjust bar width based on breakdown mode
     const columnWidth = breakdownMode.value === 'all' ? '90%' : '90%'
     
     return {
@@ -975,6 +1288,10 @@ export function useTimelineChart(
       }
     }
   })
+  
+  // ========================================
+  // RETURN API
+  // ========================================
   
   return {
     hoveredData,

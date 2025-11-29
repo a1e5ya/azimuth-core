@@ -466,7 +466,7 @@ class CategoryService:
                 parent_id=type_category.id,  # Child of type (L2)
                 name='Uncategorized',
                 code='uncategorized',
-                icon='circle-question',
+                icon='circle',
                 color='#999999',
                 category_type=category_type,
                 active=True

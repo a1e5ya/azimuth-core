@@ -1,5 +1,28 @@
+<!--
+  Dashboard Accounts Management - Owner and account CRUD with stats display
+  
+  Hierarchical structure: Owners → Accounts → Transactions
+  
+  Features:
+  - Owner management: Create/edit/delete owners with color coding
+  - Account management: Create/edit/delete accounts under owners
+  - Financial stats: Real-time income/expenses/transfers/balance per account
+  - CSV/XLSX import: Direct file upload to specific accounts
+  - Delete safety: Confirmation dialogs with cascade warnings
+  - Stats computation: Automatic aggregation from filteredTransactions
+  
+  Import workflow:
+  - User clicks import icon on account card
+  - Hidden file input triggered programmatically
+  - Multi-format support (CSV/XLSX, Finnish/Swedish/English)
+  - Auto-categorization with LLM during import
+  - Progress/results sent to chat via emit
+  
+  Layout: 3-column grid of owner sections, each containing account cards
+-->
 <template>
   <div class="container">
+    <!-- Header with add owner button -->
     <div class="header-with-action">
       <h3>Account Owners & Accounts</h3>
       <button class=" btn-plus" @click="showAddOwnerModal = true">
@@ -317,34 +340,65 @@ export default {
     ActionsMenu
   },
   props: {
+    /**
+     * Filtered transactions from parent (for stats computation)
+     * @type {Array}
+     */
     filteredTransactions: {
       type: Array,
       required: true
     }
   },
-  emits: ['import-success', 'open-import', 'add-chat-message'],
+  emits: [
+    /**
+     * Import success notification
+     */
+    'import-success',
+    /**
+     * Open import modal request
+     */
+    'open-import',
+    /**
+     * Add message to chat
+     * @param {Object} payload - {message: string, response: string}
+     */
+    'add-chat-message'
+  ],
   setup(props, { emit }) {
     const API_BASE = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8001'
     const authStore = useAuthStore()
     
+    /** Loading state for data fetching */
     const loading = ref(false)
+    /** Saving state for create/update operations */
     const saving = ref(false)
+    /** Deleting state for delete operations */
     const deleting = ref(false)
+    /** List of owners with nested accounts */
     const owners = ref([])
     
+    /** Show add owner modal */
     const showAddOwnerModal = ref(false)
+    /** Show add/edit account modal */
     const showAccountModal = ref(false)
+    /** Currently editing owner */
     const editingOwner = ref(null)
+    /** Currently editing account */
     const editingAccount = ref(null)
+    /** Selected owner for account operations */
     const selectedOwner = ref(null)
+    /** Owner pending deletion */
     const deletingOwner = ref(null)
+    /** Account pending deletion with owner reference */
     const deletingAccount = ref(null)
     
+    /** Owner form data */
     const ownerForm = ref({
       name: '',
       color: '#3b82f6'
     })
     
+    /** Account form data */
     const accountForm = ref({
       owner_id: '',
       name: '',
@@ -353,10 +407,18 @@ export default {
       current_balance: 0
     })
     
+    /** Hidden file input reference for import */
     const fileInput = ref(null)
+    /** Account receiving imported transactions */
     const importingAccount = ref(null)
+    /** Owner of importing account (for display) */
     const importingOwner = ref(null)
 
+    /**
+     * Compute owners with account stats from filteredTransactions
+     * Aggregates income/expenses/transfers per account
+     * @returns {Array} Owners with enriched account stats
+     */
     const ownersWithStats = computed(() => {
       return owners.value.map(owner => {
         const accountsWithStats = owner.accounts.map(account => {
@@ -400,6 +462,9 @@ export default {
       })
     })
 
+    /**
+     * Load all owners with nested accounts from API
+     */
     async function loadOwners() {
       if (!authStore.token) return
       
@@ -411,7 +476,6 @@ export default {
         })
         
         owners.value = response.data
-        console.log('✅ Loaded owners:', owners.value.length)
         
       } catch (error) {
         console.error('❌ Failed to load owners:', error)
@@ -420,6 +484,10 @@ export default {
       }
     }
 
+    /**
+     * Show add account modal for specific owner
+     * @param {Object} owner - Owner object
+     */
     function showAddAccountModal(owner) {
       selectedOwner.value = owner
       accountForm.value = {
@@ -432,6 +500,10 @@ export default {
       showAccountModal.value = true
     }
 
+    /**
+     * Open edit owner modal with pre-filled data
+     * @param {Object} owner - Owner to edit
+     */
     function editOwner(owner) {
       editingOwner.value = owner
       ownerForm.value = {
@@ -440,6 +512,9 @@ export default {
       }
     }
 
+    /**
+     * Close owner modal and reset form
+     */
     function closeOwnerModal() {
       showAddOwnerModal.value = false
       editingOwner.value = null
@@ -449,6 +524,10 @@ export default {
       }
     }
 
+    /**
+     * Save owner (create or update)
+     * Sends POST for new, PUT for existing
+     */
     async function saveOwner() {
       if (!ownerForm.value.name || saving.value) return
       
@@ -480,14 +559,24 @@ export default {
       }
     }
 
+    /**
+     * Show delete owner confirmation dialog
+     * @param {Object} owner - Owner to delete
+     */
     function confirmDeleteOwner(owner) {
       deletingOwner.value = owner
     }
 
+    /**
+     * Close delete owner dialog
+     */
     function closeDeletingOwner() {
       deletingOwner.value = null
     }
 
+    /**
+     * Delete owner (cascade deletes accounts if force=true)
+     */
     async function deleteOwner() {
       if (!deletingOwner.value || deleting.value) return
       
@@ -512,6 +601,11 @@ export default {
       }
     }
 
+    /**
+     * Open edit account modal with pre-filled data
+     * @param {Object} account - Account to edit
+     * @param {Object} owner - Account's owner
+     */
     function editAccount(account, owner) {
       editingAccount.value = account
       selectedOwner.value = owner
@@ -524,6 +618,9 @@ export default {
       }
     }
 
+    /**
+     * Close account modal and reset form
+     */
     function closeAccountModal() {
       showAccountModal.value = false
       editingAccount.value = null
@@ -537,6 +634,10 @@ export default {
       }
     }
 
+    /**
+     * Save account (create or update)
+     * Sends POST for new, PUT for existing
+     */
     async function saveAccount() {
       if (!accountForm.value.account_type || saving.value) return
       
@@ -568,6 +669,11 @@ export default {
       }
     }
 
+    /**
+     * Show delete account confirmation dialog
+     * @param {Object} account - Account to delete
+     * @param {Object} owner - Account's owner
+     */
     function confirmDeleteAccount(account, owner) {
       deletingAccount.value = {
         account,
@@ -575,10 +681,16 @@ export default {
       }
     }
 
+    /**
+     * Close delete account dialog
+     */
     function closeDeletingAccount() {
       deletingAccount.value = null
     }
 
+    /**
+     * Delete account (force=true to cascade delete transactions)
+     */
     async function deleteAccount() {
       if (!deletingAccount.value || deleting.value) return
       
@@ -603,12 +715,23 @@ export default {
       }
     }
 
+    /**
+     * Trigger file input for account import
+     * @param {Object} account - Target account for import
+     * @param {Object} owner - Account's owner
+     */
     function importToAccount(account, owner) {
       importingAccount.value = account
       importingOwner.value = owner
       fileInput.value.click()
     }
 
+    /**
+     * Handle file selection and import
+     * Uploads CSV/XLSX to backend with auto-categorization
+     * Sends import results to chat via emit
+     * @param {Event} event - File input change event
+     */
     async function handleFileSelect(event) {
       const file = event.target.files[0]
       if (!file) return
@@ -632,7 +755,7 @@ export default {
         
         const stats = response.data.summary
         
-        // ✅ Build detailed message with training log
+        // Build detailed message with training log
         let message = `Successfully imported ${stats.rows_inserted || 0} transactions!\n\n`
         message += `📊 Results:\n`
         message += `• Transfer pairs: ${stats.transfer_pairs_found || 0}\n`
@@ -666,6 +789,11 @@ export default {
       }
     }
 
+    /**
+     * Format number as EUR currency
+     * @param {number} amount - Amount to format
+     * @returns {string} Formatted currency string
+     */
     function formatCurrency(amount) {
       return new Intl.NumberFormat('en-EU', {
         style: 'currency',
@@ -675,16 +803,19 @@ export default {
       }).format(Math.abs(amount))
     }
 
+    /** Reload owners when user logs in */
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
         loadOwners()
       }
     })
 
+    /** Stats auto-recompute when filteredTransactions change */
     watch(() => props.filteredTransactions, () => {
       // Stats will auto-recompute via computed property
     }, { deep: true })
 
+    /** Load owners on component mount */
     onMounted(() => {
       if (authStore.user) {
         loadOwners()

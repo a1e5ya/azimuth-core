@@ -1,3 +1,38 @@
+<!--
+  TimelineControls Component - Timeline View Controls
+  
+  Provides zoom level and mode toggle controls:
+  - Zoom level selector (Year, Quarter, Month)
+  - View/Add mode toggle switch
+  - Visual feedback for active states
+  
+  Features:
+  - Three zoom levels: Year (-1), Quarter (0), Month (1)
+  - Mode toggle: View (eye icon) / Add (plus icon)
+  - Button group styling with active state
+  - Toggle switch with smooth transitions
+  - Icons for visual clarity
+  
+  Props:
+  - currentZoomLevel: Number - Current zoom level (-1, 0, 1)
+  - currentMode: String - Current mode ('view' or 'add')
+  - fullRangeStart: Date - Full data range start
+  - fullRangeEnd: Date - Full data range end
+  - visibleRangeStart: Date - Visible range start
+  - visibleRangeEnd: Date - Visible range end
+  
+  Events:
+  - @set-zoom-level: Emitted when zoom level changes
+  - @set-mode: Emitted when mode toggles
+  - @zoom-in, @zoom-out, @reset-zoom: Zoom controls
+  - @scroll-to: Scroll to specific position
+  
+  Zoom Levels:
+  - Year: Aggregated yearly view
+  - Quarter: Quarterly breakdown
+  - Month: Monthly detailed view
+-->
+
 <template>
   <div class="timeline-controls-wrapper">
     <!-- Main Controls Row -->
@@ -39,7 +74,7 @@
 </template>
 
 <script>
-import { ref, computed, onUnmounted } from 'vue'
+
 import AppIcon from './AppIcon.vue'
 
 export default {
@@ -75,12 +110,17 @@ export default {
   },
   emits: ['zoom-in', 'zoom-out', 'reset-zoom', 'set-mode', 'scroll-to', 'set-zoom-level'],
   setup(props, { emit }) {
+    /** @type {Array<{value: number, label: string}>} */
     const zoomLevels = [
       { value: -1, label: 'Year' },
       { value: 0, label: 'Quarter' },
       { value: 1, label: 'Month' }
     ]
 
+    /**
+     * Toggles between view and add modes
+     * @returns {void}
+     */
     function toggleMode() {
       const newMode = props.currentMode === 'view' ? 'add' : 'view'
       emit('set-mode', newMode)

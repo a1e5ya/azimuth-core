@@ -1,3 +1,43 @@
+<!--
+  TimelineTab Component - Main Timeline View Container
+  
+  Provides complete timeline visualization interface:
+  - Filter bar for breakdown mode selection
+  - Category legend sidebar with toggles
+  - Timeline chart with ApexCharts
+  - Zoom controls and mode selection
+  - Year selector scrollbar
+  - Hover info detail panel
+  
+  Features:
+  - Multiple breakdown modes (All, Owner, Account)
+  - Category visibility toggles (Type, Category, Subcategory)
+  - Zoom levels (Year, Quarter, Month)
+  - View/Add mode toggle
+  - Custom date range scrolling
+  - Pinnable hover info
+  - Dynamic cursor based on mode
+  
+  Composables:
+  - useTimelineData: Transaction loading and zoom management
+  - useTimelineVisibility: Category visibility state
+  - useTimelineChart: Chart configuration and data processing
+  
+  Layout Structure:
+  - TimelineFilterBar: Top filter controls
+  - TimelineCategoryLegend: Left sidebar
+  - TimelineControls: Zoom and mode controls
+  - TimelineChart: Main chart area
+  - TimelineYearSelector: Bottom scrollbar
+  - TimelineHoverInfo: Bottom detail panel
+  
+  State Management:
+  - Loading state from backend
+  - Category visibility tracking
+  - Date range management
+  - Breakdown mode and filters
+-->
+
 <template>
   <div class="timeline-container">
     <!-- Filter Bar -->
@@ -116,10 +156,7 @@ export default {
       breakdownMode,
       selectedOwners,
       selectedAccounts,
-      loadTransactions,
-      zoomIn,
-      zoomOut,
-      resetZoom
+      loadTransactions
     } = useTimelineData()
     
     const fullRangeStart = computed(() => {
@@ -216,15 +253,26 @@ export default {
       selectedAccounts
     )
     
+    /**
+     * Sets current mode (view or add) and unpins hover data
+     * @param {string} mode - Mode to set ('view' or 'add')
+     * @returns {void}
+     */
     function setMode(mode) {
       currentMode.value = mode
-      console.log('📍 Mode changed to:', mode)
       
       if (isPinned.value) {
         unpinHoverData()
       }
     }
     
+    /**
+     * Handles scroll to custom date range
+     * @param {Object} params - Range parameters
+     * @param {Date} params.start - Range start date
+     * @param {Date} params.end - Range end date
+     * @returns {void}
+     */
     function handleScrollTo({ start, end }) {
       const clampedStart = new Date(Math.max(start.getTime(), fullRangeStart.value.getTime()))
       const clampedEnd = new Date(Math.min(end.getTime(), fullRangeEnd.value.getTime()))
@@ -233,40 +281,33 @@ export default {
         start: clampedStart,
         end: clampedEnd
       }
-      
-      console.log('📜 Scrolled to:', clampedStart.toLocaleDateString(), '-', clampedEnd.toLocaleDateString())
     }
     
-    function handleResetZoom() {
-      resetZoom()
-      unpinHoverData()
-      customVisibleRange.value = null
-    }
+
     
+    /**
+     * Sets zoom level and resets custom range
+     * @param {number} level - Zoom level (-1: Year, 0: Quarter, 1: Month)
+     * @returns {void}
+     */
     function handleSetZoomLevel(level) {
       currentZoomLevel.value = level
       unpinHoverData()
       customVisibleRange.value = null
-      console.log('📊 Zoom level set to:', level)
     }
     
     watch(
       [visibleTypes, visibleCategories, visibleSubcategories, expandedCategories],
-      () => {
-        console.log('Visibility changed, chart will rebuild')
-      },
+      () => {},
       { deep: true }
     )
     
-    watch(() => currentZoomLevel.value, (newLevel) => {
-      console.log('Zoom level:', newLevel)
+    watch(() => currentZoomLevel.value, () => {
       unpinHoverData()
       customVisibleRange.value = null
     })
     
-    watch(() => currentMode.value, (newMode) => {
-      console.log('Mode changed to:', newMode)
-    })
+    watch(() => currentMode.value, () => {})
     
     watch(() => authStore.user, (newUser) => {
       if (newUser) {
