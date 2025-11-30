@@ -71,10 +71,10 @@
       <button class="btn btn-small" @click="handleBulkCategorize" :disabled="!bulkCategoryId">
         Apply Category
       </button>
-      <button class="btn btn-link btn-danger" @click="handleBulkDelete">
+      <button class="btn btn-small btn-danger" @click="handleBulkDelete">
         Delete Selected
       </button>
-      <button class="btn btn-link" @click="clearSelection">
+      <button class="btn btn-small" @click="clearSelection">
         Clear
       </button>
     </div>
