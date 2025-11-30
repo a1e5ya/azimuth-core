@@ -11,11 +11,12 @@
       }
 
       .cls-3 {
-        fill: #ef8e8e;
+        fill: #f0c46c;
+        
       }
 
       .cls-4 {
-        fill: #f0c46c;
+        fill: #ef8e8e;
       }
     </style>
   </defs>
