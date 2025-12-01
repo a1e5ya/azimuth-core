@@ -38,7 +38,7 @@
     <div v-if="!user" class="login-screen">
       <div class="login-container">
         <div class="logo-section">
-          <h1 class="museo-dashboard">azimuth<img src="@/assets/logo.png" alt="Azimuth Logo" width="22" class="logo" /></h1> 
+          <h1 class="museo-dashboard" style="font-size: 36px !important;">azimuth<img src="@/assets/logo.png" alt="Azimuth Logo" width="26" class="logo" /></h1> 
           <p class="tagline">Personal Finance Assistant</p>
         </div>
         
@@ -55,7 +55,7 @@
           class="btn btn-active museo-dashboard"
           @click="showTab('dashboard')"
         >
-          <span class="text-medium">azimuth</span> <img src="@/assets/logo.png" alt="Azimuth Logo" width="18" class="logo" />
+          <span class="text-medium">azimuth</span> <img src="@/assets/logo.png" alt="Azimuth Logo" width="14" class="logo" />
         </button>
         
         <!-- Main Navigation Tabs -->

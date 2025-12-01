@@ -35,25 +35,13 @@
     <!-- Main content area with action menu and category tree -->
     <div class="categories-scroll-container" :class="{ 'no-sidebar': typeCategories.length === 0 }" ref="scrollContainer">
       
-      <!-- Action menu: Add Type/Category, Edit Types, Retrain -->
+<!-- Action menu: Add Type/Category, Edit Types, Retrain -->
       <div v-if="typeCategories.length > 0" class="add-category-button">
         <button 
           class="btn-menu-dots always-visible"
           @click="showCreateMenu = !showCreateMenu"
         >
           <AppIcon name="menu-dots" size="small" />
-        </button>
-        
-        <!-- Retrain button (only if trained categories exist) -->
-        <button 
-          v-if="trainedCategories.length > 0"
-          class="btn btn-small" 
-          @click="startTraining"
-          :disabled="training"
-          title="Retrain all categories"
-        >
-          <AppIcon name="graduation-cap" size="small" />
-          {{ training ? 'Training...' : 'Retrain' }}
         </button>
         
         <!-- Create menu dropdown -->
@@ -69,6 +57,15 @@
           <button class="create-option" @click="handleAddMainCategory">
             <AppIcon name="folder-add" size="small" />
             <span>Add Category</span>
+          </button>
+          <button 
+            v-if="trainedCategories.length > 0"
+            class="create-option" 
+            @click="startTraining"
+            :disabled="training"
+          >
+            <AppIcon name="graduation-cap" size="small" />
+            <span>{{ training ? 'Training...' : 'Retrain' }}</span>
           </button>
         </div>
         
@@ -919,7 +916,7 @@ export default {
   display: flex;
   justify-content: flex-end;
   gap: var(--gap-small);
-  margin-bottom: var(--gap-standard);
+
   position: relative;
 }
 
